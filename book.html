@@ -64,6 +64,7 @@
   }
   .form-group { margin-bottom: 14px; }
   .form-label { font-size: 12px; color: var(--text2); margin-bottom: 6px; display: block; }
+  .form-hint { font-size: 14px; color: var(--text2); margin-top: 6px; line-height: 1.4; }
   .form-input {
     width: 100%;
     background: #ffffff;
@@ -145,20 +146,15 @@
       </div>
       <div class="form-group">
         <label class="form-label">เวลาเริ่ม *</label>
-        <input type="time" id="bookTime" class="form-input" value="10:00">
+        <select id="bookTime" class="form-input"><option value="">กำลังโหลดเวลาเปิดทำการ…</option></select>
       </div>
     </div>
+    <div class="form-hint" id="timeHint" style="margin: -6px 0 14px;"></div>
     <div class="form-row">
       <div class="form-group">
         <label class="form-label">จำนวนชั่วโมง *</label>
         <select id="bookHours" class="form-input">
           <option value="1">1 ชั่วโมง</option>
-          <option value="2">2 ชั่วโมง</option>
-          <option value="3">3 ชั่วโมง</option>
-          <option value="4">4 ชั่วโมง</option>
-          <option value="5">5 ชั่วโมง</option>
-          <option value="6">6 ชั่วโมง</option>
-          <option value="8">8 ชั่วโมง</option>
         </select>
       </div>
       <div class="form-group">
@@ -211,6 +207,35 @@ const today = new Date().toISOString().split('T')[0];
 document.getElementById('bookDate').value = today;
 document.getElementById('bookDate').min = today;
 document.getElementById('bookHours').addEventListener('change', updateCostPreview);
+document.getElementById('bookTime').addEventListener('change', fillHours);
+
+const pad2 = n => String(n).padStart(2, '0');
+const hhmm = t => String(t).slice(0, 5);
+// เวลาเริ่มจองได้เฉพาะชั่วโมงเต็มภายในเวลาเปิดทำการ (อ่านจากฐาน — ไม่ตายตัวในหน้า): เปิด 12:00–20:00 → 12:00…19:00
+// เวลาเปิด/ปิดมีนาที (เช่น 12:30) ปัดเข้าในเวลาเปิดจริง: ชั่วโมงแรก = ปัดขึ้น · ชั่วโมงสุดท้ายที่จบทันเวลาปิด = ปัดลง
+const hourOf = t => { const [h, m] = String(t).split(':').map(Number); return h + (m || 0) / 60; };
+function fillTimes() {
+  const sel = document.getElementById('bookTime');
+  const first = Math.ceil(hourOf(settings.openTime)), last = Math.floor(hourOf(settings.closeTime)) - 1;
+  const opts = [];
+  for (let h = first; h <= last; h++) opts.push('<option value="' + pad2(h) + ':00">' + pad2(h) + ':00 น.</option>');
+  sel.innerHTML = opts.join('');
+  document.getElementById('timeHint').textContent = 'เปิดทำการ ' + hhmm(settings.openTime) + '–' + hhmm(settings.closeTime) +
+    ' น. · จองได้ไม่เกิน ' + settings.maxHours + ' ชั่วโมงต่อครั้ง และต้องจบไม่เกินเวลาปิด';
+  fillHours();
+}
+// จำนวนชั่วโมงที่เลือกได้ = ไม่เกินเพดานต่อครั้ง และไม่เกินเวลาที่เหลือก่อนปิด · เปลี่ยนเวลาเริ่มแล้วคงค่าเดิมไว้ถ้ายังจองได้
+function fillHours() {
+  const sel = document.getElementById('bookHours'), start = parseInt(document.getElementById('bookTime').value, 10);
+  const room = Math.floor(hourOf(settings.closeTime)) - start;
+  const max = Math.min(settings.maxHours, isNaN(room) ? 1 : room);
+  const keep = parseInt(sel.value, 10);
+  const opts = [];
+  for (let n = 1; n <= max; n++) opts.push('<option value="' + n + '">' + n + ' ชั่วโมง</option>');
+  sel.innerHTML = opts.join('');
+  sel.value = keep <= max ? String(keep) : '1';      // keep เป็น NaN (ยังไม่เคยเลือก) → เทียบแล้วเป็นเท็จ → 1
+  updateCostPreview();
+}
 
 function updateCostPreview() {
   const hrs = parseInt(document.getElementById('bookHours').value);
@@ -218,11 +243,11 @@ function updateCostPreview() {
   document.getElementById('costAmount').textContent = cost.toLocaleString() + ' บาท (' + hrs + ' ชม.)';
 }
 
-function showToast(msg) {
+function showToast(msg, ms) {
   const t = document.getElementById('toast');
   t.textContent = msg;
   t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 3000);
+  setTimeout(() => t.classList.remove('show'), ms || 3000);
 }
 
 function formatDate(dateStr) {
@@ -305,7 +330,11 @@ async function submitBooking() {
     watchBookingStatus(inserted.id);
   } catch (err) {
     console.error('[Add booking]', err);
-    showToast('⚠️ ส่งคำขอไม่สำเร็จ ลองใหม่อีกครั้ง');
+    // ฐานปฏิเสธ (RLS 42501 = เวลา/ชั่วโมง/วันที่นอกเงื่อนไขที่ร้านรับ) ต่างจากส่งไม่ถึงฐาน (เน็ตล่ม) — บอกลูกค้าให้ถูกทาง ไม่ใช่ "ลองใหม่" วนเดิมที่ไม่มีวันผ่าน
+    const refused = err && (err.code === '42501' || /row-level security/i.test(err.message || ''));
+    showToast(refused
+      ? '⚠️ ร้านรับจองตามวัน เวลา และจำนวนชั่วโมงที่เลือกไม่ได้ กรุณาเลือกใหม่ให้อยู่ในเวลาเปิดทำการ หรือทักร้านทาง LINE'
+      : '⚠️ ส่งคำขอไม่สำเร็จ ตรวจสอบอินเทอร์เน็ตแล้วลองใหม่อีกครั้ง', refused ? 7000 : 3000);
     submitBtn.disabled = false;
   }
 }
@@ -334,16 +363,23 @@ async function initApp() {
   }
 
   try {
-    const { data } = await db.from('booking_settings').select('price_per_hour, points_per_hour').single();
+    const { data } = await db.from('booking_settings').select('price_per_hour, points_per_hour, open_time, close_time, max_hours_per_booking').single();
     if (data) {
-      settings = { pricePerHour: data.price_per_hour, pointsPerHour: data.points_per_hour };
+      settings = { pricePerHour: data.price_per_hour, pointsPerHour: data.points_per_hour,
+        openTime: data.open_time, closeTime: data.close_time, maxHours: data.max_hours_per_booking };
     }
   } catch (err) {
     console.error('[Settings]', err);
   }
+  // ไม่มีเวลาเปิดทำการ = ไม่รู้ว่าเวลาไหนจองได้ → ไม่เปิดให้กดส่ง (ไม่เดาเวลาเอง)
+  if (!settings.openTime || !settings.closeTime || !settings.maxHours) {
+    showToast('⚠️ โหลดเวลาเปิดทำการไม่สำเร็จ กรุณารีเฟรชหน้านี้ หรือทักร้านทาง LINE', 7000);
+    document.getElementById('timeHint').textContent = 'โหลดเวลาเปิดทำการไม่สำเร็จ';
+    return;
+  }
 
+  fillTimes();
   ready = true;
-  updateCostPreview();
 }
 
 initApp();
