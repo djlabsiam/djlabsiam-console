@@ -46,6 +46,8 @@ const FAKE = {
       room: 'Turntable Setup (PLX-CRSS12 + DJM-S11/S7/S5/A9)', cost: 2400, status: 'done', confirmed: true,
       source: 'staff', line_user_id: null, customer_id: null },
   ],
+  // ตารางสอน (041): 14:00–16:00 เวลาไทยของวันนี้ เขียนเป็น UTC (07:00Z–09:00Z) เพื่อเทสต์การแปลงเวลาไทยด้วย
+  room_blocks: [{ starts_at: TODAY + 'T07:00:00Z', ends_at: TODAY + 'T09:00:00Z', all_day: false }],
   booking_settings: [{ id: true, price_per_hour: 800, points_per_hour: 1, free_hour_threshold: 10, free_hours_reward: 1, room_name: 'DJ LAB SIAM' }],
   customers: [
     { id: 'c1', full_name: 'ลูกค้าประจำ', phone: '812345678', line_id: null, email: null, note: null, tags: ['ลูกค้าประจำ'],
@@ -85,7 +87,7 @@ function builder(table) {
     range() { return q; }, or() { return q; }, ilike() { return q; }, in() { return q; },
     async maybeSingle() { return { data: q._rows[0] || null, error: null }; },
     async single() { return { data: q._rows[0] || null, error: null }; },
-    then(res, rej) { return Promise.resolve({ data: q._head ? null : q._rows, error: null, count: q._rows.length }).then(res, rej); },
+    then(res, rej) { return Promise.resolve({ data: q._head ? null : q._rows, error: (window.BLOCKS_ERR && table === 'room_blocks') ? { message: 'relation room_blocks does not exist' } : null, count: q._rows.length }).then(res, rej); },
     insert(payload) { CALLS.push({ op: 'insert', table, payload }); q._rows = [Object.assign({ id: 'new-' + CALLS.length }, payload)]; return q; },
     // RLS_BLOCK = ตารางที่ฐานข้อมูลปฏิเสธ "เงียบ ๆ": ไม่มี error แต่ไม่แก้/ไม่ลบอะไร (ขอแถวกลับมาได้ 0 แถว) — จำลองสิทธิ์ที่หายไปกลางทาง
     update(payload) { CALLS.push({ op: 'update', table, payload, q }); if (window.RLS_BLOCK && window.RLS_BLOCK.has(table)) q._rows = []; return q; },
@@ -353,6 +355,105 @@ async function runTests() {
     bookings = bookings.filter(b => ['w1', 'w2', 'w3', 'w4'].indexOf(b.id) === -1);
     renderBookings();
     ok('เอาการจองทดสอบออกแล้ว ไม่เหลือรหัสจองในตาราง', document.querySelectorAll('#bookingRows tr[data-i] td:nth-child(3) .sub').length === 0 && names().length === 3, names().length);
+  }
+
+  // ── พนักงานลงจองที่ซ้อนใบอื่น/ทับตารางสอน: เตือนชัด + ต้องกด "ยืนยันจองซ้อน" ซ้ำถึงบันทึก (ไม่บล็อก) ──
+  // กติกาซ้อนเหมือนฐาน: ห้องเดียว · ทุกที่มา/ทุก Setup · รวมที่ยังไม่ยืนยัน · ไม่นับยกเลิก · ติดกันพอดีไม่ซ้อน · ตารางสอนแปลงเวลาไทยจาก UTC
+  // (ไม่ใช้แบ็กสแลช/แบ็กทิก/ดอลลาร์วงเล็บ เพราะอยู่ในสตริงเทมเพลตของไฟล์นี้)
+  {
+    const el = id => document.getElementById(id);
+    const setF = (t, h, d) => { el('bookDate').value = d || TODAY; el('bookTime').value = t; el('bookHours').value = String(h); el('bookDate').dispatchEvent(new Event('input', { bubbles: true })); };
+    const fill = () => { el('bookName').value = 'ลูกค้าซ้อนทดสอบ'; el('bookContact').value = '0811110000'; };
+    const warn = () => { const b = el('bookConflict'); return b.hidden ? null : b.textContent; };
+    const inserts = () => CALLS.filter(c => c.op === 'insert' && c.table === 'room_bookings');
+    const click = async ms => { el('bookSaveBtn').click(); await sleep(ms || 250); };
+    const room = 'Standard (CDJ3000x + DJM-A9/V10/V5/S11/S7)';
+    const mk = (id, name, hh, hrs, status, confirmed, date) => ({ id, customer_name: name, contact: '0800000000', date: date || TODAY, start_time: String(hh).padStart(2, '0') + ':00:00', hours: hrs, room, cost: 800, status, confirmed, source: 'staff', line_user_id: null, customer_id: null });
+    const addBk = b => { FAKE.room_bookings.push(b); bookings.push(b); };
+    const dropBk = ids => { FAKE.room_bookings = FAKE.room_bookings.filter(b => ids.indexOf(b.id) === -1); bookings = bookings.filter(b => ids.indexOf(b.id) === -1); };
+
+    openBookingForm(); await sleep(200);
+    ok('เปิดฟอร์มจอง: ปุ่มบันทึกยังเป็น "ยืนยันการจอง" · ไม่มีคำเตือน (10:00 วันนี้ไม่ซ้อน)', warn() === null && el('bookSaveBtn').textContent === 'ยืนยันการจอง', warn() + ' / ' + el('bookSaveBtn').textContent);
+    setF('18:00', 1); ok('18:00 ชั่วโมงเดียว ไม่ซ้อนอะไร → ไม่มีคำเตือน', warn() === null);
+    setF('14:00', 1);
+    const w = warn();
+    ok('14:00 ซ้อนทั้งการจอง (ลูกค้า LINE 13:00–15:00 รอยืนยัน) และตารางสอน (14:00–16:00 เวลาไทย แปลงจาก UTC) → บอกครบ 2 รายการ',
+      !!w && w.indexOf('ซ้อนกับ 2 รายการ') !== -1 && w.indexOf('ซ้อนกับการจองของ ลูกค้า LINE 13:00–15:00 (รอยืนยัน)') !== -1 && w.indexOf('ทับตารางสอน (ห้องซ้อมถูกใช้สอน) 14:00–16:00') !== -1, w);
+    const cs = getComputedStyle(el('bookConflict'));
+    ok('คำเตือนเป็นแดงตัวหนา (ข้อความล้วน ไม่พึ่งสีอย่างเดียว) ≥ 14px · มี role=alert', parseInt(cs.fontWeight, 10) >= 700 && cs.color === 'rgb(138, 0, 18)' && parseFloat(cs.fontSize) >= 14 && el('bookConflict').getAttribute('role') === 'alert', cs.fontWeight + ' ' + cs.color + ' ' + cs.fontSize);
+    ok('คำเตือนบอกวิธีทำต่อ: กด "ยืนยันจองซ้อน" อีกครั้งถ้าตั้งใจ', w.indexOf('ยืนยันจองซ้อน') !== -1 && w.indexOf('ห้องซ้อมมีห้องเดียว') !== -1);
+    // ขอบ: ติดกันพอดีไม่ซ้อน · ซ้อนบางส่วนซ้อน
+    const kinds = (t, h) => { setF(t, h); const x = warn(); return x === null ? 'ไม่ซ้อน' : (x.indexOf('ซ้อนกับการจอง') !== -1 ? 'จอง' : '') + (x.indexOf('ทับตารางสอน') !== -1 ? 'สอน' : ''); };
+    ok('12:00–13:00 ไม่ซ้อน (ติดกับ b1 ที่เริ่ม 13:00 พอดี)', kinds('12:00', 1) === 'ไม่ซ้อน', kinds('12:00', 1));
+    ok('12:00 สองชั่วโมง (12–14) ซ้อน b1 อย่างเดียว (ตารางสอนเริ่ม 14:00 พอดีไม่ซ้อน)', kinds('12:00', 2) === 'จอง', kinds('12:00', 2));
+    ok('15:00–16:00 ทับตารางสอนอย่างเดียว (b1 จบ 15:00 พอดี · b2 เริ่ม 16:00 พอดี)', kinds('15:00', 1) === 'สอน', kinds('15:00', 1));
+    ok('16:00–17:00 ซ้อน b2 อย่างเดียว (ตารางสอนจบ 16:00 พอดี)', kinds('16:00', 1) === 'จอง', kinds('16:00', 1));
+    ok('16:30–17:30 ซ้อน b2 (ซ้อนบางส่วน) · 17:00–18:00 ไม่ซ้อน (b2 จบ 17:00 พอดี)', kinds('16:30', 1) === 'จอง' && kinds('17:00', 1) === 'ไม่ซ้อน');
+    // สถานะของใบที่ซ้อน: ยกเลิก = ไม่นับ · ใช้แล้ว/ยืนยันแล้ว = นับ · ชื่อที่มีแท็ก = ข้อความ
+    addBk(mk('c1', 'ยกเลิกแล้ว', 19, 2, 'cancelled', true)); addBk(mk('c2', 'ใช้ไปแล้ว', 8, 1, 'done', true)); addBk(mk('c3', 'ยืนยันแล้วคนนี้', 10, 1, 'upcoming', true));
+    addBk(mk('c4', '<img src=x onerror=window.__xss2=1>', 22, 1, 'upcoming', false)); addBk(mk('c5', 'กำลังใช้อยู่', 6, 1, 'active', true));
+    ok('ใบที่ยกเลิกไม่นับ: 19:30 ไม่ซ้อนกับใบ 19:00–21:00 ที่ยกเลิก', kinds('19:30', 1) === 'ไม่ซ้อน');
+    ok('ใบที่ใช้บริการแล้ว / ยืนยันแล้ว ยังนับ (ห้องถูกใช้จริง): บอกสถานะในวงเล็บ', (setF('08:30', 1), warn().indexOf('ใช้ไปแล้ว 08:00–09:00 (ใช้บริการแล้ว)') !== -1) && (setF('10:30', 1), warn().indexOf('ยืนยันแล้วคนนี้ 10:00–11:00 (ยืนยันแล้ว)') !== -1), warn());
+    ok('ใบที่กำลังใช้งานอยู่ก็นับ: บอก (กำลังใช้งาน)', (setF('06:30', 1), warn() !== null && warn().indexOf('กำลังใช้อยู่ 06:00–07:00 (กำลังใช้งาน)') !== -1), warn());
+    setF('22:00', 1);
+    ok('ชื่อที่มีแท็ก/สคริปต์แสดงเป็นข้อความ ไม่กลายเป็นองค์ประกอบ', !el('bookConflict').querySelector('img') && window.__xss2 === undefined && warn().indexOf('<img src=x') !== -1, warn());
+    const tom = shiftDateStr(TODAY, 1), tom2 = shiftDateStr(TODAY, 2);
+    FAKE.room_blocks.push({ starts_at: tom + 'T00:00:00+07:00', ends_at: tom2 + 'T00:00:00+07:00', all_day: true }); await loadRoomBlocks();
+    setF('13:00', 1, tom);
+    ok('นัดทั้งวัน (all_day) ทับทั้งวัน: บอก "ทั้งวัน" แทนช่วงเวลา', warn() !== null && warn().indexOf('ทับตารางสอน (ห้องซ้อมถูกใช้สอน) ทั้งวัน') !== -1, warn());
+    FAKE.room_blocks.pop(); await loadRoomBlocks();
+    dropBk(['c1', 'c2', 'c3', 'c4', 'c5']);
+
+    // ขั้นบันทึก: กดครั้งแรกไม่บันทึก ต้องกดซ้ำ
+    CALLS.length = 0; fill(); setF('14:00', 1);
+    await click(250);
+    ok('ซ้อนแล้วกดบันทึกครั้งแรก: ไม่บันทึก · ปุ่มเปลี่ยนเป็น "⚠️ ยืนยันจองซ้อน" (แดง) · ฟอร์มยังเปิด · มีข้อความเตือน',
+      inserts().length === 0 && el('bookSaveBtn').textContent === '⚠️ ยืนยันจองซ้อน' && el('bookSaveBtn').classList.contains('btn-danger') && el('bookingDialog').open && txt('toast').indexOf('ซ้อน') !== -1, inserts().length + ' ' + el('bookSaveBtn').textContent);
+    await click(60);
+    ok('กดซ้ำเร็วเกินไป (ดับเบิลคลิก) ไม่นับเป็นการยืนยัน', inserts().length === 0 && el('bookingDialog').open);
+    await sleep(700); await click(300);
+    const ins1 = inserts()[0];
+    ok('กดยืนยันจองซ้อนซ้ำจริง → บันทึก (ไม่บล็อก): ข้อมูลเหมือนการจองปกติ (14:00 · 1 ชม. · staff · ยืนยันแล้ว) · ฟอร์มปิด',
+      inserts().length === 1 && ins1.payload.start_time === '14:00' && ins1.payload.date === TODAY && ins1.payload.hours === 1 && ins1.payload.source === 'staff' && ins1.payload.confirmed === true && !el('bookingDialog').open, JSON.stringify(ins1 && ins1.payload));
+    openBookingForm(); await sleep(200);
+    ok('เปิดฟอร์มใหม่: ปุ่มกลับเป็น "ยืนยันการจอง" ปกติ (ไม่ค้างสถานะยืนยันซ้อนของรอบก่อน)', el('bookSaveBtn').textContent === 'ยืนยันการจอง' && !el('bookSaveBtn').classList.contains('btn-danger') && el('bookSaveBtn').classList.contains('btn-primary'));
+    // เปลี่ยนเวลาหลังเตือน = เป็นการจองใหม่ ยืนยันใหม่
+    CALLS.length = 0; fill(); setF('14:00', 1); await click(250);
+    ok('(เตรียม) ซ้อนแล้วกดครั้งแรกได้ปุ่มยืนยัน', el('bookSaveBtn').textContent === '⚠️ ยืนยันจองซ้อน' && inserts().length === 0);
+    setF('18:00', 1);
+    ok('เปลี่ยนเวลาไปช่วงที่ไม่ซ้อน: คำเตือนหาย · ปุ่มกลับเป็นปกติ', warn() === null && el('bookSaveBtn').textContent === 'ยืนยันการจอง' && el('bookSaveBtn').classList.contains('btn-primary'));
+    await click(300);
+    ok('แล้วกดบันทึกครั้งเดียวก็บันทึก (ไม่ซ้อนแล้ว) ที่ 18:00', inserts().length === 1 && inserts()[0].payload.start_time === '18:00', inserts().length + ' ' + (inserts()[0] && inserts()[0].payload.start_time));
+    // ซ้อนแล้วค่อยเปลี่ยนไปซ้อนอีกช่วง: ต้องยืนยันใหม่ (ไม่ยืนยันข้ามช่วง)
+    openBookingForm(); await sleep(200); CALLS.length = 0; fill(); setF('14:00', 1); await click(250); setF('16:00', 1);
+    ok('ยืนยันซ้อนช่วงหนึ่งแล้วย้ายไปซ้อนอีกช่วง → ต้องเห็นคำเตือนและยืนยันใหม่ (ปุ่มกลับเป็นขั้นแรก)', warn() !== null && el('bookSaveBtn').textContent === 'ยืนยันการจอง', warn() + ' / ' + el('bookSaveBtn').textContent);
+    // ใบที่เข้ามาระหว่างฟอร์มเปิดอยู่ ต้องเจอตอนกดบันทึก (ดึงข้อมูลล่าสุดก่อนตัดสิน)
+    openBookingForm(); await sleep(200); CALLS.length = 0; fill(); setF('18:30', 1);
+    ok('(เตรียม) ตอนเปิดฟอร์ม 18:30 ยังไม่ซ้อน', warn() === null);
+    FAKE.room_bookings.push(mk('late1', 'ใบมาทีหลัง', 18, 2, 'upcoming', false));
+    await click(300);
+    ok('มีใบเว็บเข้ามา 18:00–20:00 ระหว่างที่ฟอร์มเปิด → กดบันทึกแล้วเตือน (ไม่บันทึกทับเงียบ ๆ)', inserts().length === 0 && warn() !== null && warn().indexOf('ใบมาทีหลัง') !== -1 && el('bookSaveBtn').textContent === '⚠️ ยืนยันจองซ้อน', inserts().length + ' ' + warn());
+    dropBk(['late1']); el('bookingDialog').close();
+    // ตารางสอนใหม่ที่ซิงก์เข้ามาระหว่างที่ฟอร์มเปิดอยู่ ก็ต้องเจอตอนกดบันทึก
+    openBookingForm(); await sleep(200); CALLS.length = 0; fill(); setF('20:30', 1);
+    ok('(เตรียม) ตอนเปิดฟอร์ม 20:30 ยังไม่ทับตารางสอน', warn() === null);
+    FAKE.room_blocks.push({ starts_at: TODAY + 'T13:00:00Z', ends_at: TODAY + 'T14:00:00Z', all_day: false });      // 20:00–21:00 เวลาไทย
+    await click(300);
+    ok('บอทซิงก์ตารางสอน 20:00–21:00 เข้ามาระหว่างที่ฟอร์มเปิด → กดบันทึกแล้วเตือนทับตารางสอน (ไม่บันทึกทับเงียบ ๆ)', inserts().length === 0 && warn() !== null && warn().indexOf('ทับตารางสอน (ห้องซ้อมถูกใช้สอน) 20:00–21:00') !== -1, inserts().length + ' ' + warn());
+    FAKE.room_blocks.pop(); await loadRoomBlocks(); el('bookingDialog').close();
+    // คำเตือนตามทุกช่องที่เปลี่ยน (เปลี่ยนทีละช่อง: ชั่วโมงอย่างเดียว · เวลาอย่างเดียว)
+    openBookingForm(); await sleep(200); setF('12:00', 1);
+    ok('(เตรียม) 12:00 หนึ่งชั่วโมง ไม่ซ้อน', warn() === null);
+    el('bookHours').value = '2'; el('bookHours').dispatchEvent(new Event('change', { bubbles: true }));
+    ok('เปลี่ยนเฉพาะจำนวนชั่วโมงเป็น 2 (12–14 ซ้อน b1) → คำเตือนขึ้นทันที', warn() !== null && warn().indexOf('ลูกค้า LINE') !== -1, warn());
+    el('bookTime').value = '17:00'; el('bookTime').dispatchEvent(new Event('input', { bubbles: true }));
+    ok('เปลี่ยนเฉพาะเวลาเริ่มเป็น 17:00 (17–19 ไม่ซ้อน) → คำเตือนหายทันที', warn() === null, warn());
+    el('bookingDialog').close();
+    // ยังไม่รัน 041 / อ่านตารางสอนไม่ได้
+    window.BLOCKS_ERR = true; openBookingForm(); await sleep(200); setF('14:00', 1);
+    ok('อ่านตารางสอนไม่ได้ (ยังไม่รัน 041): ไม่ขึ้นแถบแดง · ยังเตือนซ้อนกับการจองได้ · ไม่มีบรรทัดตารางสอน',
+      !document.getElementById('fatalError') && warn() !== null && warn().indexOf('ซ้อนกับการจองของ ลูกค้า LINE') !== -1 && warn().indexOf('ทับตารางสอน') === -1, warn() + ' / fatal=' + !!document.getElementById('fatalError'));
+    window.BLOCKS_ERR = false; await loadRoomBlocks(); el('bookingDialog').close();
   }
 
   // ── ย้อนกลับระหว่างหมวด ────────────────────────────────────────────────

@@ -2730,6 +2730,7 @@
       <div class="field"><label class="lbl" for="bookEquip">อุปกรณ์เพิ่มเติม</label><input type="text" id="bookEquip" class="input" placeholder="เช่น Headphone"></div>
     </div>
     <div class="field"><label class="lbl" for="bookNote">หมายเหตุ</label><input type="text" id="bookNote" class="input" placeholder="รายละเอียดเพิ่มเติม"></div>
+    <div class="alert alert-red" id="bookConflict" role="alert" style="font-weight:700;" hidden></div>
     <div class="alert alert-plain">ค่าใช้จ่ายโดยประมาณ: <strong id="costAmount">—</strong></div>
     <div class="dlg-foot" style="padding:0;">
       <button class="btn" type="button" onclick="document.getElementById('bookingDialog').close()">ปิด (Esc)</button>
@@ -6012,6 +6013,7 @@ const bkPhoneMatch = (b, q) => { const k = bkDigits(q).replace(/^0/, ''); return
 let TL_START = 12, TL_HOURS = 8;
 
 let bookings = [];
+let roomBlocks = [];     // ช่วงที่ห้องซ้อมถูกใช้สอน (ตารางสอนที่บอทซิงก์จาก Google Calendar · migration 041) — มีแต่เวลาเริ่ม/จบ ไม่มีชื่อนัด
 let settings = { pricePerHour: 800, pointsPerHour: 1, freeHourThreshold: 10, freeHoursReward: 1, roomName: 'DJ LAB SIAM' };
 let bkDate = todayBangkok();
 
@@ -6019,6 +6021,15 @@ async function loadBookings() {
   const { data, error } = await db.from('room_bookings').select('*').order('date').order('start_time');
   if (error) { console.error('[Load bookings]', error); showFatalError('โหลดรายการจองห้องไม่สำเร็จ: ' + error.message); return; }
   bookings = data || [];
+}
+
+// ตารางสอนที่ทับ "ตอนนี้เป็นต้นไป" (ย้อนหลัง 1 วันเผื่อนัดข้ามเที่ยงคืน) · พนักงานอ่านได้ตาม RLS ของ 041 · ยังไม่รัน 041/อ่านไม่ได้ = ไม่มีข้อมูลตารางสอน
+// (เงียบ ๆ ไม่ใช่ error แดง — คำเตือนซ้อนกับการจองยังทำงานตามปกติ)
+async function loadRoomBlocks() {
+  const { data, error } = await db.from('room_blocks').select('starts_at, ends_at, all_day')
+    .gte('ends_at', new Date(Date.now() - 24 * 3600 * 1000).toISOString()).order('starts_at');
+  if (error) { console.warn('[Load room_blocks]', error.message || error); roomBlocks = []; return; }
+  roomBlocks = data || [];
 }
 
 async function loadBookingSettings() {
@@ -6279,6 +6290,40 @@ function updateCostPreview() {
   document.getElementById('costAmount').textContent = (hrs * settings.pricePerHour).toLocaleString() + ' บาท (' + hrs + ' ชม.)';
 }
 
+// ---- จองซ้อน / ทับตารางสอน: เตือนชัด + ต้องกด "ยืนยันจองซ้อน" ซ้ำถึงบันทึก (ไม่บล็อก — พนักงานอาจตั้งใจ เช่น เลื่อนคิว) ----
+// กติกาซ้อนเหมือนฐาน (041): ห้องซ้อมมีห้องเดียว → นับทุกใบที่ไม่ยกเลิก ทุกที่มา ทุก Setup รวมที่ยังไม่ยืนยัน · ซ้อนเมื่อ เริ่มA < จบB และ เริ่มB < จบA (ติดกันพอดีไม่ซ้อน)
+// คิดเป็นเวลาจริง (เวลาไทย +07:00 ไม่มี DST) ทั้งการจองและตารางสอน — เวลาเศษของข้อมูลเดิม (15:15) ก็ถูกต้อง
+const bkMs = (date, time) => Date.parse(date + 'T' + shortTime(time) + ':00+07:00');
+function bkConflicts(date, time, hours) {
+  const s = bkMs(date, time), e = s + hours * 3600000;      // ค่ายังกรอกไม่ครบ (NaN) → เทียบแล้วเป็นเท็จทุกใบ = ไม่เตือน
+  return {
+    bookings: bookings.filter(b => { const bs = bkMs(b.date, b.start_time); return b.status !== 'cancelled' && bs < e && s < bs + b.hours * 3600000; }),
+    blocks: roomBlocks.filter(k => Date.parse(k.starts_at) < e && s < Date.parse(k.ends_at)),
+  };
+}
+const bkHm = iso => new Date(iso).toLocaleTimeString('en-GB', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit', hour12: false });
+const bkStText = b => b.status === 'done' ? 'ใช้บริการแล้ว' : b.status === 'active' ? 'กำลังใช้งาน' : !b.confirmed ? 'รอยืนยัน' : 'ยืนยันแล้ว';
+let bkAck = false, bkAckAt = 0;       // bkAck = พนักงานเห็นคำเตือนแล้วและกด "ยืนยันจองซ้อน" รอบแรก (รอกดซ้ำ) · bkAckAt = เวลาที่ขึ้นปุ่มยืนยัน (กันดับเบิลคลิกพลาดนับเป็นการยืนยัน)
+function bkRenderConflict() {
+  const box = document.getElementById('bookConflict');
+  const c = bkConflicts(document.getElementById('bookDate').value, document.getElementById('bookTime').value, parseInt(document.getElementById('bookHours').value, 10));
+  const lines = c.bookings.map(b => 'ซ้อนกับการจองของ ' + escapeHtml(b.customer_name) + ' ' + shortTime(b.start_time) + '–' + addHours(b.start_time, b.hours) + ' (' + bkStText(b) + ')')
+    .concat(c.blocks.map(k => 'ทับตารางสอน (ห้องซ้อมถูกใช้สอน) ' + (k.all_day ? 'ทั้งวัน' : bkHm(k.starts_at) + '–' + bkHm(k.ends_at))));
+  box.hidden = !lines.length;
+  box.innerHTML = lines.length
+    ? '⚠️ ห้องซ้อมมีห้องเดียว — เวลานี้ซ้อนกับ ' + lines.length + ' รายการ<br>' + lines.map(l => '• ' + l).join('<br>') +
+      '<br>ถ้าตั้งใจ (เช่น เลื่อนคิว) กดปุ่ม “ยืนยันจองซ้อน” อีกครั้งเพื่อบันทึก'
+    : '';
+  return lines.length;
+}
+function bkConflictChanged() {      // เปลี่ยนวัน/เวลา/ชั่วโมง = เป็นการจองใหม่ ต้องเห็นคำเตือนและยืนยันใหม่
+  bkAck = false;
+  const btn = document.getElementById('bookSaveBtn');
+  btn.textContent = 'ยืนยันการจอง'; btn.classList.remove('btn-danger'); btn.classList.add('btn-primary');
+  bkRenderConflict();
+}
+['bookDate', 'bookTime', 'bookHours'].forEach(id => ['input', 'change'].forEach(ev => document.getElementById(id).addEventListener(ev, bkConflictChanged)));
+
 function openBookingForm() {
   const room = document.getElementById('bookRoom');
   if (!room.options.length) room.innerHTML = ROOMS.map(r => '<option>' + escapeHtml(r) + '</option>').join('');
@@ -6288,6 +6333,8 @@ function openBookingForm() {
   document.getElementById('bookTime').value = '10:00';
   document.getElementById('bookHours').value = '1';
   updateCostPreview();
+  bkConflictChanged();
+  loadRoomBlocks().then(bkRenderConflict);      // ตารางสอนล่าสุดตอนเปิดฟอร์ม (คำเตือนขึ้นเองถ้าเวลาตั้งต้นทับ)
   document.getElementById('bookingDialog').showModal();
   document.getElementById('bookName').focus();
 }
@@ -6308,8 +6355,17 @@ async function submitBooking() {
   const cost = hours * settings.pricePerHour;
   const pts = hours * settings.pointsPerHour;
   const btn = document.getElementById('bookSaveBtn');
+  if (bkAck && Date.now() - bkAckAt < 600) return;      // กดซ้ำเร็วเกิน (ดับเบิลคลิก) ไม่นับเป็นการยืนยัน
   btn.disabled = true;
   try {
+    // ข้อมูลล่าสุด ณ ตอนตัดสิน (อาจมีใบเว็บ/ตารางสอนเข้ามาระหว่างที่ฟอร์มเปิดอยู่) แล้วเตือนก่อนบันทึก
+    await Promise.all([loadBookings(), loadRoomBlocks()]);
+    if (bkRenderConflict() && !bkAck) {
+      bkAck = true; bkAckAt = Date.now();
+      btn.textContent = '⚠️ ยืนยันจองซ้อน'; btn.classList.remove('btn-primary'); btn.classList.add('btn-danger');
+      showToast('⚠️ เวลานี้ซ้อนกับรายการอื่น — กด “ยืนยันจองซ้อน” อีกครั้งถ้าตั้งใจ');
+      return;
+    }
     const { data: { user } } = await db.auth.getUser();
     const { error } = await db.from('room_bookings').insert({
       customer_name: name, contact, date, start_time: time, hours,
