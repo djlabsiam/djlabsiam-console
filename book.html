@@ -203,7 +203,7 @@ let settings = { pricePerHour: 800, pointsPerHour: 1 };
 let ready = false;
 let lineUserId = null;
 
-const today = new Date().toISOString().split('T')[0];
+const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' });   // วันตามเวลาไทย (toISOString = วัน UTC → 00:00–07:00 น. ขึ้นเมื่อวาน)
 document.getElementById('bookDate').value = today;
 document.getElementById('bookDate').min = today;
 document.getElementById('bookHours').addEventListener('change', updateCostPreview);

@@ -19,6 +19,8 @@ const ROW = { price_per_hour: 800, points_per_hour: 1, open_time: '12:00:00', cl
 const mock = cfg => `<script>
 const CALLS = [];
 const CFG = ${JSON.stringify(cfg)};
+// CFG.now = เวลาปัจจุบันปลอม (ISO · UTC) — คุมวัน "วันนี้" ของหน้า (ตอน 00:00–07:00 เวลาไทย วัน UTC ยังเป็นเมื่อวาน)
+if (CFG.now) { const RD = Date, T = new RD(CFG.now).getTime(); window.Date = class extends RD { constructor(...a) { if (a.length) super(...a); else super(T); } static now() { return T; } }; }
 window.liff = { init: async () => {}, isLoggedIn: () => false, getProfile: async () => ({ userId: 'U' + '0'.repeat(32) }) };
 window.supabase = { createClient: () => ({
   from: table => {
@@ -139,6 +141,17 @@ run('ส่งไม่ถึงฐาน (เน็ตล่ม)', { settings: 
   ok('เน็ตล่ม: บอกให้ตรวจอินเทอร์เน็ตแล้วลองใหม่ (ไม่ใช่ว่าร้านไม่รับจอง)', t.indexOf('อินเทอร์เน็ต') !== -1 && t.indexOf('ร้านรับจอง') === -1, t);
   ok('ปุ่มส่งกลับมากดได้อีกครั้ง', $('submitBtn').disabled === false);
 `);
+// วันที่ของหน้า = วันตามเวลาไทย (ไม่ใช่วัน UTC): 06:30 น. ไทย 3 มี.ค. = 23:30 UTC 2 มี.ค. → เดิมหน้าขึ้น "2 มี.ค." และเลือกจองย้อนหลังได้
+for (const [label, now, want] of [
+  ['06:30 น. ไทย 3 มี.ค. (วัน UTC ยังเป็น 2 มี.ค.)', '2026-03-02T23:30:00Z', '2026-03-03'],
+  ['00:00 น. ไทยพอดี (17:00 UTC)', '2026-03-03T17:00:00Z', '2026-03-04'],
+  ['23:59 น. ไทย 2 มี.ค. (16:59 UTC) ยังเป็นวันเดิม', '2026-03-02T16:59:00Z', '2026-03-02'],
+  ['เที่ยงวันไทย (วัน UTC = วันไทย)', '2026-03-03T05:00:00Z', '2026-03-03'],
+]) run('วันที่ตั้งต้น/ขั้นต่ำเป็นวันไทย — ' + label, { settings: ROW, now }, `
+  ok('ค่าตั้งต้นของช่องวันที่ = ${want}', $('bookDate').value === '${want}', $('bookDate').value);
+  ok('จองย้อนหลังไม่ได้: ขั้นต่ำของช่องวันที่ = ${want} (ไม่ใช่วัน UTC)', $('bookDate').min === '${want}', $('bookDate').min);
+`);
+
 run('ฟอร์มเดิม: ไม่กรอกชื่อ/ติดต่อ → ไม่ส่ง', { settings: ROW }, `
   CALLS.length = 0; await submitBooking();
   ok('ไม่กรอกชื่อ/ข้อมูลติดต่อ → ไม่มีการเขียนฐาน · บอกให้กรอกให้ครบ', CALLS.filter(c => c.op === 'insert').length === 0 && $('toast').textContent.indexOf('กรอกข้อมูลที่จำเป็นให้ครบ') !== -1, $('toast').textContent);
