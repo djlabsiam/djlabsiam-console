@@ -2755,7 +2755,7 @@
       <div class="field"><label class="chk"><input type="checkbox" id="wbEnabled"> เปิดรับจองออนไลน์</label>
         <div class="hint">เอาติ๊กออก = ปิดรับจองจากหน้า /book ทันที (ใบที่จองไปแล้วไม่เปลี่ยน)</div></div>
       <div class="field"><label class="chk"><input type="checkbox" id="wbBlocks"> ให้ตารางสอนทำให้ห้องเต็ม</label>
-        <div class="hint">ติ๊ก = ช่วงที่ปฏิทินทีมใช้ห้องซ้อมจะจองจากเว็บไม่ได้ · ถ้าซิงก์เก่าเกินกำหนดด้านล่าง เว็บจะรับจองไม่ได้เลยจนกว่าซิงก์สำเร็จ</div></div>
+        <div class="hint"><span class="wk-red">เปิดแล้ว ถ้าบอทยังไม่ซิงก์สำเร็จ หรือซิงก์เก่าเกินเกณฑ์ด้านล่าง เว็บจะรับจองไม่ได้ทันที</span> · ติ๊ก = ช่วงที่ปฏิทินทีมใช้ห้องซ้อมจะจองจากเว็บไม่ได้</div></div>
       <div class="field"><label class="lbl" for="wbKeywords">คำที่บอกว่านัดในปฏิทินใช้ห้องซ้อม (คั่นด้วยจุลภาค)</label>
         <input type="text" id="wbKeywords" class="input" maxlength="300" autocomplete="off" placeholder="เช่น ห้องซ้อม">
         <div class="hint">บอทดูช่อง Location ของนัดใน Google Calendar — มีคำใดคำหนึ่ง = นัดนั้นใช้ห้องซ้อม</div></div>
@@ -6222,7 +6222,7 @@ function wbSync(s, st, now) {
 }
 function wbStatusHtml(s, st, now) {
   const y = wbSync(s, st, now), row = (k, v) => '<div class="wb-row"><span class="wb-k">' + k + '</span><span>' + v + '</span></div>';
-  const badge = y.never ? '<span class="st st-warn">◷ ยังไม่เคยซิงก์</span>' : y.old ? '<span class="st st-warn">◷ เก่าเกิน ' + s.sync_stale_minutes + ' นาที</span>' : '<span class="st st-ok">✓ ปกติ</span>';
+  const badge = !s.room_blocks_enabled ? '<span class="st st-off">ไม่ได้ใช้ (ปิดอยู่)</span>' : y.never ? '<span class="st st-warn">◷ ยังไม่เคยซิงก์</span>' : y.old ? '<span class="st st-warn">◷ เก่าเกิน ' + s.sync_stale_minutes + ' นาที</span>' : '<span class="st st-ok">✓ ปกติ</span>';
   let h = row('รับจองออนไลน์', s.web_booking_enabled ? '<span class="st st-ok">✓ เปิดอยู่</span>' : '<span class="st st-off">ปิดอยู่</span>') +
     row('ซิงก์ตารางสอน', badge + (y.never ? '' : ' <span>สำเร็จล่าสุด ' + wbWhen(st.last_ok_at) + ' (' + wbAgo(y.ageMin) + ')</span>'));
   if (y.blocking) h += '<div class="wb-row"><span class="wk-red">เว็บรับจองไม่ได้ตอนนี้ — ลูกค้าจะถูกขอให้ทักร้านแทน จนกว่าซิงก์ตารางสอนจะสำเร็จ</span></div>';
@@ -6294,19 +6294,36 @@ function wbRead() {
   if (wbEl('wbClose').value <= wbEl('wbOpen').value) return { error: 'เวลาปิดต้องหลังเวลาเปิด' };
   return { patch, said };
 }
+function wbErr(m) { const b = wbEl('wbErr'); b.textContent = m; b.hidden = false; }
 async function wbSave() {
   if (!isWriter() || wb.mode !== 'ready') return;
-  const err = m => { const b = wbEl('wbErr'); b.textContent = m; b.hidden = false; };
   const r = wbRead();
-  if (r.error) return err(r.error);
+  if (r.error) return wbErr(r.error);
   if (!Object.keys(r.patch).length) { wbEl('wbDlg').close(); showToast('ไม่มีอะไรเปลี่ยน'); return; }
+  // เปิดสวิตช์ตารางสอน (ปิด → เปิด) ทั้งที่ซิงก์ยังไม่เคยสำเร็จ/เก่าเกินเกณฑ์ที่จะบันทึก = เว็บรับจองไม่ได้ทันที (ฐานตอบ contact_shop) — เคยเกิดจริง 6 ต.ค. 69 → ถามก่อนเสมอ
+  const y = wbSync(Object.assign({}, wb.s, r.patch), wb.st, Date.now());
+  if ('room_blocks_enabled' in r.patch && y.blocking) {      // y.blocking นับค่าที่จะบันทึก: มีช่องนี้ในชุดแก้ + ผลคือ "เปิดอยู่และซิงก์ไม่ผ่าน" = กำลังเปิดสวิตช์
+    const tok = wb.tok, uid = currentUserId;
+    askConfirm('เปิด “ตารางสอนทำให้ห้องเต็ม” ทั้งที่ซิงก์ยังไม่ผ่าน',
+      '<div class="alert alert-red" style="font-weight:700;">เปิดแล้วเว็บจะรับจองไม่ได้ทันที — ' + (y.never ? 'บอทยังไม่เคยซิงก์ตารางสอนสำเร็จเลย' : 'ซิงก์ล่าสุดเมื่อ ' + wbAgo(y.ageMin) + ' เก่าเกินเกณฑ์') +
+      ' · ลูกค้าจะถูกขอให้ทักร้านแทน จนกว่าบอทจะซิงก์สำเร็จ</div>',
+      'เปิดทั้งที่ซิงก์ยังไม่ผ่าน', async () => {
+        closeConfirm();
+        if (tok !== wb.tok || uid !== currentUserId) return;
+        await wbWrite(r);
+      });
+    return;
+  }
+  await wbWrite(r);
+}
+async function wbWrite(r) {
   const btn = wbEl('wbSave'), tok = wb.tok, uid = currentUserId;
   btn.disabled = true;
   try {
     const { data, error } = await db.from('booking_settings').update(Object.assign({}, r.patch, { updated_by: currentUserId, updated_at: new Date().toISOString() })).eq('id', true).select('id');
     if (tok !== wb.tok || uid !== currentUserId) return;
-    if (error) return err(catErrText(error));
-    if (!data.length) return err(WB_NO_ROWS);     // RLS ปฏิเสธเงียบ ๆ = 0 แถว ต้องไม่ขึ้นว่าสำเร็จ (กฎข้อ 8) · ต้องขอแถวกลับ (.select) ไม่งั้นนับไม่ได้
+    if (error) return wbErr(catErrText(error));
+    if (!data.length) return wbErr(WB_NO_ROWS);     // RLS ปฏิเสธเงียบ ๆ = 0 แถว ต้องไม่ขึ้นว่าสำเร็จ (กฎข้อ 8) · ต้องขอแถวกลับ (.select) ไม่งั้นนับไม่ได้
     wbEl('wbDlg').close();
     showToast('✅ บันทึกตั้งค่าจองออนไลน์แล้ว: ' + r.said.join(' · '));
   } finally { btn.disabled = false; }

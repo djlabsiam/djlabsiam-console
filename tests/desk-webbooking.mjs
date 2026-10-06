@@ -108,6 +108,7 @@ const bold = el => parseInt(getComputedStyle(el).fontWeight, 10) >= 700;
 const redOf = () => { const t = document.createElement('span'); t.style.color = 'var(--red)'; document.body.appendChild(t); const c = getComputedStyle(t).color; t.remove(); return c; };
 const isRed = el => getComputedStyle(el).color === redOf();
 const shown = el => !!el && !el.hidden && el.offsetParent !== null;
+const visibleRed = () => Array.prototype.some.call(dlg.querySelectorAll('.wk-red'), e => e.offsetParent !== null);      // คำเตือนแดงที่มองเห็นอยู่จริง (ข้อความเตือนคงที่ใต้ช่องติ๊กอยู่ในฟอร์มที่ซ่อน)
 const INTS = [
   ['wbMaxHours', 'ชั่วโมงสูงสุดต่อใบจอง', 1, 12, 'max_hours_per_booking'],
   ['wbLead', 'จองล่วงหน้าอย่างน้อย (นาที)', 0, 1440, 'min_lead_minutes'],
@@ -174,11 +175,17 @@ async function runTests() {
   // ── 5. ปิดสวิตช์ตารางสอน ──
   SETTINGS.room_blocks_enabled = false;
   await openDlg();
+  const syncBadge = () => Array.prototype.find.call(st.querySelectorAll('.st'), e => e.textContent.indexOf('ไม่ได้ใช้') !== -1 || e.textContent.indexOf('ยังไม่เคยซิงก์') !== -1 || e.textContent.indexOf('เก่าเกิน') !== -1 || e.textContent.indexOf('ปกติ') !== -1);
+  ok('ปิดสวิตช์ตารางสอน + ไม่เคยซิงก์: ป้ายซิงก์เป็นสีกลาง "ไม่ได้ใช้ (ปิดอยู่)" (ไม่ใช่เหลือง "ยังไม่เคยซิงก์" — เจ้าของเคยเข้าใจว่ายังมีปัญหา) · ไม่มีป้ายเหลืองเลย', !!syncBadge() && syncBadge().textContent.indexOf('ไม่ได้ใช้ (ปิดอยู่)') !== -1 && syncBadge().classList.contains('st-off') && !st.querySelector('.st-warn') && st.textContent.indexOf('ยังไม่เคยซิงก์') === -1, st.innerHTML);
   ok('ปิดสวิตช์ตารางสอน + ไม่เคยซิงก์: ไม่ขึ้นว่าเว็บรับจองไม่ได้ (ฐานไม่สนตารางสอน) · อธิบายว่าสวิตช์ปิดอยู่', st.textContent.indexOf('เว็บรับจองไม่ได้') === -1 && st.textContent.indexOf('สวิตช์') !== -1 && st.textContent.indexOf('ไม่สนตารางสอน') !== -1 && !st.querySelector('.wk-red'), st.textContent);
   STATE.last_ok_at = ago(45);
   await openDlg();
-  ok('ปิดสวิตช์ + ซิงก์เก่า: ยังบอกว่า "เก่าเกิน" (ข้อเท็จจริง) แต่ไม่ขึ้นคำเตือนแดง', st.textContent.indexOf('เก่าเกิน 30 นาที') !== -1 && !st.querySelector('.wk-red'), st.textContent);
+  ok('ปิดสวิตช์ + ซิงก์เก่า: ป้ายสีกลางเหมือนกัน (ไม่เขียน "เก่าเกิน" เป็นเหลือง) แต่ยังบอกข้อเท็จจริงว่าสำเร็จล่าสุดเมื่อ 45 นาทีที่แล้ว · ไม่ขึ้นแดง', syncBadge().textContent.indexOf('ไม่ได้ใช้ (ปิดอยู่)') !== -1 && !st.querySelector('.st-warn') && st.textContent.indexOf('เก่าเกิน') === -1 && st.textContent.indexOf('45 นาทีที่แล้ว') !== -1 && !st.querySelector('.wk-red'), st.innerHTML);
+  STATE.last_ok_at = ago(3);
+  await openDlg();
+  ok('ปิดสวิตช์ + ซิงก์สดใหม่: ป้ายสีกลาง "ไม่ได้ใช้ (ปิดอยู่)" ไม่ใช่เขียว "ปกติ" (ตอนปิดไม่ได้ใช้ ไม่ควรดูเหมือนระบบทำงานให้)', syncBadge().textContent.indexOf('ไม่ได้ใช้ (ปิดอยู่)') !== -1 && syncBadge().classList.contains('st-off') && st.textContent.indexOf('ปกติ') === -1, st.innerHTML);
   SETTINGS.room_blocks_enabled = true;
+  STATE.last_ok_at = ago(45); STATE.last_try_at = ago(45);
 
   // ── 6. ข้อผิดพลาดล่าสุด / ลองล่าสุด ──
   STATE.last_ok_at = ago(10); STATE.last_try_at = ago(2); STATE.last_error = '<img src=x onerror="window.XSS=1">boom';
@@ -385,6 +392,92 @@ async function runTests() {
 }
 </script>`;
 
+// ───────── หน้า 2b: เปิดสวิตช์ตารางสอนทั้งที่ซิงก์ยังไม่ผ่าน = ถามก่อน (เหตุการณ์จริง 6 ต.ค. 69: เปิดแล้วเว็บรับจองไม่ได้ ~3 นาที) ─────────
+const T_BLOCKS = PRE + `<script>
+const CONF = () => $('confirmDialog');
+const only = u => Object.keys(u.payload).sort().join(',');
+async function tick(on, extra) {          // เปิดแผง → ตั้งช่องติ๊ก (+ ช่องอื่นถ้าส่งมา) → กดบันทึก
+  await openDlg();
+  $('wbBlocks').checked = on;
+  if (extra) extra();
+  await wbSave(); await sleep(20);
+}
+async function runTests() {
+  L('=== จองออนไลน์: เปิด "ตารางสอนทำให้ห้องเต็ม" ทั้งที่ซิงก์ยังไม่ผ่าน ===');
+  await login();
+  showSection('booking');
+  await sleep(100);
+  // อีเวนต์ close ของ <dialog> ใน Chrome headless + งบเวลาเสมือนยิงตอนสิ้นงบ — onclose="confirmFn = null" ของรอบก่อนจะมาทับรอบใหม่ → ถอดในเทสต์เท่านั้น (ดูหมายเหตุใน T_ANON)
+  CONF().onclose = null;
+
+  const hint = $('wbBlocks').closest('.field').querySelector('.hint .wk-red');
+  ok('ข้อความเตือนใต้ช่องติ๊ก: แดงตัวหนา "เว็บจะรับจองไม่ได้ทันที" (ไม่ใช่ตัวอักษรเทาธรรมดา)', !!hint && hint.textContent.indexOf('เว็บจะรับจองไม่ได้ทันที') !== -1 && bold(hint) && isRed(hint), hint && hint.textContent);
+
+  // ── ไม่เคยซิงก์ + ติ๊กเปิด ──
+  SETTINGS.room_blocks_enabled = false; STATE.last_ok_at = null; STATE.last_try_at = null;
+  await tick(true);
+  const box = $('confirmBody').querySelector('.alert-red');
+  ok('ปิด→เปิด ตอนยังไม่เคยซิงก์: ขึ้นหน้าต่างยืนยัน — ยังไม่เขียนฐาน · หน้าต่างตั้งค่ายังเปิดอยู่', CONF().open && updates().length === 0 && dlg.open, 'confirm=' + CONF().open + ' updates=' + updates().length);
+  ok('คำเตือนแดงตัวหนา: เว็บจะรับจองไม่ได้ทันที · บอทยังไม่เคยซิงก์สำเร็จเลย · ลูกค้าถูกขอให้ทักร้านแทน', !!box && bold(box) && box.textContent.indexOf('เว็บจะรับจองไม่ได้ทันที') !== -1 && box.textContent.indexOf('บอทยังไม่เคยซิงก์ตารางสอนสำเร็จเลย') !== -1 && box.textContent.indexOf('ทักร้านแทน') !== -1, box && box.textContent);
+  ok('ปุ่มยืนยันบอกตรง ๆ "เปิดทั้งที่ซิงก์ยังไม่ผ่าน" (ไม่ใช่ "ตกลง")', $('confirmOkBtn').textContent === 'เปิดทั้งที่ซิงก์ยังไม่ผ่าน', $('confirmOkBtn').textContent);
+  CONF().close(); await sleep(10);
+  ok('ปิดหน้าต่างยืนยัน (ไม่เปิด): ไม่เขียนฐาน · หน้าต่างตั้งค่ายังอยู่ ช่องยังติ๊กอยู่ (แก้ต่อได้)', updates().length === 0 && dlg.open && $('wbBlocks').checked === true, 'updates=' + updates().length);
+  await wbSave(); await sleep(10);
+  $('confirmOkBtn').click(); await sleep(40);
+  ok('กดยืนยัน: เขียนฐานเฉพาะ room_blocks_enabled=true (+ ผู้แก้/เวลา) · ปิดหน้าต่างยืนยันและหน้าต่างตั้งค่า · แจ้งสำเร็จ', updates().length === 1 && only(updates()[0]) === 'room_blocks_enabled,updated_at,updated_by' && updates()[0].payload.room_blocks_enabled === true && !CONF().open && !dlg.open && toast().indexOf('✅') === 0, JSON.stringify(updates().map(u => u.payload)) + ' conf=' + CONF().open);
+
+  // ── ซิงก์เก่าเกินเกณฑ์ ──
+  SETTINGS.room_blocks_enabled = false; STATE.last_ok_at = ago(45); STATE.last_try_at = ago(45);
+  let n = updates().length;
+  await tick(true);
+  ok('ซิงก์เก่าเกินเกณฑ์ (45 นาที เกณฑ์ 30): ถามเหมือนกัน · บอกอายุจริง "ซิงก์ล่าสุดเมื่อ 45 นาทีที่แล้ว เก่าเกินเกณฑ์"', CONF().open && updates().length === n && $('confirmBody').textContent.indexOf('ซิงก์ล่าสุดเมื่อ 45 นาทีที่แล้ว เก่าเกินเกณฑ์') !== -1 && $('confirmBody').textContent.indexOf('ยังไม่เคยซิงก์') === -1, $('confirmBody').textContent);
+  CONF().close(); await sleep(10);
+  $('wbStale').value = '60';
+  await wbSave(); await sleep(40);
+  ok('ติ๊กเปิดพร้อมขยายเกณฑ์เป็น 60 นาทีในครั้งเดียวกัน (45 < 60 ไม่เก่าแล้ว): ไม่ต้องถาม — ตัดสินจากค่าที่จะบันทึก ไม่ใช่ค่าเดิม · เขียนทั้งสองช่อง', !CONF().open && updates().length === n + 1 && only(updates()[n]) === 'room_blocks_enabled,sync_stale_minutes,updated_at,updated_by', JSON.stringify(updates()[n] && updates()[n].payload));
+  SETTINGS.sync_stale_minutes = 30;
+
+  // ── กรณีที่ไม่ต้องถาม ──
+  SETTINGS.room_blocks_enabled = false; STATE.last_ok_at = ago(3); STATE.last_try_at = ago(3);
+  n = updates().length;
+  await tick(true);
+  ok('ซิงก์ปกติ (3 นาที): ติ๊กเปิดได้เลย ไม่ถาม', !CONF().open && updates().length === n + 1 && updates()[n].payload.room_blocks_enabled === true, 'conf=' + CONF().open);
+  SETTINGS.room_blocks_enabled = true; STATE.last_ok_at = null; STATE.last_try_at = null;
+  n = updates().length;
+  await tick(true, () => { $('wbMaxHours').value = '5'; });
+  ok('เปิดอยู่แล้วและยังไม่เคยซิงก์ แก้ช่องอื่น: ไม่ถาม (ไม่ได้เป็นคนเปิดตอนนี้ — แถบแดงบนหน้าบอกอยู่แล้ว)', !CONF().open && updates().length === n + 1 && only(updates()[n]) === 'max_hours_per_booking,updated_at,updated_by', JSON.stringify(updates()[n] && updates()[n].payload));
+  SETTINGS.room_blocks_enabled = true;
+  n = updates().length;
+  await tick(false);
+  ok('ปิดสวิตช์ (เปิด→ปิด) ตอนยังไม่เคยซิงก์: ไม่ถาม — ปิดเป็นการแก้ปัญหา', !CONF().open && updates().length === n + 1 && updates()[n].payload.room_blocks_enabled === false, 'conf=' + CONF().open);
+  SETTINGS.room_blocks_enabled = false;
+  n = updates().length;
+  await tick(false, () => { $('wbMaxHours').value = '6'; });
+  ok('สวิตช์ปิดอยู่และไม่แตะ แก้ช่องอื่นตอนยังไม่เคยซิงก์: ไม่ถาม', !CONF().open && updates().length === n + 1 && only(updates()[n]) === 'max_hours_per_booking,updated_at,updated_by', JSON.stringify(updates()[n] && updates()[n].payload));
+
+  // ── ออกจากระบบ/เปลี่ยนผู้ใช้/กดซ้ำระหว่างหน้าต่างยืนยันเปิด ──
+  SETTINGS.room_blocks_enabled = false; STATE.last_ok_at = null; STATE.last_try_at = null;
+  n = updates().length;
+  await tick(true);
+  wbReset();
+  $('confirmOkBtn').click(); await sleep(40);
+  ok('ล้างแผง (ออกจากระบบ/สลับบัญชี) ตอนหน้าต่างยืนยันค้างอยู่ แล้วมีคนกดยืนยัน: ไม่เขียนฐาน · หน้าต่างยืนยันปิด', updates().length === n && !CONF().open, 'updates+' + (updates().length - n) + ' conf=' + CONF().open);
+  await tick(true);
+  currentUserId = 'u-someone-else';
+  $('confirmOkBtn').click(); await sleep(40);
+  currentUserId = 'u1';
+  ok('เปลี่ยนผู้ใช้ตอนหน้าต่างยืนยันค้างอยู่ แล้วกดยืนยัน: ไม่เขียนฐานในนามคนใหม่ · หน้าต่างยืนยันปิด', updates().length === n && !CONF().open, 'updates+' + (updates().length - n));
+  await tick(true);
+  let rel; MODE.holdUpdate = new Promise(r => { rel = r; });
+  $('confirmOkBtn').click(); $('confirmOkBtn').click(); await sleep(20);
+  rel(); await sleep(40); MODE.holdUpdate = null;
+  ok('กดยืนยันรัว ๆ: เขียนฐานครั้งเดียว', updates().length === n + 1, 'updates+' + (updates().length - n));
+
+  L('=== สรุป: ' + pass + ' PASS / ' + fail + ' FAIL ===');
+  L(fail ? 'RESULT:FAIL' : 'RESULT:PASS');
+}
+</script>`;
+
 // ───────── หน้า 3: พนักงาน (ดูได้ ตั้งค่าไม่ได้) + ผู้ดูแล (ตั้งค่าได้) ─────────
 const T_STAFF = PRE + `<script>
 async function runTests() {
@@ -437,10 +530,10 @@ async function runTests() {
   const note = $('wbNote');
   ok('แถบเหลืองบอกให้รัน migration 041 (ไม่ใช่ error แดง)', shown(note) && note.classList.contains('alert-warn') && note.textContent.indexOf('041') !== -1, note.textContent);
   ok('ไม่มีแถบสถานะ · ไม่มีฟอร์ม · ไม่มีปุ่มบันทึก (ไม่มีอะไรให้ตั้ง)', !shown($('wbStatus')) && !shown($('wbSettings')) && !shown($('wbSave')));
-  ok('ไม่มีข้อความแดง ไม่มีแถบผิดพลาดบนหน้าจอ (ฐานเก่ายังใช้งานปกติ) — ตารางสถานะที่ยังไม่มีไม่ถูกนับเป็น error', $('wbErr').hidden === true && !$('fatalError') && !dlg.querySelector('.wk-red'), 'fatal=' + !!$('fatalError'));
+  ok('ไม่มีข้อความแดง ไม่มีแถบผิดพลาดบนหน้าจอ (ฐานเก่ายังใช้งานปกติ) — ตารางสถานะที่ยังไม่มีไม่ถูกนับเป็น error', $('wbErr').hidden === true && !$('fatalError') && !visibleRed(), 'fatal=' + !!$('fatalError'));
   ok('หมวดจองห้องยังทำงานปกติ (ตั้งค่าเดิมโหลดได้)', typeof settings === 'object' && settings.pricePerHour === 800, JSON.stringify(settings));
   $('wbReload').click(); await sleep(40);
-  ok('กดรีเฟรชบนฐานเก่า: ยังเป็นแถบเหลืองเดิม ไม่เปลี่ยนเป็นข้อผิดพลาด', shown(note) && !dlg.querySelector('.wk-red'));
+  ok('กดรีเฟรชบนฐานเก่า: ยังเป็นแถบเหลืองเดิม ไม่เปลี่ยนเป็นข้อผิดพลาด', shown(note) && !visibleRed());
   $('wbForm').dispatchEvent(new Event('submit', { cancelable: true }));
   await sleep(20);
   ok('ส่งฟอร์มตอนยังไม่มีข้อมูลตั้งค่า (ไม่ได้โหลด/ยังไม่รัน 041): ไม่เขียนฐาน ไม่มี error หลุดในหน้า (ตัวรันเทสต์ตรวจ error ที่ไม่ถูกดักให้เอง)', updates().length === 0, 'updates=' + updates().length);
@@ -690,6 +783,7 @@ async function runTests() {
 const pages = [
   ['แถบสถานะซิงก์ (เจ้าของ)', { role: 'owner', v041: true }, T_STATUS],
   ['ฟอร์มตั้งค่า + บันทึก (เจ้าของ)', { role: 'owner', v041: true }, T_FORM],
+  ['เปิดสวิตช์ตารางสอนทั้งที่ซิงก์ยังไม่ผ่าน (เจ้าของ)', { role: 'owner', v041: true }, T_BLOCKS],
   ['พนักงาน (ดูอย่างเดียว)', { role: 'staff', v041: true }, T_STAFF],
   ['ผู้ดูแล (ตั้งค่าได้)', { role: 'admin', v041: true }, T_STAFF],
   ['ฐานยังไม่รัน 041', { role: 'owner', v041: false }, T_NO041],
