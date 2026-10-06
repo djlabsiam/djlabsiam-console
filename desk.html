@@ -4591,8 +4591,6 @@ async function rcvRegAdd() {
   await receiveScan(serial);
   focusField(inp);
 }
-// ตัวอักษรที่เครื่องยิงพิมพ์ลงช่องหมายเหตุของถาดถูก oninput ก๊อปเข้า rcv.reason (ที่ใช้ตอนยืนยัน) แต่ช่องถูกคืนค่าเดิมแล้ว — ก๊อปค่าที่คืนแล้วกลับ
-function rcvReasonSync() { const r = document.getElementById('rcvReason'); if (r) rcv.reason = r.value; }
 function rcvUndo(pid, i) {
   const g = rcvGroup(pid);
   if (!g) return;
@@ -14118,10 +14116,18 @@ function wedgeRoute() {
   return 'wrongpage';
 }
 
+// wedgeRestore คืนค่าช่องด้วย .value ตรง ๆ ไม่มี event — ผู้ฟัง input ที่ก๊อปค่าลงตัวแปรหรือวาดรายการใหม่ (หมายเหตุรับเข้า ·
+// ยอดฝังใน QR รับเงิน · ตัวกรองราคา/Ops Board ฯลฯ) จึงยังถือค่าที่มีตัวอักษรของเครื่องยิงปนอยู่ · บอกซ้ำด้วยค่าที่คืนแล้ว
+// (เฉพาะช่องพิมพ์ — select/checkbox ไม่ใช่ · ส่วนนี้อยู่นอกบล็อกที่ต้องเหมือนกันสามไฟล์ จึงไม่แตะ wedgeRestore)
+function wedgeResyncField() {
+  const el = wedgeSnapshot && wedgeSnapshot.el;
+  if (el && /^(text|search|tel|url|email|number|password|textarea)$/.test(el.type)) el.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
 async function onWedgeScan(value) {
   calcUndoScan();                             // ตัวอักษรของการยิงที่หล่นเข้าเครื่องคิดเลข — คืนสถานะเดิมทั้งก้อน แล้วส่งต่อตามหมวดเหมือนเดิม
   dcComposerSync();                           // ช่องพิมพ์ Discord ถูกคืนค่าเดิมแล้ว (wedgeRestore) — ตัวนับ/ความสูงตามให้ตรง
-  rcvReasonSync();                            // ช่องหมายเหตุของถาดรับเข้าถูกคืนค่าเดิมแล้ว — ตัวแปร rcv.reason ที่ oninput ก๊อปไว้ต้องกลับตาม
+  wedgeResyncField();                         // ช่องพิมพ์อื่นที่ถูกคืนค่า — ตัวแปร/รายการที่ผู้ฟัง input ถือไว้ต้องกลับตาม (รวม rcv.reason ของถาดรับเข้า)
   await routeScan(value, true);
 }
 

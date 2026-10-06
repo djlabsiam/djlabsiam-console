@@ -7,6 +7,7 @@
  *   2. ยิงรหัสที่ระบบไม่รู้จักจากหมวดไหนก็ตาม → เลือกรุ่นในหน้าต่างเดิม แล้วเข้ารอบรับเข้าของผนัง (ไม่พาไปหน้าเคลื่อนไหวอีก)
  *   3. เมนู "รับเข้า / ตัดออก / ปรับยอด" ไม่อยู่ในเมนูซ้าย แต่หน้ากับ #stock-move ยังอยู่ให้ลิงก์เก่า
  *   4. เครื่องยิงยิงได้ตลอดที่แผงเปิดอยู่ (ไม่ถูก 'blocked') · ตัวอักษรที่เครื่องยิงพิมพ์ลงช่องหมายเหตุไม่ค้างใน rcv.reason
+ *   5. ช่องพิมพ์ที่ถูกตัวอักษรของเครื่องยิงลงทับแล้วถูกคืนค่า → ตัวแปร/รายการที่ผู้ฟัง input ถือไว้ต้องตรงกับค่าที่คืน (7 ต.ค. — ยอดใน QR รับเงิน · ตัวกรองรายการ)
  * ทุกหน้าแยกกัน (หน้าละ 1 งบเวลาเสมือน) · ฐานข้อมูลปลอมจดทุกการเขียนไว้ใน CALLS
  */
 
@@ -344,9 +345,83 @@ async function runTests() {
 }
 </script>`;
 
+// ── หน้า 4: ช่องพิมพ์ที่ถูกตัวอักษรของเครื่องยิงลงทับ → ผู้ฟัง input ต้องได้ค่าที่คืนแล้ว ──────────
+// wedgeRestore คืนค่าช่องด้วย .value ตรง ๆ (ไม่มี event) — ผู้ฟังที่ก๊อปค่าลงตัวแปรหรือวาดรายการใหม่ยังถือค่าที่มีตัวอักษรยิงปนอยู่
+// ต้นเหตุเดียวกับช่องหมายเหตุรับเข้า (rcvReason) · ตัวอย่างที่เงินเกี่ยว: ยอดใน QR พร้อมเพย์ (ยิงตอนหน้าต่างรับเงินเปิด)
+const RESYNC = `<script>
+window.addEventListener('load', () => setTimeout(runTests, 300));
+${COMMON}
+async function runTests() {
+  L('=== ช่องพิมพ์ที่ถูกเครื่องยิงลงทับ: ตัวแปร/รายการต้องตรงกับค่าที่คืนแล้ว ===');
+  try { localStorage.clear(); } catch (e) {}
+  await login('owner@djlabsiam.com');
+  const heard = [];
+  document.addEventListener('input', e => heard.push(e.target.id));       // ผู้ฟังระดับหน้า (ตรวจว่า event ลอยขึ้นถึง ไม่ใช่แค่ oninput ที่ตัวช่อง)
+
+  // ── ยอดใน QR รับเงิน (หน้าต่างเปิด → ถูกยิงเป็น 'blocked' แต่ตัวอักษรหล่นลงช่องยอดไปแล้ว) ──
+  Object.assign(payState, { loaded: true, missing: false, promptpayId: '0812345678', name: 'DJ LAB SIAM' });
+  await openPayQr('promptpay', 1250);
+  const amt = $('payAmt');
+  ok('เปิด QR รับเงิน: ช่องยอด = 1250.00 · ตัวแปร pay.amount ตรงกัน', amt.value === '1250.00' && pay.amount === '1250.00', amt.value + ' / ' + pay.amount);
+  amt.focus(); amt.value = '1250'; amt.dispatchEvent(new Event('input', { bubbles: true }));
+  ok('พิมพ์ยอดเองยังเข้า pay.amount และ QR ตามปกติ', pay.amount === '1250' && /฿1,250/.test($('payStage').textContent), pay.amount + ' / ' + $('payStage').textContent);
+  heard.length = 0;
+  typedBurst(digits('885123456789'), amt); await sleep(150);
+  ok('ยิงตอนโฟกัสอยู่ที่ช่องยอด → ช่องกลับเป็นยอดเดิม', amt.value === '1250', amt.value);
+  ok('ยิงตอนโฟกัสอยู่ที่ช่องยอด → pay.amount ไม่มีตัวเลขของเครื่องยิงค้าง (ยอดที่ฝังใน QR)', pay.amount === '1250', pay.amount);
+  ok('ยิงตอนโฟกัสอยู่ที่ช่องยอด → QR ยังแสดงยอดเดิม ไม่ใช่ยอดจากบาร์โค้ด', /฿1,250/.test($('payStage').textContent) && !/885/.test($('payStage').textContent), $('payStage').textContent);
+  ok('คืนค่าแล้วมี input event เพิ่มอีก 1 ครั้งลอยขึ้นถึงระดับหน้า (12 ตัวอักษรที่ยิง + 1 ตอนคืนค่า — ผู้ฟังแบบ delegate ก็ได้ค่าที่คืนแล้ว)', heard.length === 13 && heard.every(x => x === 'payAmt'), heard.length + ' ' + heard.join());
+  ok('ยิงตอนหน้าต่างเปิด = ยังถูกกัน (blocked) ไม่เกิดรายการขาย/เขียนฐาน', writes().length === 0, JSON.stringify(writes()));
+  $('payDialog').close();
+
+  // ── ตัวกรองรายการ (ราคา/โปรโมชัน · งานทีม): ช่องค้นหากับตัวแปรตัวกรองต้องไม่เพี้ยนจากกัน ──
+  showSection('catalog'); await sleep(100);
+  const cs = $('catSearch'); cs.focus(); cs.value = 'flx'; cs.dispatchEvent(new Event('input', { bubbles: true }));
+  ok('พิมพ์ค้นหาเองยังเข้า cat.q ตามปกติ', cat.q === 'flx', cat.q);
+  typedBurst(digits('885123456789'), cs); await sleep(150);
+  ok('ยิงตอนโฟกัสอยู่ที่ช่องค้นหาราคา → ช่องกลับเป็นคำค้นเดิม · cat.q ตรงกับช่อง', cs.value === 'flx' && cat.q === 'flx', cs.value + ' / ' + cat.q);
+  showSection('ops'); await sleep(100);
+  const os = $('opsSearch'); os.focus(); os.value = 'ซ่อม'; os.dispatchEvent(new Event('input', { bubbles: true }));
+  typedBurst(digits('885123456789'), os); await sleep(150);
+  ok('ยิงตอนโฟกัสอยู่ที่ช่องค้นหางานทีม → ช่องกลับเป็นคำค้นเดิม · ops.q ตรงกับช่อง', os.value === 'ซ่อม' && ops.q === 'ซ่อม', os.value + ' / ' + ops.q);
+
+  // ── ทุกชนิดช่องพิมพ์: ตัวก๊อปค่า (oninput) ต้องกลับเป็นค่าเดิม · ชนิดที่ไม่ใช่ช่องพิมพ์ต้องไม่ถูกยิง input ซ้ำ ──
+  const holder = document.createElement('div'); document.body.appendChild(holder);
+  const mirror = {};
+  const mk = (id, make, start) => { const el = make(); el.id = id; el.value = start; el.oninput = () => { mirror[id] = el.value; }; holder.appendChild(el); mirror[id] = el.value; return el; };
+  const inputOf = type => () => { const e = document.createElement('input'); e.type = type; return e; };
+  const TEXTY = [['pt-text', inputOf('text'), 'abc'], ['pt-search', inputOf('search'), 'abc'], ['pt-tel', inputOf('tel'), '0812345678'], ['pt-url', inputOf('url'), 'https://x.co'],
+    ['pt-email', inputOf('email'), 'a@b.co'], ['pt-number', inputOf('number'), '12'], ['pt-password', inputOf('password'), 'abc'], ['pt-textarea', () => document.createElement('textarea'), 'abc']];
+  for (const [id, make, start] of TEXTY) {
+    const el = mk(id, make, start); el.focus();
+    typedBurst(digits('885123456789'), el); await sleep(60);
+    ok('ช่องชนิด ' + id.slice(3) + ': ยิงทับแล้วค่ากลับเป็นเดิม · ตัวก๊อปค่า (oninput) ตรงกับช่อง', el.value === start && mirror[id] === start, el.value + ' / ' + mirror[id]);
+  }
+  const idle = [['pt-checkbox', inputOf('checkbox')], ['pt-radio', inputOf('radio')], ['pt-range', inputOf('range')], ['pt-color', inputOf('color')], ['pt-button', inputOf('button')], ['pt-select', () => document.createElement('select')]];
+  let spurious = [];
+  for (const [id, make] of idle) {
+    const el = make(); el.id = id; el.oninput = () => spurious.push(id); holder.appendChild(el); el.focus();
+    burst(digits('885123456789')); await sleep(60);
+  }
+  ok('ช่องที่ไม่ใช่ช่องพิมพ์ (checkbox · radio · range · color · button · select) ไม่ถูกยิง input ซ้ำหลังเครื่องยิงทำงาน', spurious.length === 0, spurious.join());
+  holder.remove();
+
+  // ── ไม่เสี่ยงข้างเคียง: การยิงที่ไม่ได้อยู่ในช่องพิมพ์ทำงานเหมือนเดิม ──
+  showSection('products'); setWallMode('find'); await sleep(60);
+  (document.activeElement || document.body).blur();
+  heard.length = 0;
+  burst(digits('619659216054')); await sleep(150);
+  ok('ยิงตอนไม่ได้โฟกัสช่องพิมพ์ → ไม่มี input event เพิ่มจากการคืนค่า', heard.length === 0, heard.join());
+  ok('ไม่มีข้อผิดพลาดแดงบนจอ', !$('fatalError'), $('fatalError') && $('fatalError').textContent);
+  L('=== สรุป: ' + pass + ' PASS / ' + fail + ' FAIL ===');
+  L(fail ? 'RESULT:FAIL' : 'RESULT:PASS');
+}
+</script>`;
+
 let bad = 0;
 // หน้าแรกกว้างแบบคอม (1366×768) — เทสต์วัดความสูงถาดที่ผูกกับ vh ต้องใช้หน้าต่างกว้างกว่าเกณฑ์มือถือ (767px)
-for (const [name, tests, flags] of [['แผงลงทะเบียนเครื่อง', PANEL, ['--window-size=1366,768']], ['รหัสที่ไม่รู้จัก', UNKNOWN, []], ['เมนู', MENU, []]]) {
+for (const [name, tests, flags] of [['แผงลงทะเบียนเครื่อง', PANEL, ['--window-size=1366,768']], ['รหัสที่ไม่รู้จัก', UNKNOWN, []], ['เมนู', MENU, []], ['ช่องพิมพ์ที่ถูกยิงทับ', RESYNC, []]]){
+  if (process.env.REG_ONLY && !new RegExp(process.env.REG_ONLY).test(name)) continue;       // REG_ONLY=<regex ชื่อหน้า> รันทีละหน้า (เครื่องหนัก/ทำ mutation เฉพาะจุด)
   console.log('\n--- ' + name + ' ---');
   const r = runPage({ root, file: 'desk.html', mock: MOCK, tests, flags });
   if (!r.ok) bad++;
