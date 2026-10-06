@@ -759,6 +759,14 @@
   .tray-sum b { font-family: var(--font-head); font-size: 19px; color: var(--text); }
   .tray-h .input { width: auto; min-height: 36px; padding: 5px 10px; }
   .tray-reason { width: 260px !important; }
+  /* ลงทะเบียนเครื่อง (โหมดรับเข้า) — แผงในถาด ไม่ใช่ <dialog> · เปิดแล้วถาดสูงขึ้นให้การ์ดซีเรียลยังเห็นครบ */
+  .tray-reg { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; padding: 8px 14px; background: var(--surface2); border-bottom: 1px solid var(--line-strong); flex-shrink: 0; }
+  .tray-reg .tr-f { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 14px; font-weight: 600; color: var(--text2); }
+  .tray-reg .input { width: auto; min-height: 36px; padding: 5px 10px; }
+  .tray-reg select.input { min-width: 200px; max-width: 300px; }
+  .tray-reg .tr-sn { width: 210px; font-variant-numeric: tabular-nums; letter-spacing: .02em; }
+  .tray-reg .tr-hint { margin: 0; flex: 1 1 200px; }
+  .tray.reg-open { flex-basis: clamp(330px, 46vh, 400px); }
   .tray-b { flex: 1; min-height: 0; display: flex; gap: 18px; padding: 12px 14px; overflow-x: auto; overflow-y: hidden;
     scrollbar-width: thin; scrollbar-color: var(--line-strong) var(--surface2); }
   .tray-empty { color: var(--text2); font-size: 15px; max-width: 72ch; }
@@ -960,6 +968,7 @@
     .tablewrap { max-height: calc(100dvh - 290px); }
     .mail-reader iframe { height: calc(100dvh - 430px); }
     .tray { flex-basis: clamp(250px, 34dvh, 330px); }
+    .tray.reg-open { flex-basis: clamp(330px, 46dvh, 400px); }
     .gresults { max-height: 60dvh; }
     /* ขอบล่างของ iPad ที่มีแถบโฮม (เส้นขีดล่างจอ) — ของที่ชิดล่างยกขึ้นพ้นแถบ */
     .workspace { padding-bottom: calc(40px + env(safe-area-inset-bottom)); }
@@ -1311,7 +1320,7 @@
     .pay-amt-in { font-size: 24px; }
     input[type="checkbox"], input[type="radio"] { width: 22px; height: 22px; }
     input[type="color"] { min-width: 44px; min-height: 44px; }
-    .tray-h .input { min-height: 44px; }
+    .tray-h .input, .tray-reg .input { min-height: 44px; }
     .price-in { width: 96px; }
     /* ก้อนจองสั้น ๆ (1 ชม.) บนไทม์ไลน์แคบกว่านิ้ว — กว้างอย่างน้อย 44 (ล้นเข้าชั่วโมงถัดไปไม่กี่ px · ตารางข้างล่างแตะได้อีกทาง) */
     .tl-block { min-width: 44px; }
@@ -1450,6 +1459,14 @@
     .tray-note { flex: 1 0 100%; max-width: none; white-space: normal; }
     .tray-reason { width: 100% !important; }
     .tray-h .btn { flex: 1; }
+    /* แผงลงทะเบียนเครื่อง: รุ่นเต็มแถว · ซีเรียล + ปุ่มเพิ่มแถวเดียวกัน · ไม่มีป้ายหัวข้อ/คำแนะนำ (ช่องมี aria-label กับข้อความในช่อง) กินที่ถาดน้อยที่สุด */
+    .tray-reg { display: grid; grid-template-columns: 1fr auto; gap: 8px; padding: 8px 12px; }
+    .tray-reg .tr-f { display: flex; min-width: 0; }
+    .tray-reg .tr-f:first-child { grid-column: 1 / -1; }
+    .tray-reg .tr-f > span, .tray-reg .tr-hint { display: none; }
+    .tray-reg .input, .tray-reg select.input, .tray-reg .tr-sn { width: 100%; max-width: none; min-width: 0; }
+    .tray-h #rcvRegBtn { flex: 1 0 100%; }
+    .tray.reg-open { flex-basis: auto; max-height: 70dvh; }
     .tray-b { padding: 10px 12px; gap: 12px; }
 
     /* หน้าต่างวิดีโอลอย: ไม่กว้างกว่าจอ */
@@ -1509,7 +1526,7 @@
     .wall-bar { flex-wrap: nowrap; }
     .wall-chips { flex-wrap: nowrap; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; }
     .wall-chips::-webkit-scrollbar { display: none; }
-    .tray { flex: 0 1 auto; max-height: 60dvh; }
+    .tray, .tray.reg-open { flex: 0 1 auto; max-height: 60dvh; }
   }
   /* ...และถ้าความกว้างเป็นมือถือด้วย (SE แนวนอน 667): เครื่องคิดเลขลอยมุมขวาบนของแถบ จึงเว้นขวาให้ · ผนังเรียงเดิมของแถว (ไม่ย้าย order) */
   @media screen and (max-height: 500px) and (max-width: 767px) {
@@ -3161,7 +3178,9 @@ const SECTIONS = [
   // T = งานของฉัน (Work Checklist · migration 037/038) — ทุกตำแหน่งเข้าได้ · แท็บ "ตรวจงาน" ในหน้าเห็นเฉพาะเจ้าของ/ผู้ดูแล · ป้ายเมนูกับชื่อหน้าเป็นคำเดียวกันตามที่เจ้าของสั่ง
   { id: 'tasks',    hash: 'tasks',         group: 'พนักงาน',     icon: 'tasks', label: 'งานของฉัน', key: 'T' },
   { id: 'products', hash: 'stock',         group: 'สต็อกสินค้า', icon: 'products', label: 'สินค้า', key: '1' },
-  { id: 'movement', hash: 'stock-move',    group: 'สต็อกสินค้า', icon: 'movement', label: 'รับเข้า / ตัดออก / ปรับยอด', short: 'เข้า-ออก/ปรับยอด', key: '2' },
+  // menu: false = ไม่อยู่ในเมนูซ้าย (เจ้าของสั่ง 6 ต.ค. 69 — พนักงานสับสนกับเมนู "สินค้า" งานรับเข้าทั้งหมดทำในผนังสต็อกโหมดรับเข้า · ตัดออก/ปรับยอดทำในแผงรายละเอียดสินค้า)
+  // เก็บหน้า (#sec-movement) กับ hash #stock-move ไว้ให้ลิงก์เก่า · ไม่มีคีย์ลัด (Alt+2 เดิมว่าง)
+  { id: 'movement', hash: 'stock-move',    group: 'สต็อกสินค้า', icon: 'movement', label: 'รับเข้า / ตัดออก / ปรับยอด', short: 'เข้า-ออก/ปรับยอด', menu: false },
   { id: 'moves',    hash: 'stock-history', group: 'สต็อกสินค้า', icon: 'moves', label: 'ประวัติการเคลื่อนไหว', short: 'ประวัติสต๊อก', key: '3' },
   { id: 'pos',      hash: 'pos',           group: 'การขาย',      icon: 'pos', label: 'ขายหน้าร้าน', key: '4' },
   { id: 'bills',    hash: 'bills',         group: 'การขาย',      icon: 'bills', label: 'ประวัติบิล', key: '5' },
@@ -4411,13 +4430,22 @@ function buildTray() {
   const t = document.getElementById('tray');
   t.className = 'tray tray-' + wall.mode;
   if (wall.mode === 'receive') {
+    // แผง "ลงทะเบียนเครื่อง" ไม่ใช่ <dialog> โดยตั้งใจ — wedgeRoute ปฏิเสธการยิงตอนมี dialog เปิด (เครื่องยิงต้องยิงเข้ารอบได้ตลอดที่แผงเปิดอยู่)
+    // ช่องซีเรียลในแผงไม่มี oninput ที่ก๊อปค่าลงตัวแปร: ตัวอักษรที่เครื่องยิงพิมพ์ลงช่องถูกคืนค่าเองแล้ว แต่ตัวแปรที่ก๊อปไว้จะไม่ถูกคืน (บทเรียนช่องหมายเหตุ rcvReason)
     t.innerHTML = '<div class="tray-h"><h2>รับเข้ารอบนี้</h2><span class="tray-sum" id="traySum"></span>' +
       '<input class="input tray-reason" id="rcvReason" maxlength="200" placeholder="หมายเหตุ เช่น ล็อตจากตัวแทน" aria-label="หมายเหตุการรับเข้า" oninput="rcv.reason = this.value">' +
       '<span class="tray-acts"><span id="trayNote"></span>' +
+      '<button class="btn" type="button" id="rcvRegBtn" aria-controls="rcvReg" onclick="rcvRegToggle()">ลงทะเบียนเครื่อง</button>' +
       '<button class="btn" type="button" id="rcvClearBtn" onclick="rcvClear()">ล้างรอบนี้</button>' +
       '<button class="btn btn-primary" type="button" id="rcvConfirmBtn" onclick="rcvConfirm()"></button></span></div>' +
+      '<div class="tray-reg" id="rcvReg">' +
+        '<label class="tr-f"><span>รุ่น</span><select class="input" id="rcvRegModel" aria-label="รุ่นของเครื่องที่ลงทะเบียน" onchange="rcvRegPick()"></select></label>' +
+        '<label class="tr-f"><span>ซีเรียล</span><input class="input tr-sn" id="rcvRegSerial" maxlength="64" autocomplete="off" spellcheck="false" placeholder="SER. NO. แล้วกด Enter" aria-label="ซีเรียล (SER. NO.) ของเครื่อง" onkeydown="if (event.key === \'Enter\') { event.preventDefault(); rcvRegAdd(); }"></label>' +
+        '<button class="btn btn-primary" type="button" id="rcvRegAddBtn" onclick="rcvRegAdd()">เพิ่มเครื่องนี้</button>' +
+        '<span class="hint tr-hint">ยิงซีเรียลต่อได้เลย — เข้ารุ่นที่เลือก</span></div>' +
       '<div class="tray-b" id="trayBody"></div>';
     document.getElementById('rcvReason').value = rcv.reason || '';
+    rcvRegApply();
   } else if (!cnt.started) {
     const opts = wall.wings.length ? countScopeOptions() : '';
     t.innerHTML = '<div class="tray-h"><h2>นับสต็อก</h2>' +
@@ -4508,7 +4536,7 @@ async function receiveScan(value) {
     return;
   }
   // 4. ซีเรียลใหม่ — ต้องรู้ว่าเป็นเครื่องของรุ่นไหน ยังไม่รู้ = ถามก่อน ไม่เดา
-  if (!rcv.target) { askCodeKind(value, true); return; }
+  if (!rcv.target) { askCodeKind(value); return; }
   rcvAddSerial(rcv.target, value);
 }
 function rcvSerialFor() {
@@ -4516,8 +4544,55 @@ function rcvSerialFor() {
   const pid = sel ? sel.value : '';
   if (!pid) { showToast('⚠️ เลือกรุ่นสินค้าก่อน'); return; }
   document.getElementById('codeDialog').close();
+  // ยิงรหัสที่ไม่รู้จักจากหมวดอื่น (หน้าแรก · โหมดหา · หน้าเคลื่อนไหวเดิม) แล้วเลือกรุ่น = พามาโหมดรับเข้าของผนัง ไม่ใช่ไปหน้าเคลื่อนไหว
+  if (current !== 'products' || wall.mode !== 'receive') { showSection('products'); setWallMode('receive'); }
   rcvAddSerial(pid, pendingCode);
 }
+
+// ---- ลงทะเบียนเครื่อง: เลือกรุ่น + พิมพ์ซีเรียลทีละเครื่อง ในถาดรับเข้าเลย (แทนการไปหน้า "รับเข้า / ตัดออก / ปรับยอด") ----
+// ใช้ receiveScan ตัวเดิมทั้งหมด (ซ้ำในรอบ · ซีเรียลมีในระบบแล้ว · เข้ารุ่นที่เป็นเป้าหมาย) และยืนยันด้วย rcvConfirm ตัวเดิม — ลงฐานวิธีเดิมทุกอย่าง
+let rcvRegOpen = false;
+function rcvModelOptions() {
+  return products.filter(p => p.is_active && onShelf(p)).slice().sort(byModel).map(p =>
+    '<option value="' + p.id + '">' + escapeHtml(p.name) + ' (' + escapeHtml(p.sku) + ')</option>').join('');
+}
+function rcvRegApply() {
+  const panel = document.getElementById('rcvReg'), btn = document.getElementById('rcvRegBtn');
+  panel.hidden = !rcvRegOpen;
+  btn.setAttribute('aria-expanded', String(rcvRegOpen));
+  document.getElementById('tray').classList.toggle('reg-open', rcvRegOpen);
+}
+function rcvRegToggle() {
+  rcvRegOpen = !rcvRegOpen;
+  rcvRegApply();
+  if (rcvRegOpen) {
+    document.getElementById('rcvReg').scrollIntoView({ block: 'nearest' });      // จอเล็ก (มือถือ) ถาดอยู่ใต้ผนัง — เปิดแล้วต้องเห็นแผงเลย ไม่ต้องเลื่อนหา
+    focusField(document.getElementById(rcv.target ? 'rcvRegSerial' : 'rcvRegModel'));
+  }
+}
+// รายการรุ่นเติมใหม่เฉพาะเมื่อสินค้าเปลี่ยน (โหลดใหม่ระหว่างเลือก ไม่ทำให้รายการที่เปิดอยู่หุบ) · ช่องรุ่นตามรุ่นที่กำลังรับเข้าเสมอ (ยิงบาร์โค้ด/คลิกผนังแล้วช่องเปลี่ยนตาม)
+function rcvRegFill() {
+  const sel = document.getElementById('rcvRegModel');
+  const opts = rcvModelOptions();
+  if (sel.dataset.sig !== opts) { sel.innerHTML = '<option value="">— เลือกรุ่น —</option>' + opts; sel.dataset.sig = opts; }
+  sel.value = rcv.target && [...sel.options].some(o => o.value === rcv.target) ? rcv.target : '';
+}
+function rcvRegPick() {
+  const id = document.getElementById('rcvRegModel').value;
+  if (id) rcvSetTarget(id);              // เลือกรุ่นในช่อง = รุ่นที่กำลังรับเข้า (เหมือนคลิกรุ่นบนผนัง) ซีเรียลที่ยิงต่อจากนี้เข้ารุ่นนี้
+  else { rcv.target = null; renderTrayBody(); }
+}
+async function rcvRegAdd() {
+  const sel = document.getElementById('rcvRegModel'), inp = document.getElementById('rcvRegSerial');
+  const serial = inp.value.trim();
+  if (!sel.value) { showToast('⚠️ เลือกรุ่นก่อน แล้วค่อยพิมพ์ซีเรียล'); focusField(sel); return; }
+  if (!serial) { showToast('⚠️ พิมพ์ซีเรียลของเครื่องก่อน'); focusField(inp); return; }
+  inp.value = '';                         // รุ่นเป้าหมายคือรุ่นในช่องเสมอ (rcvRegPick ตั้งตอนเลือก · rcvRegFill ให้ช่องตามเป้าหมาย) receiveScan จึงเข้ารุ่นนี้
+  await receiveScan(serial);
+  focusField(inp);
+}
+// ตัวอักษรที่เครื่องยิงพิมพ์ลงช่องหมายเหตุของถาดถูก oninput ก๊อปเข้า rcv.reason (ที่ใช้ตอนยืนยัน) แต่ช่องถูกคืนค่าเดิมแล้ว — ก๊อปค่าที่คืนแล้วกลับ
+function rcvReasonSync() { const r = document.getElementById('rcvReason'); if (r) rcv.reason = r.value; }
 function rcvUndo(pid, i) {
   const g = rcvGroup(pid);
   if (!g) return;
@@ -4571,9 +4646,10 @@ function renderReceiveBody() {
   ok.textContent = 'ยืนยันรับเข้าทั้งรอบ (' + n + ')';
   ok.disabled = !n;
   document.getElementById('rcvClearBtn').disabled = !rcv.groups.length;
+  rcvRegFill();
   if (!rcv.groups.length) {
     body.innerHTML = '<div class="tray-empty"><strong>เริ่มรับของได้เลย</strong><ol>' +
-      '<li>ยิงบาร์โค้ดของรุ่นบนกล่อง หรือคลิกรุ่นบนผนัง</li>' +
+      '<li>ยิงบาร์โค้ดของรุ่นบนกล่อง หรือคลิกรุ่นบนผนัง (หรือกด <strong>ลงทะเบียนเครื่อง</strong> เลือกรุ่นแล้วพิมพ์ซีเรียล)</li>' +
       '<li>ยิงซีเรียล (SER. NO.) ของแต่ละเครื่อง — ขึ้นเป็นการ์ดทีละเครื่อง กด ✕ ที่การ์ดเพื่อเอาออก</li>' +
       '<li>ของไม่มีซีเรียล เช่น สาย: ยิงบาร์โค้ดรุ่นซ้ำตามจำนวน หรือกด + −</li>' +
       '<li>ครบแล้วกด <strong>ยืนยันรับเข้าทั้งรอบ</strong> — ยังไม่มีอะไรลงระบบจนกว่าจะกด</li></ol></div>';
@@ -4620,7 +4696,7 @@ async function rcvConfirm() {
       console.error('[Receive movements]', error);
       // ซีเรียลลงไปแล้วแต่ยอดไม่ลง — บอกให้ชัดว่าค้างตรงไหน และเอากลุ่มที่มีซีเรียลออกจากถาด (กดซ้ำ = ซีเรียลซ้ำ)
       showFatalError('ลงยอดรับเข้าไม่สำเร็จ: ' + error.message + (units.length
-        ? ' (ซีเรียล ' + units.length + ' เครื่องบันทึกไปแล้ว อย่ายิงซ้ำ — ลงยอดอย่างเดียวที่หมวด "รับเข้า / ตัดออก / ปรับยอด")' : ''));
+        ? ' (ซีเรียล ' + units.length + ' เครื่องบันทึกไปแล้ว อย่ายิงซ้ำ — ลงยอดอย่างเดียวด้วยโหมดรับเข้า: เลือกรุ่นแล้วกด + ตามจำนวน ไม่ต้องยิงซีเรียล)' : ''));
       if (units.length) { rcv.groups = rcv.groups.filter(g => !g.serials.length); rcv.target = null; }
       return;
     }
@@ -5464,6 +5540,7 @@ function renderNav() {
   let html = '', group = '';
   SECTIONS.forEach((s, i) => {
     if (!sectionAllowed(s)) return;      // พนักงานไม่เห็นหมวดที่หน้าเดิมปิดไว้ · Ops Board เห็นเฉพาะเจ้าของร้าน
+    if (s.menu === false) return;        // หมวดที่เก็บไว้ให้ลิงก์เก่า (hash เปิดได้ แต่ไม่อยู่ในเมนู)
     if (s.group !== group) {
       if (group) html += '</div>';
       group = s.group;
@@ -13856,14 +13933,14 @@ async function onScanned(code, viaGun) {
     }
     return;
   }
-  askCodeKind(value, false);
+  askCodeKind(value);
 }
 
 // อ่านได้แต่ไม่มีในระบบ — บาร์โค้ดที่ยิงมาเป็นได้ 2 อย่างซึ่งต้องทำคนละเรื่อง
 // ผูกซีเรียลของเครื่องเดียวเป็นบาร์โค้ดประจำรุ่นคือความผิดพลาดที่กู้ยาก
 // เพราะเครื่องที่เหลือทั้งรุ่นจะยิงไม่เจอ จึงต้องให้คนเลือกเอง ไม่เดาแทน
-// forReceive = ยิงมาตอนรับเข้าแต่ยังไม่ได้เลือกรุ่น → ข้อสองเลือกรุ่นแล้วเข้าถาดรับเข้าได้เลย
-function askCodeKind(value, forReceive) {
+// ข้อสอง: เลือกรุ่นแล้วเข้าถาดรับเข้าของผนังสต็อกได้เลย ไม่ว่ายิงมาจากหมวดไหน (rcvSerialFor พามาโหมดรับเข้าให้) — ไม่มีทางไปหน้า "รับเข้า / ตัดออก / ปรับยอด" แล้ว
+function askCodeKind(value) {
   pendingCode = value;
   const esc = escapeHtml(value);
   document.getElementById('codeBody').innerHTML =
@@ -13882,24 +13959,11 @@ function askCodeKind(value, forReceive) {
     '<div class="opt">' +
       '<div style="font-weight:600;">ซีเรียลของเครื่องเครื่องนี้</div>' +
       '<div class="hint" style="margin:0 0 10px;">สติกเกอร์ SER. NO. ไม่ซ้ำกับเครื่องอื่น ใช้ตอนรับเข้าทีละเครื่อง</div>' +
-      (forReceive
-        ? '<select id="serialModelSel" class="input"><option value="">— เป็นเครื่องของรุ่น —</option>' +
-          products.filter(p => p.is_active && onShelf(p)).slice().sort(byModel).map(p =>
-            '<option value="' + p.id + '">' + escapeHtml(p.name) + ' (' + escapeHtml(p.sku) + ')</option>').join('') +
-          '</select>' +
-          '<button class="btn btn-primary" type="button" style="margin-top:8px;" onclick="rcvSerialFor()">เพิ่มเข้ารอบรับเข้า</button>'
-        : '<button class="btn" type="button" onclick="goRegisterSerial(\'' + esc + '\')">ไปหน้ารับเข้าเพื่อบันทึกเครื่องนี้</button>') +
+      // ซีเรียลผูกกับ "เครื่อง" ไม่ใช่ "รุ่น" จึงต้องรู้ก่อนว่าเป็นเครื่องของรุ่นไหน
+      '<select id="serialModelSel" class="input"><option value="">— เป็นเครื่องของรุ่น —</option>' + rcvModelOptions() + '</select>' +
+      '<button class="btn btn-primary" type="button" style="margin-top:8px;" onclick="rcvSerialFor()">เพิ่มเข้ารอบรับเข้า</button>' +
     '</div>';
   document.getElementById('codeDialog').showModal();
-}
-
-// ซีเรียลผูกกับ "เครื่อง" ไม่ใช่ "รุ่น" จึงต้องรู้ก่อนว่าเป็นเครื่องของรุ่นไหน
-function goRegisterSerial(value) {
-  document.getElementById('codeDialog').close();
-  showSection('movement');
-  document.getElementById('movType').value = 'in';
-  onMovTypeChange();
-  showToast('เลือกรุ่นสินค้าก่อน แล้วยิงซีเรียลอีกครั้ง — รหัส ' + value + ' ยังไม่ได้บันทึก');
 }
 
 async function handleSerialScan(value) {
@@ -14057,6 +14121,7 @@ function wedgeRoute() {
 async function onWedgeScan(value) {
   calcUndoScan();                             // ตัวอักษรของการยิงที่หล่นเข้าเครื่องคิดเลข — คืนสถานะเดิมทั้งก้อน แล้วส่งต่อตามหมวดเหมือนเดิม
   dcComposerSync();                           // ช่องพิมพ์ Discord ถูกคืนค่าเดิมแล้ว (wedgeRestore) — ตัวนับ/ความสูงตามให้ตรง
+  rcvReasonSync();                            // ช่องหมายเหตุของถาดรับเข้าถูกคืนค่าเดิมแล้ว — ตัวแปร rcv.reason ที่ oninput ก๊อปไว้ต้องกลับตาม
   await routeScan(value, true);
 }
 

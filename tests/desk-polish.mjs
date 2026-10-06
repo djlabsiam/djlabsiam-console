@@ -230,16 +230,18 @@ async function runTests() {
   L('=== ' + W + '×' + H + ': เมนูซ้าย ===');
   await login('tibass');
   const sb = document.querySelector('.sidebar'), nl = $('navList');
-  ok('เจ้าของร้าน: เห็นเมนูครบ ' + SECTIONS.length + ' หมวด', document.querySelectorAll('#navList .nav-item').length === SECTIONS.length);
+  // movement (รับเข้า / ตัดออก / ปรับยอด) เก็บไว้ให้ลิงก์เก่า แต่ไม่อยู่ในเมนู (menu: false · เจ้าของสั่ง 6 ต.ค. 69) — รายละเอียดใน tests/desk-register.mjs
+  const MENU = SECTIONS.filter(s => s.menu !== false);
+  ok('เจ้าของร้าน: เห็นเมนูครบ ' + MENU.length + ' หมวด (ไม่รวมหมวดที่เก็บไว้ให้ลิงก์เก่า)', MENU.length === SECTIONS.length - 1 && document.querySelectorAll('#navList .nav-item').length === MENU.length);
   ok('ตัวเลขยังไม่อ่านบนเมนูโผล่จริง (กระดาน + จดหมาย) — ป้ายต้องพอดีทั้งที่มีตัวเลข',
     !$('navBadge-board').hidden && !$('navBadge-mail').hidden);
   // ป้ายย่อที่เจ้าของตั้ง ตามตัวอักษร (ประวัติสต๊อก ใช้ไม้ตรีตั้งใจ) — ที่เหลือคือชื่อหมวดเต็ม
-  const SHORT = { board: 'ข้อความ', mail: 'Mailbox', movement: 'เข้า-ออก/ปรับยอด', moves: 'ประวัติสต๊อก' };
-  ok('ป้ายในเมนู = ป้ายย่อที่เจ้าของตั้ง 4 หมวด · หมวดอื่นชื่อเต็ม', SECTIONS.every(s => {
+  const SHORT = { board: 'ข้อความ', mail: 'Mailbox', moves: 'ประวัติสต๊อก' };
+  ok('ป้ายในเมนู = ป้ายย่อที่เจ้าของตั้ง 3 หมวด · หมวดอื่นชื่อเต็ม', MENU.every(s => {
     const b = document.querySelector('.nav-item[data-s="' + s.id + '"]');
     return b && b.querySelector('.lbl').textContent === (SHORT[s.id] || s.label);
-  }), SECTIONS.map(s => { const b = document.querySelector('.nav-item[data-s="' + s.id + '"]'); return b && b.querySelector('.lbl').textContent; }).join(' | '));
-  const fullT = { board: 'กระดานข้อความ (Alt+B)', mail: 'กล่องจดหมายร้าน (Alt+M)', movement: 'รับเข้า / ตัดออก / ปรับยอด (Alt+2)', moves: 'ประวัติการเคลื่อนไหว (Alt+3)' };
+  }), MENU.map(s => { const b = document.querySelector('.nav-item[data-s="' + s.id + '"]'); return b && b.querySelector('.lbl').textContent; }).join(' | '));
+  const fullT = { board: 'กระดานข้อความ (Alt+B)', mail: 'กล่องจดหมายร้าน (Alt+M)', moves: 'ประวัติการเคลื่อนไหว (Alt+3)' };
   ok('ป้ายย่อทุกอัน: ชื่อเต็มอยู่ใน title ของปุ่มเมนู', Object.keys(fullT).every(k => document.querySelector('.nav-item[data-s="' + k + '"]').title === fullT[k]));
   const FULL = { board: 'กระดานข้อความ', mail: 'กล่องจดหมายร้าน', movement: 'รับเข้า / ตัดออก / ปรับยอด', moves: 'ประวัติการเคลื่อนไหว' };
   const badTitle = Object.keys(FULL).filter(k => { showSection(k); return $('pageTitle').textContent !== FULL[k]; });

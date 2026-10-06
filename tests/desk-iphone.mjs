@@ -177,11 +177,12 @@ async function runTests() {
   ok(T + ': เมนูซ้ายหุบเป็นลิ้นชัก มีปุ่มเมนูบนแถบบน', getComputedStyle(sb).visibility === 'hidden' && vis($('navBtn')));
   const scope = () => document.querySelector('.app');
   const views = SECTIONS.map(s => ({ id: s.id, label: s.label + ' (#' + s.hash + ')' }))
-    .concat([{ id: 'products', mode: 'receive', label: 'ผนังสต็อก โหมดรับเข้า' }, { id: 'products', mode: 'count', label: 'ผนังสต็อก โหมดนับ' }]);
+    .concat([{ id: 'products', mode: 'receive', label: 'ผนังสต็อก โหมดรับเข้า' }, { id: 'products', mode: 'receive', reg: true, label: 'ผนังสต็อก โหมดรับเข้า (แผงลงทะเบียนเครื่องเปิด)' }, { id: 'products', mode: 'count', label: 'ผนังสต็อก โหมดนับ' }]);
   for (const v of views) {
     showSection(v.id);
     if (v.id === 'pos') { cart.length = 0; addToCart('p1'); addToCart('p2'); addToCart('p3'); }
     if (v.id === 'products') setWallMode(v.mode || 'find');
+    if (v.mode === 'receive') { rcvRegOpen = !!v.reg; rcvRegApply(); }          // แผง "ลงทะเบียนเครื่อง" (6 ต.ค. 69) ต้องผ่านเกณฑ์มือถือชุดเดียวกัน
     if (v.mode === 'receive') { scanPurpose = 'receive'; await onScanned('619659216054', true); }
     await sleep(250); await frames();
     document.querySelector('.workspace').scrollTop = 0;
@@ -203,8 +204,14 @@ async function runTests() {
       ok(T + ' ผนังสต็อก: เห็นสินค้าได้จริง (ผนังสูง ≥ 150px)', wr.height >= 150, Math.round(wr.height) + 'px');
       ok(T + ' ผนังสต็อก: ชิปกรองเลื่อนข้างได้ ไม่ถูกพับเป็น "+n หมวด"', !document.querySelector('#wallChips .fchip-more'));
     }
-    if (SHOTS) await shot(TAG + '-' + (v.mode ? v.id + '-' + v.mode : v.id) + '.png');
+    if (v.reg) {
+      rcvRegOpen = false; rcvRegApply(); rcvRegToggle(); await frames();          // กดเปิดจริง: ต้องเลื่อนให้เห็นแผง (จอเล็กถาดอยู่ใต้ผนัง)
+      const pr = $('rcvReg').getBoundingClientRect();
+      ok(T + ' ' + v.label + ': แผงอยู่ในจอทั้งแผง · ช่องรุ่น/ช่องซีเรียล/ปุ่มเพิ่มเห็นครบ · ปุ่มกล้องยังอยู่ในโหมดนี้', !$('rcvReg').hidden && inView(pr) && vis($('rcvRegModel')) && vis($('rcvRegSerial')) && vis($('rcvRegAddBtn')) && vis(document.querySelector('.scanbox .cam-btn')), JSON.stringify(pr));
+    }
+    if (SHOTS) await shot(TAG + '-' + (v.mode ? v.id + '-' + v.mode + (v.reg ? '-reg' : '') : v.id) + '.png');
   }
+  rcvRegOpen = false;                       // ตอนนี้ถาดเป็นโหมดนับ (ไม่มีแผง) — ตั้งแค่ค่าสถานะ ไม่เรียก rcvRegApply
   setWallMode('find');
   const si = smallInputs();
   ok(T + ': ช่องกรอกทุกช่อง (รวมในหน้าต่างซ้อน) ตัวหนังสือ ≥ 16px — iOS ไม่ซูมเองตอนแตะ', !si.length, si.slice(0, 8).join(' | '));

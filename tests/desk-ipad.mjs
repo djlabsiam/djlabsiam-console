@@ -184,11 +184,12 @@ async function runTests() {
     drawer ? (getComputedStyle(sb).visibility === 'hidden' && vis($('navBtn'))) : (vis(sb) && Math.round(sb.getBoundingClientRect().width) === 248 && !vis($('navBtn'))));
   const scope = () => document.querySelector('.app');
   const views = SECTIONS.map(s => ({ id: s.id, label: s.label + ' (#' + s.hash + ')' }))
-    .concat([{ id: 'products', mode: 'receive', label: 'ผนังสต็อก โหมดรับเข้า' }, { id: 'products', mode: 'count', label: 'ผนังสต็อก โหมดนับ' }]);
+    .concat([{ id: 'products', mode: 'receive', label: 'ผนังสต็อก โหมดรับเข้า' }, { id: 'products', mode: 'receive', reg: true, label: 'ผนังสต็อก โหมดรับเข้า (แผงลงทะเบียนเครื่องเปิด)' }, { id: 'products', mode: 'count', label: 'ผนังสต็อก โหมดนับ' }]);
   for (const v of views) {
     showSection(v.id);
     if (v.id === 'pos') { cart.length = 0; addToCart('p1'); addToCart('p2'); addToCart('p3'); }
     if (v.id === 'products') setWallMode(v.mode || 'find');
+    if (v.mode === 'receive') { rcvRegOpen = !!v.reg; rcvRegApply(); }          // แผง "ลงทะเบียนเครื่อง" (6 ต.ค. 69) ต้องผ่านเกณฑ์จอสัมผัสชุดเดียวกัน
     if (v.mode === 'receive') { scanPurpose = 'receive'; await onScanned('619659216054', true); }
     await sleep(250); await frames();
     document.querySelector('.workspace').scrollTop = 0;
@@ -202,9 +203,15 @@ async function runTests() {
     ok(T + ' ' + v.label + ': เป้ากดที่มองเห็นทุกอัน ≥ 44×44', !s.length, s.slice(0, 10).join(' | ') + (s.length > 10 ? ' …+' + (s.length - 10) : ''));
     const u = underCalc(sec), tx = textUnder(sec);
     ok(T + ' ' + v.label + ': ปุ่มเครื่องคิดเลขไม่ทับปุ่ม/ตัวหนังสือ (ตำแหน่งเลื่อนตั้งต้น)', !u.length && !tx.length, u.concat(tx).join(' | '));
-    const key = v.mode ? v.id + '-' + v.mode : v.id;
+    if (v.reg) {
+      rcvRegOpen = false; rcvRegApply(); rcvRegToggle(); await frames();          // กดเปิดจริง: ต้องเลื่อนให้เห็นแผง
+      const pr = $('rcvReg').getBoundingClientRect();
+      ok(T + ' ' + v.label + ': แผงอยู่ในจอทั้งแผง · ช่องรุ่น/ช่องซีเรียล/ปุ่มเพิ่มเห็นครบ · ปุ่มกล้องยังอยู่ในโหมดนี้', !$('rcvReg').hidden && inView(pr) && vis($('rcvRegModel')) && vis($('rcvRegSerial')) && vis($('rcvRegAddBtn')) && vis(document.querySelector('.scanbox .cam-btn')), JSON.stringify(pr));
+    }
+    const key = v.mode ? v.id + '-' + v.mode + (v.reg ? '-reg' : '') : v.id;
     if (SHOTS[key]) await shot(SHOTS[key]);
   }
+  rcvRegOpen = false;                       // ตอนนี้ถาดเป็นโหมดนับ (ไม่มีแผง) — ตั้งแค่ค่าสถานะ ไม่เรียก rcvRegApply
   setWallMode('find');
   const si = smallInputs();
   ok(T + ': ช่องกรอกทุกช่อง (รวมในหน้าต่างซ้อน) ตัวหนังสือ ≥ 16px — iOS ไม่ซูมเองตอนแตะ', !si.length, si.slice(0, 8).join(' | '));
@@ -278,13 +285,14 @@ async function runTests() {
   ok('Esc → ลิ้นชักหุบ โฟกัสกลับปุ่มเมนู', !document.body.classList.contains('nav-open') && document.activeElement === btn);
   // ไปได้ทุกหมวดผ่านลิ้นชัก
   const bad = [];
-  for (const s of SECTIONS) {
+  const MENU = SECTIONS.filter(s => s.menu !== false);        // หมวดที่เก็บไว้ให้ลิงก์เก่า (รับเข้า / ตัดออก / ปรับยอด) ไม่อยู่ในเมนู
+  for (const s of MENU) {
     btn.click(); await sleep(60);
     const item = document.querySelector('#navList .nav-item[data-s="' + s.id + '"]');
     item.click(); await sleep(120);
     if (current !== s.id || $('sec-' + s.id).hidden || document.body.classList.contains('nav-open')) bad.push(s.id);
   }
-  ok('แตะหมวดในลิ้นชัก → เปิดหมวดนั้นและลิ้นชักหุบเอง ครบทุกหมวด (' + SECTIONS.length + ')', !bad.length, bad.join(','));
+  ok('แตะหมวดในลิ้นชัก → เปิดหมวดนั้นและลิ้นชักหุบเอง ครบทุกหมวดในเมนู (' + MENU.length + ')', !bad.length && MENU.length === SECTIONS.length - 1, bad.join(','));
   // คีย์ลัดยังใช้ได้เมื่อต่อคีย์บอร์ด
   document.dispatchEvent(new KeyboardEvent('keydown', { code: 'Digit4', key: '4', altKey: true, bubbles: true, cancelable: true }));
   await sleep(100);
