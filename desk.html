@@ -260,6 +260,9 @@
   .dlg-head h2 { font-size: 19px; }
   .dlg-body { padding: 18px 22px 22px; }
   .dlg-foot { display: flex; justify-content: flex-end; gap: 10px; padding: 0 22px 20px; }
+  .wb-box { border: 1px solid var(--line-strong); background: var(--surface2); padding: 12px 14px; margin-bottom: 16px; }   /* แถบสถานะซิงก์ตารางสอนในแผง "จองออนไลน์" */
+  .wb-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin: 6px 0; font-size: 14px; }
+  .wb-k { flex: 0 0 168px; color: var(--text2); }
   .opt { border: 1px solid var(--line); padding: 14px; margin-top: 12px; }
   .help-grid { display: grid; grid-template-columns: auto 1fr; gap: 8px 16px; font-size: 15px; }
 
@@ -1996,6 +1999,7 @@
                 <button class="btn btn-sm" type="button" onclick="setBkDate(todayBangkok())">วันนี้</button>
                 <strong id="bkDateLabel" style="margin-left:6px;"></strong>
                 <span style="flex:1;"></span>
+                <button class="btn" type="button" id="wbBtn" title="สถานะซิงก์ตารางสอน + ตั้งค่ารับจองจากหน้า /book">⚙ จองออนไลน์</button>
                 <button class="btn btn-primary" type="button" onclick="openBookingForm()">+ จองห้องใหม่</button>
               </div>
               <div id="bkTimeline"></div>
@@ -2739,6 +2743,47 @@
   </form>
 </dialog>
 
+<!-- จองออนไลน์ (หน้า /book): สถานะซิงก์ตารางสอน (ทุกคนในทีมดูได้) + ตั้งค่ารับจอง (เจ้าของ/ผู้ดูแล · migration 041) -->
+<dialog id="wbDlg" aria-labelledby="wbTitle" style="max-width:640px;">
+  <div class="dlg-head"><h2 id="wbTitle">จองออนไลน์ (หน้า /book)</h2><button class="btn btn-sm" type="button" id="wbReload">↻ รีเฟรช</button></div>
+  <form class="dlg-body" id="wbForm" novalidate>
+    <div id="wbNote" class="alert alert-warn" role="status" hidden></div>
+    <div id="wbStatus" class="wb-box" aria-live="polite"></div>
+    <p class="hint" id="wbRo" hidden>ตั้งค่าการรับจองได้เฉพาะเจ้าของร้านหรือผู้ดูแล — พนักงานดูสถานะได้อย่างเดียว</p>
+    <div id="wbSettings" hidden>
+      <div class="field"><label class="chk"><input type="checkbox" id="wbEnabled"> เปิดรับจองออนไลน์</label>
+        <div class="hint">เอาติ๊กออก = ปิดรับจองจากหน้า /book ทันที (ใบที่จองไปแล้วไม่เปลี่ยน)</div></div>
+      <div class="field"><label class="chk"><input type="checkbox" id="wbBlocks"> ให้ตารางสอนทำให้ห้องเต็ม</label>
+        <div class="hint">ติ๊ก = ช่วงที่ปฏิทินทีมใช้ห้องซ้อมจะจองจากเว็บไม่ได้ · ถ้าซิงก์เก่าเกินกำหนดด้านล่าง เว็บจะรับจองไม่ได้เลยจนกว่าซิงก์สำเร็จ</div></div>
+      <div class="field"><label class="lbl" for="wbKeywords">คำที่บอกว่านัดในปฏิทินใช้ห้องซ้อม (คั่นด้วยจุลภาค)</label>
+        <input type="text" id="wbKeywords" class="input" maxlength="300" autocomplete="off" placeholder="เช่น ห้องซ้อม">
+        <div class="hint">บอทดูช่อง Location ของนัดใน Google Calendar — มีคำใดคำหนึ่ง = นัดนั้นใช้ห้องซ้อม</div></div>
+      <div class="row2">
+        <div class="field"><label class="lbl" for="wbOpen">เวลาเปิดรับจอง</label><input type="time" id="wbOpen" class="input"></div>
+        <div class="field"><label class="lbl" for="wbClose">เวลาปิด (ต้องหลังเวลาเปิด)</label><input type="time" id="wbClose" class="input"></div>
+      </div>
+      <div class="row2">
+        <div class="field"><label class="lbl" for="wbMaxHours">ชั่วโมงสูงสุดต่อใบจอง (1–12)</label><input type="number" id="wbMaxHours" class="input" min="1" max="12" step="1" inputmode="numeric"></div>
+        <div class="field"><label class="lbl" for="wbLead">จองล่วงหน้าอย่างน้อย · นาที (0–1440)</label><input type="number" id="wbLead" class="input" min="0" max="1440" step="1" inputmode="numeric"></div>
+      </div>
+      <div class="row2">
+        <div class="field"><label class="lbl" for="wbAhead">จองล่วงหน้าได้ไกลสุด · วัน (1–365)</label><input type="number" id="wbAhead" class="input" min="1" max="365" step="1" inputmode="numeric"></div>
+        <div class="field"><label class="lbl" for="wbPend">ใบรอยืนยันต่อผู้ติดต่อต่อวัน (1–20)</label><input type="number" id="wbPend" class="input" min="1" max="20" step="1" inputmode="numeric"></div>
+      </div>
+      <div class="row2">
+        <div class="field"><label class="lbl" for="wbHour">จองเว็บรวมทั้งร้านต่อชั่วโมง (1–1000)</label><input type="number" id="wbHour" class="input" min="1" max="1000" step="1" inputmode="numeric">
+          <div class="hint">เกินแล้วหน้าเว็บให้ลูกค้าทักร้านแทน</div></div>
+        <div class="field"><label class="lbl" for="wbStale">ซิงก์เก่าเกินกี่นาทีถือว่าใช้ไม่ได้ (5–1440)</label><input type="number" id="wbStale" class="input" min="5" max="1440" step="1" inputmode="numeric"></div>
+      </div>
+    </div>
+    <div id="wbErr" class="alert alert-red" role="alert" style="font-weight:700;" hidden></div>
+    <div class="dlg-foot" style="padding:0;">
+      <button class="btn" type="button" id="wbCancel">ปิด (Esc)</button>
+      <button class="btn btn-primary" id="wbSave" type="submit" hidden>บันทึกตั้งค่า</button>
+    </div>
+  </form>
+</dialog>
+
 <dialog id="customerDialog" aria-labelledby="customerFormTitle">
   <div class="dlg-head"><h2 id="customerFormTitle">เพิ่มลูกค้าใหม่</h2></div>
   <form class="dlg-body" onsubmit="event.preventDefault(); saveCustomer();">
@@ -3232,6 +3277,7 @@ async function handleAuthState(session) {
   if (!session) {
     opsReset();                     // ออกจากระบบ = ล้าง Ops Board ออกจากหน้า (ข้อมูลภายในร้าน)
     catReset();                     // และล้างหมวดราคา/โปรโมชัน (แถบย้อนกลับ ฟอร์มที่พิมพ์ค้าง)
+    wbReset();                      // และล้างแผง "จองออนไลน์" (ค่าตั้งการจองเว็บ/สถานะซิงก์ที่โหลดไว้)
     workReset();                    // และล้างงานของฉัน/คำขอ (ใบงาน ประวัติ รูปหลักฐาน ฟอร์มที่พิมพ์ค้าง)
     notifReset();                   // และล้างหน้าต่างแจ้งเตือน (รายการเครื่อง/ข้อความของคนก่อน)
     dcStop();                       // ออกจากระบบ = หยุดดึงข้อความ Discord และล้างที่ค้างในหน่วยความจำ
@@ -6120,6 +6166,147 @@ async function loadBookingSettings() {
   }
   updateCostPreview();
 }
+
+// ===========================================================================
+// จองออนไลน์ (หน้า /book) — ปุ่ม "⚙ จองออนไลน์" ในหมวดจองห้อง · migration 041
+// แถบสถานะซิงก์ตารางสอน (room_blocks_state — ทีมงานทุกคนอ่านได้) + ช่องตั้งค่า (booking_settings — เขียนได้เฉพาะเจ้าของ/ผู้ดูแล ตรง RLS booking_settings_admin_write)
+// ไม่มีราคา/แต้ม/equipment_sets/entry_refs ในแผงนี้ · ยังไม่รัน 041 = แถบเหลือง ไม่ใช่ error แดง · ไม่มีปุ่ม "ซิงก์ตอนนี้" (บอทซิงก์เองทุก ~5 นาที)
+// ===========================================================================
+const wbEl = id => document.getElementById(id);
+const wb = { tok: 0, mode: 'closed', s: null, st: null, err: '' };   // mode: closed | loading | ready | no041 | error
+const WB_FIELDS = [
+  { k: 'web_booking_enabled', id: 'wbEnabled', t: 'bool', lbl: 'เปิดรับจองออนไลน์' },
+  { k: 'room_blocks_enabled', id: 'wbBlocks', t: 'bool', lbl: 'ตารางสอนทำให้ห้องเต็ม' },
+  { k: 'room_block_keywords', id: 'wbKeywords', t: 'kw', lbl: 'คำที่บอกว่านัดใช้ห้องซ้อม' },
+  { k: 'open_time', id: 'wbOpen', t: 'time', lbl: 'เวลาเปิดรับจอง' },
+  { k: 'close_time', id: 'wbClose', t: 'time', lbl: 'เวลาปิด' },
+  { k: 'max_hours_per_booking', id: 'wbMaxHours', t: 'int', min: 1, max: 12, lbl: 'ชั่วโมงสูงสุดต่อใบจอง' },
+  { k: 'min_lead_minutes', id: 'wbLead', t: 'int', min: 0, max: 1440, lbl: 'จองล่วงหน้าอย่างน้อย (นาที)' },
+  { k: 'max_days_ahead', id: 'wbAhead', t: 'int', min: 1, max: 365, lbl: 'จองล่วงหน้าได้ไกลสุด (วัน)' },
+  { k: 'max_pending_per_contact_per_day', id: 'wbPend', t: 'int', min: 1, max: 20, lbl: 'ใบรอยืนยันต่อผู้ติดต่อต่อวัน' },
+  { k: 'max_web_bookings_per_hour', id: 'wbHour', t: 'int', min: 1, max: 1000, lbl: 'จองเว็บรวมต่อชั่วโมง' },
+  { k: 'sync_stale_minutes', id: 'wbStale', t: 'int', min: 5, max: 1440, lbl: 'ซิงก์เก่าเกินกี่นาทีถือว่าใช้ไม่ได้' },
+];
+const WB_NO_ROWS = 'ฐานข้อมูลไม่ได้บันทึกให้ — ไม่มีสิทธิ์แก้ (เฉพาะเจ้าของร้านหรือผู้ดูแล) หรือแถวตั้งค่าหายไป · กด “รีเฟรช” แล้วลองใหม่';
+
+const wbWhen = iso => { const d = new Date(iso); return isNaN(d) ? '-' : d.toLocaleString('th-TH', { timeZone: 'Asia/Bangkok', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false }) + ' น.'; };
+function wbAgo(min) {
+  if (min < 1) return 'เมื่อสักครู่';
+  if (min < 60) return min + ' นาทีที่แล้ว';
+  if (min < 1440) return Math.floor(min / 60) + ' ชม.' + (min % 60 ? ' ' + (min % 60) + ' นาที' : '') + 'ที่แล้ว';
+  return Math.floor(min / 1440) + ' วันที่แล้ว';
+}
+// กติกาเดียวกับ booking_blocks_stale() ของฐาน: ใช้เมื่อเปิดสวิตช์ตารางสอนเท่านั้น · ไม่เคยซิงก์สำเร็จ = เก่า · เก่า = เกิน sync_stale_minutes (เทียบเป็นมิลลิวินาที ไม่ปัดนาที)
+function wbSync(s, st, now) {
+  const ok = st && st.last_ok_at ? Date.parse(st.last_ok_at) : NaN;
+  const never = !Number.isFinite(ok);
+  const old = now - ok > s.sync_stale_minutes * 60000;      // ไม่เคยซิงก์ = ok เป็น NaN → เทียบเป็นเท็จเอง (never แยกเป็นสถานะของมันเอง)
+  return { never, old, ageMin: never ? null : Math.max(0, Math.floor((now - ok) / 60000)), blocking: !!s.room_blocks_enabled && (never || old) };
+}
+function wbStatusHtml(s, st, now) {
+  const y = wbSync(s, st, now), row = (k, v) => '<div class="wb-row"><span class="wb-k">' + k + '</span><span>' + v + '</span></div>';
+  const badge = y.never ? '<span class="st st-warn">◷ ยังไม่เคยซิงก์</span>' : y.old ? '<span class="st st-warn">◷ เก่าเกิน ' + s.sync_stale_minutes + ' นาที</span>' : '<span class="st st-ok">✓ ปกติ</span>';
+  let h = row('รับจองออนไลน์', s.web_booking_enabled ? '<span class="st st-ok">✓ เปิดอยู่</span>' : '<span class="st st-off">ปิดอยู่</span>') +
+    row('ซิงก์ตารางสอน', badge + (y.never ? '' : ' <span>สำเร็จล่าสุด ' + wbWhen(st.last_ok_at) + ' (' + wbAgo(y.ageMin) + ')</span>'));
+  if (y.blocking) h += '<div class="wb-row"><span class="wk-red">เว็บรับจองไม่ได้ตอนนี้ — ลูกค้าจะถูกขอให้ทักร้านแทน จนกว่าซิงก์ตารางสอนจะสำเร็จ</span></div>';
+  else if (y.never || y.old) h += '<div class="wb-row"><span class="hint" style="margin:0;">สวิตช์ “ตารางสอนทำให้ห้องเต็ม” ปิดอยู่ — ระบบไม่สนตารางสอน จึงไม่ปิดรับจองเพราะซิงก์เก่า</span></div>';
+  if (st && st.last_try_at && (y.never || Date.parse(st.last_try_at) > Date.parse(st.last_ok_at))) h += row('ลองซิงก์ล่าสุด', wbWhen(st.last_try_at));
+  if (st && st.last_error) h += row('ข้อผิดพลาดล่าสุด', '<span class="wk-red">' + escapeHtml(st.last_error) + '</span>');
+  if (!y.never) h += row('ที่ซิงก์ได้', 'เห็นนัดในปฏิทิน ' + st.events_seen + ' นัด · ช่วงที่ห้องไม่ว่าง ' + st.blocks_in_window + ' ช่วง');
+  return h + '<p class="hint" style="margin:10px 0 0;">บอทซิงก์ตารางสอนเองทุก ~5 นาที (กดซิงก์จากคอนโซลไม่ได้) · แก้ปฏิทินแล้วรอสักครู่ แล้วกด “รีเฟรช” เพื่อดูค่าล่าสุด</p>';
+}
+
+function wbPaint() {
+  const w = isWriter(), m = wb.mode, note = wbEl('wbNote'), box = wbEl('wbStatus'), set = wbEl('wbSettings'), save = wbEl('wbSave');
+  note.hidden = m !== 'no041';
+  if (m === 'no041') note.textContent = 'ยังไม่ได้รัน migration 041 บนฐานข้อมูล — ระบบจองออนไลน์ยังไม่พร้อม จึงยังไม่มีสถานะหรือค่าตั้งให้แสดง (ให้ผู้จัดการข้อมูลภายในรันก่อน)';
+  box.hidden = m === 'no041';
+  if (m === 'loading') box.textContent = 'กำลังโหลด…';
+  else if (m === 'error') box.innerHTML = '<span class="wk-red">' + escapeHtml(wb.err) + '</span>';
+  else if (m === 'ready') box.innerHTML = wbStatusHtml(wb.s, wb.st, Date.now());
+  const editable = m === 'ready' && w;
+  set.hidden = !editable; save.hidden = !editable;
+  wbEl('wbRo').hidden = !(m === 'ready' && !w);
+  wbEl('wbErr').hidden = true;
+  if (editable) wbFill();
+}
+function wbFill() {
+  for (const f of WB_FIELDS) {
+    const el = wbEl(f.id), v = wb.s[f.k];
+    if (f.t === 'bool') el.checked = v;
+    else if (f.t === 'time') el.value = v.slice(0, 5);
+    else if (f.t === 'kw') el.value = v.join(', ');
+    else el.value = String(v);
+  }
+}
+async function wbLoad() {
+  const tok = ++wb.tok, uid = currentUserId;
+  wb.mode = 'loading'; wbPaint();
+  const [s, st] = await Promise.all([db.from('booking_settings').select('*').single(), db.from('room_blocks_state').select('*').maybeSingle()]);
+  if (tok !== wb.tok || uid !== currentUserId) return;    // ปิดหน้าต่าง/ออกจากระบบ/สลับบัญชีระหว่างโหลด = ทิ้งผล
+  if (s.error) { console.error('[Web booking]', s.error); wb.err = 'โหลดตั้งค่าการจองไม่สำเร็จ: ' + s.error.message; wb.mode = 'error'; }
+  else if (!('web_booking_enabled' in s.data)) wb.mode = 'no041';
+  else if (st.error) { console.error('[Web booking]', st.error); wb.err = 'โหลดสถานะซิงก์ตารางสอนไม่สำเร็จ: ' + st.error.message; wb.mode = 'error'; }
+  else { wb.s = s.data; wb.st = st.data; wb.mode = 'ready'; }
+  wbPaint();
+}
+function wbOpen() { wbEl('wbDlg').showModal(); wbLoad(); }
+
+// อ่านฟอร์ม → { patch, said } หรือ { error } · ส่งเฉพาะช่องที่เปลี่ยน
+function wbKeywords(text) {
+  const seen = new Set(), out = [];
+  String(text).split(',').forEach(w => { const t = w.trim(); if (t && !seen.has(t.toLowerCase())) { seen.add(t.toLowerCase()); out.push(t); } });
+  return out;
+}
+function wbRead() {
+  const patch = {}, said = [];
+  for (const f of WB_FIELDS) {
+    const el = wbEl(f.id), old = wb.s[f.k];
+    let v, was;
+    if (f.t === 'bool') { v = el.checked; was = old; }
+    else if (f.t === 'time') { v = el.value; was = old.slice(0, 5); if (!v) return { error: 'กรอก “' + f.lbl + '” ให้ครบ' }; }
+    else if (f.t === 'kw') { v = wbKeywords(el.value); was = old; if (!v.length) return { error: 'ใส่คำที่บอกว่านัดใช้ห้องซ้อมอย่างน้อย 1 คำ (ถ้าไม่ต้องการใช้ตารางสอน ให้เอาติ๊ก “ให้ตารางสอนทำให้ห้องเต็ม” ออกแทน)' }; }
+    else { const raw = el.value.trim(); if (!/^\d+$/.test(raw) || +raw < f.min || +raw > f.max) return { error: '“' + f.lbl + '” ต้องเป็นจำนวนเต็ม ' + f.min + ' ถึง ' + f.max }; v = +raw; was = old; }
+    if (JSON.stringify(v) !== JSON.stringify(was)) {
+      patch[f.k] = v;
+      said.push(f.t === 'bool' ? f.lbl + (v ? ': เปิด' : ': ปิด') : f.lbl + ' ' + was + ' → ' + v);
+    }
+  }
+  if (wbEl('wbClose').value <= wbEl('wbOpen').value) return { error: 'เวลาปิดต้องหลังเวลาเปิด' };
+  return { patch, said };
+}
+async function wbSave() {
+  if (!isWriter() || wb.mode !== 'ready') return;
+  const err = m => { const b = wbEl('wbErr'); b.textContent = m; b.hidden = false; };
+  const r = wbRead();
+  if (r.error) return err(r.error);
+  if (!Object.keys(r.patch).length) { wbEl('wbDlg').close(); showToast('ไม่มีอะไรเปลี่ยน'); return; }
+  const btn = wbEl('wbSave'), tok = wb.tok, uid = currentUserId;
+  btn.disabled = true;
+  try {
+    const { data, error } = await db.from('booking_settings').update(Object.assign({}, r.patch, { updated_by: currentUserId, updated_at: new Date().toISOString() })).eq('id', true).select('id');
+    if (tok !== wb.tok || uid !== currentUserId) return;
+    if (error) return err(catErrText(error));
+    if (!data.length) return err(WB_NO_ROWS);     // RLS ปฏิเสธเงียบ ๆ = 0 แถว ต้องไม่ขึ้นว่าสำเร็จ (กฎข้อ 8) · ต้องขอแถวกลับ (.select) ไม่งั้นนับไม่ได้
+    wbEl('wbDlg').close();
+    showToast('✅ บันทึกตั้งค่าจองออนไลน์แล้ว: ' + r.said.join(' · '));
+  } finally { btn.disabled = false; }
+}
+
+// ออกจากระบบ/สลับบัญชี: ล้างผลที่โหลดไว้ + ฟอร์ม + หน้าต่าง (ค่าตั้งของร้านไม่ค้างหน้าจอของคนใหม่) · เรียกคู่กับ catReset()
+function wbReset() {
+  wb.tok++;
+  wb.mode = 'closed';
+  const d = wbEl('wbDlg'); if (d.open) d.close();
+  wbEl('wbStatus').textContent = '';      // แถบ/ฟอร์มที่ซ่อนหรือโชว์ ตั้งใหม่ทุกครั้งที่เปิด (wbPaint) — ที่นี่ล้างเฉพาะเนื้อหา
+  for (const f of WB_FIELDS) { const el = wbEl(f.id); if (f.t === 'bool') el.checked = false; else el.value = ''; }
+}
+(function wbInit() {
+  wbEl('wbBtn').addEventListener('click', wbOpen);
+  wbEl('wbReload').addEventListener('click', wbLoad);
+  wbEl('wbForm').addEventListener('submit', e => { e.preventDefault(); wbSave(); });
+  wbEl('wbCancel').addEventListener('click', () => wbEl('wbDlg').close());
+})();
 
 // ยืนยันแล้วและยังไม่เข้าใช้/ไม่ยกเลิก = "ยืนยันแล้ว (รอเข้าใช้)" → เขียว (ก้อนไทม์ไลน์ · แถวตาราง · ป้าย) — ที่ใช้งาน/ใช้แล้ว/ยกเลิกมีสีของสถานะตัวเอง
 const bkIsConfirmed = b => !!b.confirmed && b.status !== 'cancelled' && b.status !== 'done' && b.status !== 'active';
@@ -10284,6 +10471,7 @@ function renderLoginAccounts() {
 function onAccountSwitched() {
   opsReset();                    // Ops Board เป็นข้อมูลของเจ้าของ — สลับเป็นคนอื่นต้องไม่ค้างอยู่ในหน้า
   catReset();                    // หมวดราคา/โปรโมชัน: แถบย้อนกลับ/ฟอร์มค้างของคนเดิมใช้สิทธิ์ของคนใหม่ไม่ได้
+  wbReset();                     // แผง "จองออนไลน์": ฟอร์มตั้งค่าของคนเดิม (เจ้าของ/ผู้ดูแล) ต้องไม่ค้างให้พนักงานเห็น
   workReset();                   // งานของฉัน/คำขอ: ใบงาน คำขอ รูปหลักฐานของคนเดิมต้องไม่ค้าง (คอมหน้าร้านใช้ร่วมกันหลายคน)
   notifReset();                  // หน้าต่างแจ้งเตือน: รายการเครื่อง/ข้อความของคนเดิมต้องไม่ค้าง
   coSellers = [];
