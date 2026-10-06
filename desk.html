@@ -3388,6 +3388,23 @@ document.addEventListener('visibilitychange', () => {
 window.addEventListener('pageshow', e => { if (e.persisted) resyncSoon(); });
 window.addEventListener('online', resyncSoon);
 
+// ── ตัวสำรองโพลล์ (เบา) ──
+// websocket ตายเงียบโดยไม่ส่งสถานะ + แท็บเปิดมองเห็นอยู่ตลอด = ตัวกระตุ้นข้างบนไม่ทำงานเลย → ใบจองจากลูกค้าหายเงียบ (เว็บเปิดรับจองจริงแล้ว · ใบค้างทั้งคืนมาแล้ว 1 ใบ)
+// ทุก 5 นาทีตอนแท็บมองเห็น + ล็อกอินอยู่ + ออนไลน์: ดึงการจองใหม่ แล้ววาดจอง/เลขแดง (ไม่ใช่ loadAll — ไม่ดึง/วาดหมวดอื่น) · ดึงไม่สำเร็จ = แถบแดงของ loadBookings ตามกฎข้อ 8 (ออฟไลน์ข้ามไปเงียบ ๆ รอ online)
+// วาดทุกรอบที่ดึงสำเร็จ ไม่เทียบว่าข้อมูลเปลี่ยนไหม: เทียบกับ bookings เดิมพลาดได้ถ้าข้อมูลถูกโหลดไปแล้วแต่ยังไม่ได้วาด (โพลล์ถูกขัดกลางทาง) → รอบถัดไปจะมองว่า "ไม่เปลี่ยน" แล้วไม่วาดเลย
+let BK_POLL_MS = 300000, bkPollTimer = null;     // let: เทสต์ปรับให้สั้นลงได้
+async function bkPoll() {
+  if (document.hidden || !currentUserId || navigator.onLine === false) return;
+  const uid = currentUserId;
+  await loadBookings();
+  if (uid === currentUserId) renderBookings();
+}
+function bkPollSchedule() {
+  clearTimeout(bkPollTimer);
+  bkPollTimer = setTimeout(() => { bkPollSchedule(); bkPoll(); }, BK_POLL_MS);     // ตั้งรอบถัดไป "ก่อน" ดึง: ดึงพังก็ไม่หยุดเดิน
+}
+bkPollSchedule();
+
 // ---------------------------------------------------------------------------
 // โหลดข้อมูล — query ชุดเดียวกับ stock.html / sales.html
 // ---------------------------------------------------------------------------

@@ -922,4 +922,60 @@ const resync = loadWith('#booking', 'u1', wait + `
 
 `);
 
-process.exit(res.ok && resync.ok && deepColon.ok && deepLoggedOut.ok && onBooking.ok && staffAdmin.ok && deepOwn.ok && deepOldDate.ok && deepStaff.ok && deepEncoded.ok && deepMissing.ok && deepEmpty.ok && deepOther.ok && deepNav.ok ? 0 : 1);
+// ── หน้าแยก: ตัวสำรองโพลล์ (เบา) — websocket ตายเงียบ + แท็บเปิดมองเห็นตลอด → ทุก 5 นาทีดึงการจองใหม่ (เฉพาะ loadBookings + วาดจอง/เลขแดง เมื่อข้อมูลเปลี่ยน) ──
+const poll = loadWith('#booking', 'u1', wait + `
+  {
+    const txt = id => document.getElementById(id).textContent;
+    const nb = () => document.getElementById('navBadge-booking');
+    const rowsN = () => document.querySelectorAll('#bookingRows tr[data-i]').length;
+    const nFrom = t => window.FROMS.filter(x => x === t).length;
+    const setVis = hidden => {
+      Object.defineProperty(document, 'hidden', { configurable: true, get: () => hidden });
+      Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => hidden ? 'hidden' : 'visible' });
+      document.dispatchEvent(new Event('visibilitychange'));
+    };
+    const setOnline = on => Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => on });
+    let seq = 0, seen = 0;
+    const missed = () => { seq++; FAKE.room_bookings.push({ id: 'pl' + seq, customer_name: 'ใบที่พลาด ' + seq, contact: '0800000010', date: TODAY, start_time: '20:00:00', hours: 1, room: 'Controller Setup', cost: 800, status: 'upcoming', confirmed: false, source: 'online_web', line_user_id: null, customer_id: null }); };
+    const orig = renderBookings; let nRender = 0;
+    renderBookings = () => { nRender++; return orig(); };
+    const origP = renderProducts, origC = renderCustomers; let nOther = 0;
+    renderProducts = () => { nOther++; return origP(); }; renderCustomers = () => { nOther++; return origC(); };
+    const base = rowsN();
+    ok('ค่าตั้งต้น: โพลล์ทุก 300000 มิลลิวินาที (5 นาที)', BK_POLL_MS === 300000, String(BK_POLL_MS));
+    ok('ตัวตั้งเวลาเริ่มเดินตั้งแต่โหลดหน้า (ไม่ต้องรอใครสั่ง)', bkPollTimer !== null, String(bkPollTimer));
+    ok('(ตั้งต้น) ตารางจอง 3 รายการ · เลขแดง 2', base === 3 && nb().textContent === '2', base + ' ' + nb().textContent);
+    window.FROMS.length = 0; nRender = 0; nOther = 0; await bkPoll();
+    ok('โพลล์ตอนข้อมูลไม่เปลี่ยน: ดึงการจองครั้งเดียว (ไม่ดึงตารางอื่น) · วาดจอง/เลขแดงรอบเดียว · ไม่วาดสินค้า/ลูกค้า (ไม่ใช่ renderAll)', nFrom('room_bookings') === 1 && window.FROMS.length === 1 && nRender === 1 && nOther === 0, window.FROMS.join() + ' วาด ' + nRender);
+    missed(); nRender = 0; window.FROMS.length = 0; await bkPoll(); seen = seq;
+    ok('มีใบใหม่ที่ realtime พลาด: โพลล์ดึงมาวาด (แถว +1 · เลขแดง 3 · การ์ดสรุป 3) วาดรอบเดียว', rowsN() === base + 1 && nb().textContent === '3' && txt('bkStatPending') === '3' && nRender === 1, rowsN() + ' ' + nb().textContent + ' วาด ' + nRender);
+    ok('โพลล์ไม่ใช่ loadAll: ไม่ดึงสินค้า · ลูกค้า · ขาย · ตั้งค่าจอง · งาน', ['products', 'customers', 'sales', 'booking_settings', 'work_tasks'].every(t => nFrom(t) === 0), window.FROMS.join());
+    FAKE.room_bookings[0].confirmed = true; nRender = 0; await bkPoll();
+    ok('มีคนยืนยันใบหนึ่ง (จำนวนแถวเท่าเดิม): วาดใหม่ · เลขแดงลดเป็น 2', rowsN() === base + 1 && nb().textContent === '2' && nRender === 1, nb().textContent + ' วาด ' + nRender);
+    missed(); window.FROMS.length = 0;
+    setVis(true); await bkPoll(); setVis(false);
+    ok('แท็บถูกซ่อน: ไม่โพลล์ (ไม่ยิงคำขอใดเลย)', window.FROMS.length === 0, window.FROMS.join());
+    const keep = currentUserId;
+    currentUserId = null; await bkPoll(); currentUserId = keep;
+    ok('ยังไม่ล็อกอิน/ออกจากระบบแล้ว: ไม่โพลล์', window.FROMS.length === 0, window.FROMS.join());
+    setOnline(false); await bkPoll(); setOnline(true);
+    ok('ออฟไลน์: ไม่โพลล์ (ไม่เด้งแถบแดงทุก 5 นาที — รอ online แล้วเก็บตกเอง)', window.FROMS.length === 0 && !document.getElementById('fatalError'), window.FROMS.join());
+    const rowsBefore = rowsN();
+    const pr = bkPoll(); currentUserId = 'u-other'; await pr; currentUserId = keep;
+    ok('สลับบัญชีระหว่างที่โพลล์กำลังดึง: ไม่วาดผลนั้น (แถวเท่าเดิม)', rowsN() === rowsBefore, rowsN() + ' ' + rowsBefore);
+    await bkPoll(); seen = seq;
+    ok('โพลล์รอบถัดไปปกติ: เห็นใบที่ค้างอยู่ทั้งหมด', rowsN() === base + seen, rowsN() + ' ' + (base + seen));
+    // ตัวตั้งเวลา: ครบรอบแล้วดึงเอง · ตั้งซ้ำไม่ซ้อน · ดึงต่อทุกรอบ · ซ่อนแท็บตอนครบรอบข้ามไปแต่ไม่หยุดเดิน
+    BK_POLL_MS = 150; bkPollSchedule(); bkPollSchedule();
+    window.FROMS.length = 0; missed(); await sleep(230); seen = seq;
+    ok('ตัวตั้งเวลา: ครบรอบแล้วดึงเอง เห็นใบใหม่ · เรียกตั้งเวลาซ้ำสองครั้งก็ดึงรอบละครั้งเดียว (ไม่ซ้อนสองตัว)', rowsN() === base + seen && nFrom('room_bookings') === 1, rowsN() + ' ' + (base + seen) + ' ดึง ' + nFrom('room_bookings'));
+    missed(); await sleep(200); seen = seq;
+    ok('รอบถัดไปก็ดึงต่อ (ตั้งเวลารอบใหม่ทุกครั้งหลังดึง)', rowsN() === base + seen, rowsN() + ' ' + (base + seen));
+    setVis(true); missed(); await sleep(250);
+    ok('แท็บซ่อนอยู่ตอนครบรอบ: ข้ามรอบนั้น (แถวเท่าเดิม)', rowsN() === base + seen, rowsN() + ' ' + (base + seen));
+    setVis(false); await sleep(250); seen = seq;
+    ok('มองเห็นอีกครั้ง: ตัวตั้งเวลายังเดินอยู่ รอบถัดไปดึงต่อ', rowsN() === base + seen, rowsN() + ' ' + (base + seen));
+    BK_POLL_MS = 300000; bkPollSchedule();
+  }`);
+
+process.exit(res.ok && resync.ok && poll.ok && deepColon.ok && deepLoggedOut.ok && onBooking.ok && staffAdmin.ok && deepOwn.ok && deepOldDate.ok && deepStaff.ok && deepEncoded.ok && deepMissing.ok && deepEmpty.ok && deepOther.ok && deepNav.ok ? 0 : 1);
