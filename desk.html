@@ -3311,44 +3311,82 @@ async function initSupabaseSync() {
 
   db.channel('desk-products')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, () => loadAll())
-    .subscribe();
+    .subscribe(rtWatch('desk-products'));
   db.channel('desk-stock-movements')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'stock_movements' }, () => loadAll())
-    .subscribe();
+    .subscribe(rtWatch('desk-stock-movements'));
   db.channel('desk-sales')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'sales' }, () => loadAll())
-    .subscribe();
+    .subscribe(rtWatch('desk-sales'));
   db.channel('desk-room-bookings')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'room_bookings' },
         () => { loadBookings().then(() => { renderBookings(); if (current === 'daily') loadDaily(); }); })
-    .subscribe();
+    .subscribe(rtWatch('desk-room-bookings'));
   db.channel('desk-booking-settings')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'booking_settings' }, () => loadBookingSettings())
-    .subscribe();
+    .subscribe(rtWatch('desk-booking-settings'));
   db.channel('desk-customers')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'customers' },
         () => { loadCustomers().then(() => { renderCustomers(); renderCustomerOptions(); }); })
-    .subscribe();
+    .subscribe(rtWatch('desk-customers'));
   db.channel('desk-daily')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'income_entries' }, () => { if (current === 'daily') loadDaily(); })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'expenses' }, () => { if (current === 'daily') loadDaily(); })
-    .subscribe();
+    .subscribe(rtWatch('desk-daily'));
   db.channel('desk-board')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'board_messages' }, () => refreshBoard())
     .on('postgres_changes', { event: '*', schema: 'public', table: 'board_reads' }, () => refreshBoard())
-    .subscribe();
+    .subscribe(rtWatch('desk-board'));
   db.channel('desk-calendar')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'calendar_events' }, () => {
       loadHomeToday();
       if (current === 'calendar') loadCalendar();
     })
-    .subscribe();
+    .subscribe(rtWatch('desk-calendar'));
   db.channel('desk-work')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'work_tasks' }, () => workScheduleReload())
     .on('postgres_changes', { event: '*', schema: 'public', table: 'work_task_events' }, () => workScheduleReload())
     .on('postgres_changes', { event: '*', schema: 'public', table: 'work_requests' }, () => workScheduleReload())
-    .subscribe();
+    .subscribe(rtWatch('desk-work'));
 }
+
+// ── เก็บตกข้อมูลที่ realtime พลาด ──
+// 6 ต.ค. 69 เจ้าของทดสอบจอง /book บนมือถือเครื่องเดียวกับที่เปิดคอนโซล → แท็บคอนโซลอยู่เบื้องหลัง websocket ถูกพัก/หลุด → พลาด event INSERT ของใบจอง
+// แต่ละหมวดโหลดใหม่เฉพาะตอนได้ event จึงไม่มีอะไรโหลดใหม่ตอนกลับมา = ใบนั้นหายจากหน้าจอ (และเลขแดง) จนกว่าจะรีเฟรช
+// ตัวกระตุ้น 3 ทาง: กลับมาที่แท็บหลังซ่อน ≥ 5 วินาที (หรือกลับจาก bfcache) · เน็ตกลับมา (online) · channel realtime ต่อใหม่หลังหลุด (CLOSED / CHANNEL_ERROR / TIMED_OUT → SUBSCRIBED)
+// → โหลดชุดที่ใช้ realtime ใหม่ "รอบเดียว" (ตัวกระตุ้นที่มาติดกันรวบด้วยตัวหน่วง 400ms) · ยังไม่ล็อกอิน/ออกจากระบบ (ตอนโหลดจริง) = ไม่ทำอะไร · ต่อช่อง: ช่องที่ไม่เคยหลุดตอบ SUBSCRIBED ตอนเริ่มต่อไม่ทำให้โหลด
+const RESYNC_MIN_HIDDEN_MS = 5000;
+let RESYNC_DEBOUNCE_MS = 400;            // let: เทสต์ปรับให้สั้นลงได้ (หน้าทดสอบมีงบเวลาเสมือนจำกัด)
+let resyncTimer = null, resyncHiddenAt = 0;
+const rtLost = new Set();
+function rtWatch(name) {
+  return status => {
+    if (status === 'SUBSCRIBED') { if (rtLost.delete(name)) resyncSoon(); }
+    else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') rtLost.add(name);
+  };
+}
+function resyncSoon() {
+  clearTimeout(resyncTimer);
+  resyncTimer = setTimeout(resyncAll, RESYNC_DEBOUNCE_MS);
+}
+async function resyncAll() {
+  if (!currentUserId) return;
+  const uid = currentUserId;
+  await loadAll();                // สินค้า · ยอดคงเหลือ · ความเคลื่อนไหว · ลูกค้า · ขาย · สถิติ · การจอง · ตั้งค่าจอง + วาดใหม่ (รวมเลขแดงข้างเมนูจองห้อง)
+  if (uid !== currentUserId) return;
+  if (current === 'daily') loadDaily();
+  refreshBoard();
+  loadHomeToday();
+  if (current === 'calendar') loadCalendar();
+  loadWork();
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { resyncHiddenAt = Date.now(); return; }
+  if (resyncHiddenAt && Date.now() - resyncHiddenAt >= RESYNC_MIN_HIDDEN_MS) resyncSoon();
+  resyncHiddenAt = 0;
+});
+window.addEventListener('pageshow', e => { if (e.persisted) resyncSoon(); });
+window.addEventListener('online', resyncSoon);
 
 // ---------------------------------------------------------------------------
 // โหลดข้อมูล — query ชุดเดียวกับ stock.html / sales.html

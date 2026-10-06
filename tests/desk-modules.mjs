@@ -77,6 +77,7 @@ const COLS = {
 };
 FAKE.sales.push({ id: 's1', sale_no: 'S-0001', total: 590, status: 'completed', created_at: '2026-09-20T10:00:00Z', customer_id: 'c9' });
 function builder(table) {
+  (window.FROMS = window.FROMS || []).push(table);       // บันทึกทุกครั้งที่หน้าเปิดคำขอไปตารางไหน (ไว้นับว่า "โหลดใหม่" ไปกี่รอบ ครอบตารางไหนบ้าง)
   const q = {
     _rows: (FAKE[table] || []).slice(), _head: false,
     select(c, o) { if (o && o.head) q._head = true; return q; },
@@ -109,7 +110,7 @@ window.supabase = {
       }
       return { data: null, error: null };
     },
-    channel: () => ({ on(t, f, cb) { if (f && f.table) (window.RT = window.RT || {})[f.table] = cb; return this; }, subscribe() { return this; } }),     // RT[ตาราง]() = จำลองว่า realtime แจ้งว่ามีการเปลี่ยน
+    channel: name => ({ on(t, f, cb) { if (f && f.table) (window.RT = window.RT || {})[f.table] = cb; return this; }, subscribe(cb) { (window.RTSUB = window.RTSUB || {})[name] = cb; return this; } }),     // RTSUB[ชื่อช่อง](สถานะ) = จำลองสถานะของ channel (SUBSCRIBED · CLOSED · CHANNEL_ERROR · TIMED_OUT)     // RT[ตาราง]() = จำลองว่า realtime แจ้งว่ามีการเปลี่ยน
     storage: { from: () => ({
       async upload() { CALLS.push({ op: 'upload' }); return { error: null }; },
       async remove() { return { error: null }; },
@@ -806,4 +807,119 @@ async function runTests() {
 }
 </script>` });
 
-process.exit(res.ok && deepColon.ok && deepLoggedOut.ok && onBooking.ok && staffAdmin.ok && deepOwn.ok && deepOldDate.ok && deepStaff.ok && deepEncoded.ok && deepMissing.ok && deepEmpty.ok && deepOther.ok && deepNav.ok ? 0 : 1);
+// ── หน้าแยก: เก็บตกข้อมูลที่ realtime พลาด (กลับมาที่แท็บ · online · channel ต่อใหม่) ──
+const resync = loadWith('#booking', 'u1', wait + `
+  // ── เก็บตกที่ realtime พลาด ──
+  // 6 ต.ค. 69 เจ้าของทดสอบจอง /book บนมือถือเครื่องเดียวกับที่เปิดคอนโซล → แท็บคอนโซลอยู่เบื้องหลัง websocket ถูกพัก/หลุด → พลาด event INSERT ของใบจอง
+  // กลับมาแล้วไม่มีอะไรโหลดใหม่ = ใบนั้นหายจากหน้าจอ (และเลขแดง) จนกว่าจะรีเฟรช · ตอนนี้: กลับมาที่แท็บ (ซ่อน ≥ 5 วินาที) · เน็ตกลับมา · channel ต่อใหม่หลังหลุด → โหลดชุดที่ใช้ realtime ใหม่รอบเดียว
+  {
+    const txt = id => document.getElementById(id).textContent;
+    const SETTLE = 150;
+    ok('ค่าตั้งต้นของการเก็บตก: หน่วงรวบตัวกระตุ้น 400ms · ซ่อนแท็บ ≥ 5000ms ถึงโหลดใหม่', RESYNC_DEBOUNCE_MS === 400 && RESYNC_MIN_HIDDEN_MS === 5000, RESYNC_DEBOUNCE_MS + ' ' + RESYNC_MIN_HIDDEN_MS);
+    RESYNC_DEBOUNCE_MS = 30;                                        // ให้เทสต์รอสั้นลง (งบเวลาของหน้าทดสอบ 15 วินาที)
+    const nb = () => document.getElementById('navBadge-booking');
+    const rowsN = () => document.querySelectorAll('#bookingRows tr[data-i]').length;
+    const nFrom = t => window.FROMS.filter(x => x === t).length;
+    const setVis = hidden => {
+      Object.defineProperty(document, 'hidden', { configurable: true, get: () => hidden });
+      Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => hidden ? 'hidden' : 'visible' });
+      document.dispatchEvent(new Event('visibilitychange'));
+    };
+    const away = async ms => { setVis(true); if (typeof resyncHiddenAt !== 'undefined') resyncHiddenAt -= ms; setVis(false); await sleep(SETTLE); };     // ซ่อนไป ms มิลลิวินาทีแล้วกลับมา (ถอยเวลาที่ซ่อนแทนการรอจริง)
+    let seq = 0;
+    const missed = () => { seq++; FAKE.room_bookings.push({ id: 'ms' + seq, customer_name: 'ใบที่พลาด ' + seq, contact: '0800000010', date: TODAY, start_time: '20:00:00', hours: 1, room: 'Controller Setup', cost: 800, status: 'upcoming', confirmed: false, source: 'online_web', line_user_id: null, customer_id: null }); };
+    const base = rowsN();
+    ok('(ตั้งต้น) ตารางจอง 3 รายการ · เลขแดง 2', base === 3 && nb().textContent === '2', base + ' ' + nb().textContent);
+    missed();
+    await sleep(SETTLE);
+    ok('(ต้นเหตุ) ใบเข้าฐานแต่ realtime ไม่แจ้ง (แท็บถูกพัก): หน้าจอไม่เห็นใบนั้น เลขแดงเท่าเดิม — ไม่มีอะไรโหลดใหม่เอง', rowsN() === base && nb().textContent === '2', rowsN() + ' ' + nb().textContent);
+    await away(60000);
+    ok('ซ่อนแท็บไป 60 วินาทีแล้วกลับมา: เห็นใบที่พลาดทันที (แถวเพิ่ม 1) · เลขแดงตามเป็น 3 · การ์ดสรุปรอยืนยัน 3', rowsN() === base + 1 && nb().textContent === '3' && txt('bkStatPending') === '3', rowsN() + ' ' + nb().textContent + ' ' + txt('bkStatPending'));
+    window.FROMS.length = 0; setVis(false); await sleep(SETTLE);
+    ok('โหลดใหม่แล้ว กลับมา visible ซ้ำอีก (ไม่ได้ซ่อนรอบใหม่): ไม่โหลดซ้ำ — เวลาที่ซ่อนถูกล้างหลังใช้แล้ว', nFrom('room_bookings') === 0, String(nFrom('room_bookings')));
+    missed(); window.FROMS.length = 0;
+    await away(4000);
+    ok('ซ่อนแค่ 4 วินาที (สลับแท็บเร็ว ๆ): ไม่โหลดใหม่ — ไม่มีคำขอ room_bookings เลย · ใบใหม่ยังไม่โผล่', nFrom('room_bookings') === 0 && rowsN() === base + 1, nFrom('room_bookings') + ' ' + rowsN());
+    window.FROMS.length = 0; setVis(false); await sleep(SETTLE);
+    ok('visible ซ้ำโดยไม่เคยซ่อน: ไม่โหลดใหม่', nFrom('room_bookings') === 0);
+    window.FROMS.length = 0; window.dispatchEvent(new Event('online')); await sleep(SETTLE);
+    ok('เน็ตกลับมา (online): โหลดใหม่รอบเดียว เห็นใบที่พลาดทั้งหมด (แถว +2) · เลขแดง 4', rowsN() === base + 2 && nb().textContent === '4' && nFrom('room_bookings') === 1, rowsN() + ' ' + nb().textContent + ' ' + nFrom('room_bookings'));
+    const got = new Set(window.FROMS);
+    const want = ['products', 'stock_movements', 'sales', 'room_bookings', 'booking_settings', 'customers', 'board_messages', 'calendar_events', 'work_tasks', 'work_task_events', 'work_requests'];
+    ok('การโหลดใหม่ครอบทุกตารางที่ใช้ realtime (สินค้า · ความเคลื่อนไหว · ขาย · จอง · ตั้งค่าจอง · ลูกค้า · กระดาน · ปฏิทิน · งาน 3 ตาราง)', want.every(t => got.has(t)), 'ขาด: ' + want.filter(t => !got.has(t)).join());
+    // หมวดสรุปรายวัน (รายรับ-รายจ่ายโหลดเมื่อเปิดหมวดนั้นอยู่) · เปิดหมวดแล้ว "กลับมา" ต้องโหลดชุดนั้นด้วย
+    showSection('daily', 'replace'); await sleep(SETTLE);
+    window.FROMS.length = 0; window.dispatchEvent(new Event('online')); await sleep(SETTLE);
+    ok('อยู่หมวดสรุปรายวันแล้วกลับมา: โหลดรายรับ-รายจ่ายใหม่ด้วย', nFrom('v_daily_income') >= 1 && nFrom('expenses') >= 1, nFrom('v_daily_income') + ' ' + nFrom('expenses'));
+    showSection('booking', 'replace'); await sleep(SETTLE);
+    window.FROMS.length = 0; window.dispatchEvent(new Event('online')); await sleep(SETTLE);
+    ok('อยู่หมวดอื่น (จองห้อง) แล้วกลับมา: ไม่โหลดรายรับ-รายจ่ายซ้ำโดยไม่จำเป็น', nFrom('v_daily_income') === 0 && nFrom('expenses') === 0, nFrom('v_daily_income') + ' ' + nFrom('expenses'));
+    // หมวดปฏิทิน: โหลดของหน้าแรก (วันนี้) + ของหมวดเอง = 2 รอบ · หมวดอื่น = รอบเดียว (ของหน้าแรก)
+    showSection('calendar', 'replace'); await sleep(SETTLE);
+    window.FROMS.length = 0; window.dispatchEvent(new Event('online')); await sleep(SETTLE);
+    ok('อยู่หมวดปฏิทินแล้วกลับมา: โหลดกิจกรรมปฏิทินใหม่ทั้งของหน้าแรก (วันนี้) และของหมวด = 2 รอบ', nFrom('calendar_events') === 2, String(nFrom('calendar_events')));
+    showSection('booking', 'replace'); await sleep(SETTLE);
+    window.FROMS.length = 0; window.dispatchEvent(new Event('online')); await sleep(SETTLE);
+    ok('อยู่หมวดจองห้องแล้วกลับมา: โหลดกิจกรรมปฏิทินของหน้าแรกรอบเดียว (ไม่โหลดปฏิทินของหมวดปฏิทิน)', nFrom('calendar_events') === 1, String(nFrom('calendar_events')));
+    // channel realtime หลุดแล้วต่อใหม่
+    missed();
+    const names = Object.keys(window.RTSUB || {}).sort();
+    ok('ทั้ง 10 channel ของหน้านี้ฟังสถานะการเชื่อมต่อ (ไม่มี channel ที่สมัครโดยไม่มีตัวฟังสถานะ)', names.length === 10 && names.every(n => typeof window.RTSUB[n] === 'function'), names.join());
+    window.FROMS.length = 0; window.RTSUB['desk-room-bookings']('SUBSCRIBED'); await sleep(SETTLE);
+    ok('channel ตอบ SUBSCRIBED ตอนเริ่มต่อครั้งแรก (ไม่เคยหลุด): ไม่โหลดซ้ำ', nFrom('room_bookings') === 0 && rowsN() === base + 2, nFrom('room_bookings') + ' ' + rowsN());
+    window.RTSUB['desk-room-bookings']('CHANNEL_ERROR'); await sleep(SETTLE);
+    ok('ระหว่างที่หลุด (CHANNEL_ERROR): ยังไม่โหลด รอต่อใหม่', nFrom('room_bookings') === 0, String(nFrom('room_bookings')));
+    window.RTSUB['desk-room-bookings']('SUBSCRIBED'); await sleep(SETTLE);
+    ok('หลุดแล้วต่อใหม่ได้ (CHANNEL_ERROR → SUBSCRIBED): โหลดใหม่ เห็นใบที่พลาด · เลขแดง 5', rowsN() === base + 3 && nb().textContent === '5' && nFrom('room_bookings') === 1, rowsN() + ' ' + nb().textContent + ' ' + nFrom('room_bookings'));
+    window.RTSUB['desk-room-bookings']('SUBSCRIBED'); window.FROMS.length = 0; await sleep(SETTLE);
+    ok('SUBSCRIBED ซ้ำหลังต่อใหม่แล้ว: ไม่โหลดอีก (จำเฉพาะช่วงที่หลุด)', nFrom('room_bookings') === 0);
+    for (const n of names) {
+      for (const st of ['CLOSED', 'TIMED_OUT', 'CHANNEL_ERROR']) {
+        if (n !== 'desk-room-bookings' && st !== 'CLOSED') continue;
+        missed(); window.FROMS.length = 0;
+        window.RTSUB[n](st); names.forEach(m => { if (m !== n) window.RTSUB[m]('SUBSCRIBED'); }); await sleep(60);
+        const early = nFrom('room_bookings');
+        window.RTSUB[n]('SUBSCRIBED'); await sleep(SETTLE);
+        ok('channel ' + n + ' ' + st + ': ช่องอื่นต่อใหม่ครบ ไม่ล้างสถานะหลุดของช่องนี้ (ไม่โหลด) · ช่องนี้ต่อใหม่ → โหลดใหม่ทุกชุด (ไม่ใช่แค่ตารางของ channel นั้น)', early === 0 && nFrom('room_bookings') === 1 && nFrom('products') === 1, early + ' ' + nFrom('room_bookings') + ' ' + nFrom('products'));
+      }
+    }
+    // ต่างช่อง: ช่องอื่นต่อ SUBSCRIBED โดยที่ตัวเองไม่เคยหลุด ไม่ทำให้โหลด
+    missed(); window.FROMS.length = 0;
+    window.RTSUB['desk-products']('CLOSED'); window.RTSUB['desk-customers']('SUBSCRIBED'); await sleep(SETTLE);
+    ok('ช่อง A หลุด · ช่อง B (ไม่เคยหลุด) ตอบ SUBSCRIBED: ไม่โหลด (ต่อช่องไม่ปนกัน)', nFrom('room_bookings') === 0, String(nFrom('room_bookings')));
+    window.RTSUB['desk-products']('SUBSCRIBED'); await sleep(SETTLE);
+    ok('ช่อง A ต่อใหม่: โหลด', nFrom('room_bookings') === 1);
+    // ตัวกระตุ้นหลายทางพร้อมกัน = โหลดรอบเดียว
+    missed(); window.FROMS.length = 0;
+    setVis(true); if (typeof resyncHiddenAt !== 'undefined') resyncHiddenAt -= 60000; setVis(false);
+    window.dispatchEvent(new Event('online'));
+    window.RTSUB['desk-sales']('CLOSED'); window.RTSUB['desk-sales']('SUBSCRIBED');
+    await sleep(SETTLE);
+    ok('กลับมาที่แท็บ + online + channel ต่อใหม่ พร้อมกัน: โหลดรวมรอบเดียว (ไม่ยิงซ้ำ 3 รอบ)', nFrom('room_bookings') === 1 && nFrom('products') === 1 && nFrom('work_tasks') === 1, nFrom('room_bookings') + ' ' + nFrom('products') + ' ' + nFrom('work_tasks'));
+    // ยังไม่ได้ล็อกอิน/ออกจากระบบ: ไม่โหลดอะไรเลย
+    const keepUid = currentUserId;
+    currentUserId = null; window.FROMS.length = 0;
+    window.dispatchEvent(new Event('online')); await away(60000);
+    window.RTSUB['desk-sales']('CLOSED'); window.RTSUB['desk-sales']('SUBSCRIBED'); await sleep(SETTLE);
+    ok('ยังไม่ล็อกอิน/ออกจากระบบแล้ว: กลับมาที่แท็บ · online · channel ต่อใหม่ ไม่โหลดอะไรเลย', window.FROMS.length === 0, window.FROMS.join());
+    currentUserId = keepUid; await sleep(SETTLE);
+    // กลับจากแคชย้อนหลังของเบราว์เซอร์ (bfcache) = หน้าถูกพักทั้งหน้า ต้องโหลดใหม่ · pageshow ตอนโหลดหน้าปกติไม่ต้อง
+    missed(); window.FROMS.length = 0;
+    window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: false })); await sleep(SETTLE);
+    ok('pageshow ปกติ (โหลดหน้าใหม่ ไม่ใช่กลับจากแคชย้อนหลัง): ไม่โหลดใหม่', nFrom('room_bookings') === 0, String(nFrom('room_bookings')));
+    window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })); await sleep(SETTLE);
+    ok('กลับจากแคชย้อนหลังของเบราว์เซอร์ (pageshow persisted): โหลดใหม่ รอบเดียว', nFrom('room_bookings') === 1 && nFrom('products') === 1, nFrom('room_bookings') + ' ' + nFrom('products'));
+    // สลับบัญชี/ออกจากระบบระหว่างที่กำลังโหลดใหม่: ไม่เอาผลไปโหลดต่อของคนใหม่ (ปฏิทิน · กระดาน · งาน)
+    window.FROMS.length = 0;
+    const pr = resyncAll(); currentUserId = 'u-other'; await pr; await sleep(SETTLE);
+    ok('สลับบัญชีระหว่างที่กำลังโหลดใหม่: ไม่โหลดชุดที่เหลือต่อ (ปฏิทิน · กระดาน · งาน)', nFrom('calendar_events') === 0 && nFrom('board_messages') === 0 && nFrom('work_tasks') === 0, window.FROMS.join());
+    currentUserId = keepUid; await sleep(SETTLE);
+    // คืนสถานะ: ใบที่พลาดออก เลขแดงกลับเป็น 2
+    FAKE.room_bookings = FAKE.room_bookings.filter(b => !/^ms[0-9]+$/.test(b.id));
+    window.RTSUB['desk-room-bookings']('CLOSED'); window.RTSUB['desk-room-bookings']('SUBSCRIBED'); await sleep(SETTLE);
+    ok('(คืนสถานะ) ตารางจองกลับเป็น 3 · เลขแดง 2 เพื่อให้เทสต์ต่อไปเริ่มจากจุดเดิม', rowsN() === base && nb().textContent === '2', rowsN() + ' ' + nb().textContent);
+  }
+
+`);
+
+process.exit(res.ok && resync.ok && deepColon.ok && deepLoggedOut.ok && onBooking.ok && staffAdmin.ok && deepOwn.ok && deepOldDate.ok && deepStaff.ok && deepEncoded.ok && deepMissing.ok && deepEmpty.ok && deepOther.ok && deepNav.ok ? 0 : 1);
