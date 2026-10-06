@@ -263,6 +263,7 @@
   .wb-box { border: 1px solid var(--line-strong); background: var(--surface2); padding: 12px 14px; margin-bottom: 16px; }   /* แถบสถานะซิงก์ตารางสอนในแผง "จองออนไลน์" */
   .wb-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin: 6px 0; font-size: 14px; }
   .wb-k { flex: 0 0 168px; color: var(--text2); }
+  .wb-h { font-size: 16px; margin: 6px 0 10px; padding-top: 12px; border-top: 1px solid var(--line); }
   .opt { border: 1px solid var(--line); padding: 14px; margin-top: 12px; }
   .help-grid { display: grid; grid-template-columns: auto 1fr; gap: 8px 16px; font-size: 15px; }
 
@@ -2774,6 +2775,20 @@
         <div class="field"><label class="lbl" for="wbHour">จองเว็บรวมทั้งร้านต่อชั่วโมง (1–1000)</label><input type="number" id="wbHour" class="input" min="1" max="1000" step="1" inputmode="numeric">
           <div class="hint">เกินแล้วหน้าเว็บให้ลูกค้าทักร้านแทน</div></div>
         <div class="field"><label class="lbl" for="wbStale">ซิงก์เก่าเกินกี่นาทีถือว่าใช้ไม่ได้ (5–1440)</label><input type="number" id="wbStale" class="input" min="5" max="1440" step="1" inputmode="numeric"></div>
+      </div>
+      <div id="wbOwner" hidden>
+        <h3 class="wb-h">ข้อมูลส่วนตัวของลูกค้าที่จองจากเว็บ (เจ้าของร้านเท่านั้น)</h3>
+        <div class="row2">
+          <div class="field"><label class="lbl" for="wbMonths">เก็บไว้กี่เดือนหลังวันจอง (1–120)</label><input type="number" id="wbMonths" class="input" min="1" max="120" step="1" inputmode="numeric"></div>
+          <div class="field"><label class="chk"><input type="checkbox" id="wbAuto"> ให้บอทล้างเองวันละครั้ง</label>
+            <div class="hint">ปิดอยู่จนเจ้าของสั่ง · ติ๊ก = ใบที่ครบกำหนดจะถูกล้างเองโดยไม่ถามอีก</div></div>
+        </div>
+        <div class="field">
+          <button class="btn" type="button" id="wbAnonCheck">ตรวจจำนวนที่ครบกำหนดล้าง</button>
+          <div class="hint">ตรวจตามจำนวนเดือนที่บันทึกแล้ว — แก้จำนวนเดือนแล้วกด “บันทึกตั้งค่า” ก่อนตรวจ · ตรวจอย่างเดียวไม่ล้างอะไร</div>
+          <div id="wbAnon" role="status" aria-live="polite" style="margin-top:8px;font-size:14px;"></div>
+          <button class="btn btn-danger" type="button" id="wbAnonGo" hidden style="margin-top:8px;"></button>
+        </div>
       </div>
     </div>
     <div id="wbErr" class="alert alert-red" role="alert" style="font-weight:700;" hidden></div>
@@ -6173,7 +6188,7 @@ async function loadBookingSettings() {
 // ไม่มีราคา/แต้ม/equipment_sets/entry_refs ในแผงนี้ · ยังไม่รัน 041 = แถบเหลือง ไม่ใช่ error แดง · ไม่มีปุ่ม "ซิงก์ตอนนี้" (บอทซิงก์เองทุก ~5 นาที)
 // ===========================================================================
 const wbEl = id => document.getElementById(id);
-const wb = { tok: 0, mode: 'closed', s: null, st: null, err: '' };   // mode: closed | loading | ready | no041 | error
+const wb = { tok: 0, mode: 'closed', s: null, st: null, err: '', anon: null };   // mode: closed | loading | ready | no041 | error · anon = { count, before } ที่เจ้าของเพิ่งตรวจเห็น
 const WB_FIELDS = [
   { k: 'web_booking_enabled', id: 'wbEnabled', t: 'bool', lbl: 'เปิดรับจองออนไลน์' },
   { k: 'room_blocks_enabled', id: 'wbBlocks', t: 'bool', lbl: 'ตารางสอนทำให้ห้องเต็ม' },
@@ -6186,6 +6201,8 @@ const WB_FIELDS = [
   { k: 'max_pending_per_contact_per_day', id: 'wbPend', t: 'int', min: 1, max: 20, lbl: 'ใบรอยืนยันต่อผู้ติดต่อต่อวัน' },
   { k: 'max_web_bookings_per_hour', id: 'wbHour', t: 'int', min: 1, max: 1000, lbl: 'จองเว็บรวมต่อชั่วโมง' },
   { k: 'sync_stale_minutes', id: 'wbStale', t: 'int', min: 5, max: 1440, lbl: 'ซิงก์เก่าเกินกี่นาทีถือว่าใช้ไม่ได้' },
+  { k: 'anonymize_after_months', id: 'wbMonths', t: 'int', min: 1, max: 120, lbl: 'เก็บข้อมูลลูกค้าเว็บกี่เดือนหลังวันจอง' },     // สองช่องนี้โชว์เฉพาะเจ้าของ (wbOwner)
+  { k: 'auto_anonymize_enabled', id: 'wbAuto', t: 'bool', lbl: 'ให้บอทล้างข้อมูลส่วนตัวเองวันละครั้ง' },
 ];
 const WB_NO_ROWS = 'ฐานข้อมูลไม่ได้บันทึกให้ — ไม่มีสิทธิ์แก้ (เฉพาะเจ้าของร้านหรือผู้ดูแล) หรือแถวตั้งค่าหายไป · กด “รีเฟรช” แล้วลองใหม่';
 
@@ -6227,7 +6244,9 @@ function wbPaint() {
   const editable = m === 'ready' && w;
   set.hidden = !editable; save.hidden = !editable;
   wbEl('wbRo').hidden = !(m === 'ready' && !w);
+  wbEl('wbOwner').hidden = !isOwner();     // ล้างข้อมูลส่วนตัว: เจ้าของคนเดียว (ผู้ดูแลเขียนตั้งค่าได้ แต่ส่วนนี้ไม่โชว์) · อยู่ใน #wbSettings จึงตามฟอร์มซ่อน/โชว์เอง
   wbEl('wbErr').hidden = true;
+  wbEl('wbAnon').textContent = ''; wbEl('wbAnonGo').hidden = true;     // ผลตรวจจำนวนเก่าไม่ค้างข้ามการโหลดใหม่
   if (editable) wbFill();
 }
 function wbFill() {
@@ -6241,7 +6260,7 @@ function wbFill() {
 }
 async function wbLoad() {
   const tok = ++wb.tok, uid = currentUserId;
-  wb.mode = 'loading'; wbPaint();
+  wb.anon = null; wb.mode = 'loading'; wbPaint();
   const [s, st] = await Promise.all([db.from('booking_settings').select('*').single(), db.from('room_blocks_state').select('*').maybeSingle()]);
   if (tok !== wb.tok || uid !== currentUserId) return;    // ปิดหน้าต่าง/ออกจากระบบ/สลับบัญชีระหว่างโหลด = ทิ้งผล
   if (s.error) { console.error('[Web booking]', s.error); wb.err = 'โหลดตั้งค่าการจองไม่สำเร็จ: ' + s.error.message; wb.mode = 'error'; }
@@ -6293,10 +6312,53 @@ async function wbSave() {
   } finally { btn.disabled = false; }
 }
 
+// ล้างข้อมูลส่วนตัวครบกำหนด (เจ้าของเท่านั้น · booking_anonymize_expired ของ 041 — ฐานตรวจสิทธิ์ซ้ำ ล้างแล้วกู้คืนไม่ได้)
+// นับก่อน (dry-run: จำนวน + วันตัดรอบ) → หน้าต่างยืนยันคำเตือนแดงตัวหนา → ล้างจริงโดยส่งจำนวนที่เห็น (p_expected) — จำนวนไม่ตรง = ฐานไม่ล้างอะไร ให้ตรวจใหม่
+async function wbAnonCheck(notice) {
+  if (!isOwner()) return;
+  const tok = wb.tok, uid = currentUserId, out = wbEl('wbAnon'), go = wbEl('wbAnonGo');
+  const pre = notice ? '<span class="wk-red">' + notice + '</span><br>' : '';        // notice = ข้อความคงที่ของแอป (ไม่ใช่ข้อมูลจากฐาน)
+  wb.anon = null; go.hidden = true; out.textContent = 'กำลังตรวจ…';
+  const { data, error } = await db.rpc('booking_anonymize_expired', { p_dry: true });
+  if (tok !== wb.tok || uid !== currentUserId) return;
+  if (error || !data.ok) { console.error('[Anonymize]', error || data); out.innerHTML = pre + '<span class="wk-red">ตรวจจำนวนไม่สำเร็จ: ' + escapeHtml(error ? error.message : String(data.error)) + '</span>'; return; }
+  const when = 'วันจองก่อน ' + fmtDate(data.before);
+  if (!data.count) { out.innerHTML = pre + 'ไม่มีการจองจากเว็บที่ครบกำหนดล้าง (' + when + ')'; return; }
+  wb.anon = { count: data.count, before: data.before };
+  out.innerHTML = pre + '<span class="wk-red">ครบกำหนดล้างข้อมูลส่วนตัว ' + data.count + ' ใบ</span> (' + when + ')';
+  go.textContent = 'ล้างข้อมูลส่วนตัว ' + data.count + ' ใบ…'; go.hidden = false;
+}
+function wbAnonConfirm() {
+  const a = wb.anon;
+  if (!a || !isOwner()) return;
+  askConfirm('ล้างข้อมูลส่วนตัวลูกค้าเว็บ',
+    '<div class="alert alert-red" style="font-weight:700;">ล้างข้อมูลส่วนตัวของการจองจากเว็บ ' + a.count + ' ใบ (วันจองก่อน ' + fmtDate(a.before) + ') — ย้อนกลับไม่ได้ ไม่มีสำเนาให้กู้คืน' +
+    '<br>ชื่อผู้จองจะถูกแทนด้วยข้อความคงที่ · เบอร์โทร อีเมล LINE หมายเหตุ อุปกรณ์ รุ่นที่ระบุ จะถูกลบ · บันทึกการใช้งาน (ประวัติแก้ไข) ของใบเหล่านี้ก็ถูกลบข้อมูลส่วนตัวด้วย' +
+    '<br>วัน เวลา ชั่วโมง ราคา ยังอยู่ (บัญชีรายวันอ่านต่อได้) · การจองที่พนักงานบันทึกไม่ถูกแตะ</div>',
+    'ล้างข้อมูล ' + a.count + ' ใบ', async () => {
+      const tok = wb.tok, uid = currentUserId;
+      const { data, error } = await db.rpc('booking_anonymize_expired', { p_dry: false, p_expected: a.count });
+      closeConfirm();
+      if (tok !== wb.tok || uid !== currentUserId) return;
+      if (data && data.error === 'count_changed') { await wbAnonCheck('จำนวนที่ครบกำหนดเปลี่ยนไประหว่างรอ — ยังไม่ได้ล้างอะไร ตรวจดูจำนวนใหม่แล้วยืนยันอีกครั้ง'); return; }
+      if (error || !data.ok) {
+        console.error('[Anonymize]', error || data);
+        wb.anon = null; wbEl('wbAnonGo').hidden = true; wbEl('wbAnon').textContent = '';
+        showFatalError('ล้างข้อมูลไม่สำเร็จ: ' + (error ? error.message : String(data.error)) + '\nอาจล้างไปแล้วบางส่วน — กด “ตรวจจำนวนที่ครบกำหนดล้าง” เพื่อดูที่เหลือ');
+        return;
+      }
+      wb.anon = null; wbEl('wbAnonGo').hidden = true;
+      wbEl('wbAnon').textContent = '✅ ล้างข้อมูลส่วนตัวแล้ว ' + data.anonymized + ' ใบ';
+      showToast('✅ ล้างข้อมูลส่วนตัวแล้ว ' + data.anonymized + ' ใบ');
+      await loadBookings();
+      renderBookings();
+    });
+}
+
 // ออกจากระบบ/สลับบัญชี: ล้างผลที่โหลดไว้ + ฟอร์ม + หน้าต่าง (ค่าตั้งของร้านไม่ค้างหน้าจอของคนใหม่) · เรียกคู่กับ catReset()
 function wbReset() {
   wb.tok++;
-  wb.mode = 'closed';
+  wb.mode = 'closed'; wb.anon = null;
   const d = wbEl('wbDlg'); if (d.open) d.close();
   wbEl('wbStatus').textContent = '';      // แถบ/ฟอร์มที่ซ่อนหรือโชว์ ตั้งใหม่ทุกครั้งที่เปิด (wbPaint) — ที่นี่ล้างเฉพาะเนื้อหา
   for (const f of WB_FIELDS) { const el = wbEl(f.id); if (f.t === 'bool') el.checked = false; else el.value = ''; }
@@ -6306,6 +6368,8 @@ function wbReset() {
   wbEl('wbReload').addEventListener('click', wbLoad);
   wbEl('wbForm').addEventListener('submit', e => { e.preventDefault(); wbSave(); });
   wbEl('wbCancel').addEventListener('click', () => wbEl('wbDlg').close());
+  wbEl('wbAnonCheck').addEventListener('click', () => wbAnonCheck());
+  wbEl('wbAnonGo').addEventListener('click', wbAnonConfirm);
 })();
 
 // ยืนยันแล้วและยังไม่เข้าใช้/ไม่ยกเลิก = "ยืนยันแล้ว (รอเข้าใช้)" → เขียว (ก้อนไทม์ไลน์ · แถวตาราง · ป้าย) — ที่ใช้งาน/ใช้แล้ว/ยกเลิกมีสีของสถานะตัวเอง

@@ -16,7 +16,7 @@ const root = process.env.WB_ROOT || join(dirname(fileURLToPath(import.meta.url))
 const mockFor = cfg => `<script>
 const CFG = ${JSON.stringify(cfg)};
 const CALLS = [];
-const MODE = { settingsError: null, stateError: null, denyUpdate: false, updateError: null, hold: null, holdUpdate: null };
+const MODE = { settingsError: null, stateError: null, denyUpdate: false, updateError: null, hold: null, holdUpdate: null, holdRpc: null, anon: null };
 const NOW0 = Date.now();
 const ago = min => new Date(NOW0 - min * 60000 - 20000).toISOString();
 const SETTINGS = Object.assign({ id: true, price_per_hour: 800, points_per_hour: 1, free_hour_threshold: 10, free_hours_reward: 1, room_name: 'DJ LAB SIAM' },
@@ -68,7 +68,12 @@ let SESSION = null, authCb = null;
 window.supabase = {
   createClient: () => ({
     from: builder,
-    rpc: async () => ({ data: null, error: null }),
+    rpc: async (name, args) => {
+      CALLS.push({ op: 'rpc', name, args: clone(args) });
+      if (name !== 'booking_anonymize_expired') return { data: null, error: null };
+      if (MODE.holdRpc) await MODE.holdRpc;
+      return MODE.anon ? MODE.anon(args) : { data: null, error: { message: 'no mock' } };
+    },
     channel: () => ({ on() { return this; }, subscribe() { return this; } }),
     storage: { from: () => ({ async upload() { return { error: null }; }, async remove() { return { error: null }; }, async createSignedUrl() { return { data: { signedUrl: 'data:,' }, error: null }; } }) },
     auth: {
@@ -218,7 +223,7 @@ async function runTests() {
 
 // ───────── หน้า 2: ฟอร์มตั้งค่า + บันทึก (เจ้าของ) ─────────
 const T_FORM = PRE + `<script>
-const ALLOWED = ['web_booking_enabled', 'room_blocks_enabled', 'room_block_keywords', 'open_time', 'close_time', 'max_hours_per_booking', 'min_lead_minutes', 'max_days_ahead', 'max_pending_per_contact_per_day', 'max_web_bookings_per_hour', 'sync_stale_minutes', 'updated_by', 'updated_at'];
+const ALLOWED = ['web_booking_enabled', 'room_blocks_enabled', 'room_block_keywords', 'open_time', 'close_time', 'max_hours_per_booking', 'min_lead_minutes', 'max_days_ahead', 'max_pending_per_contact_per_day', 'max_web_bookings_per_hour', 'sync_stale_minutes', 'anonymize_after_months', 'auto_anonymize_enabled', 'updated_by', 'updated_at'];
 const keys = u => Object.keys(u.payload).sort().join(',');
 async function runTests() {
   L('=== จองออนไลน์: ฟอร์มตั้งค่า + บันทึก (เจ้าของ) ===');
@@ -232,7 +237,8 @@ async function runTests() {
   ok('ติ๊ก 2 ช่อง + คำค้นตามฐาน', $('wbEnabled').checked === true && $('wbBlocks').checked === true && $('wbKeywords').value === 'ห้องซ้อม', $('wbKeywords').value);
   ok('เวลาเปิด/ปิดตัด :00 วินาทีออก (ช่องเวลา HH:MM)', $('wbOpen').value === '12:00' && $('wbClose').value === '20:00', $('wbOpen').value + ' ' + $('wbClose').value);
   ok('ตัวเลขทั้ง 6 ช่องตามฐาน (4 · 60 · 30 · 2 · 10 · 30)', ['wbMaxHours', 'wbLead', 'wbAhead', 'wbPend', 'wbHour', 'wbStale'].map(i => $(i).value).join(',') === '4,60,30,2,10,30', ['wbMaxHours', 'wbLead', 'wbAhead', 'wbPend', 'wbHour', 'wbStale'].map(i => $(i).value).join(','));
-  ok('ไม่มีช่องราคา/แต้ม/ชุดอุปกรณ์/ช่องทางที่มา/ล้างข้อมูลในแผงนี้ (เจ้าของสั่งไม่รวม)', !/ราคา|แต้ม|ชุดอุปกรณ์|equipment|ล้างข้อมูล|anonym/.test(dlg.textContent), dlg.textContent.slice(0, 200));
+  ok('ไม่มีช่องราคา/แต้ม/ชุดอุปกรณ์/ช่องทางที่มาในแผงนี้ (เจ้าของสั่งไม่รวม)', !/ราคา|แต้ม|ชุดอุปกรณ์|equipment|ช่องทางที่มา/.test(dlg.textContent), dlg.textContent.slice(0, 200));
+  ok('เจ้าของเห็นส่วน "ข้อมูลส่วนตัวของลูกค้าที่จองจากเว็บ" · เก็บ 12 เดือน · บอทล้างเองปิดอยู่', shown($('wbOwner')) && $('wbMonths').value === '12' && $('wbAuto').checked === false, $('wbMonths').value);
 
   // ── 2. ไม่เปลี่ยนอะไร ──
   const sub = new Event('submit', { cancelable: true });
@@ -391,6 +397,11 @@ async function runTests() {
   ok('ทุกคนในทีมเห็นปุ่ม "⚙ จองออนไลน์"', shown($('wbBtn')));
   await openDlg();
   ok('ทุกตำแหน่งเห็นแถบสถานะซิงก์', shown($('wbStatus')) && $('wbStatus').textContent.indexOf('ปกติ') !== -1, $('wbStatus').textContent);
+  ok('ส่วน "ข้อมูลส่วนตัวของลูกค้า / ล้างข้อมูล" ไม่โชว์ (เฉพาะเจ้าของ แม้ผู้ดูแลก็ไม่เห็น)', !shown($('wbOwner')) && $('wbOwner').hidden === true);
+  await wbAnonCheck();
+  wb.anon = { count: 3, before: '2025-01-01' }; wbAnonConfirm();
+  await sleep(10);
+  ok('เรียกฟังก์ชันตรวจ/ยืนยันล้างข้อมูลตรง ๆ (ข้ามปุ่มที่ซ่อน): ไม่เรียกฐาน ไม่เปิดหน้าต่างยืนยัน', CALLS.filter(c => c.op === 'rpc' && c.name === 'booking_anonymize_expired').length === 0 && !$('confirmDialog').open, 'open=' + $('confirmDialog').open);
   if (CFG.role === 'staff') {
     ok('พนักงาน: ไม่เห็นฟอร์มตั้งค่า · ไม่เห็นปุ่มบันทึก · เห็นข้อความว่าตั้งค่าได้เฉพาะเจ้าของร้านหรือผู้ดูแล', !shown($('wbSettings')) && !shown($('wbSave')) && shown($('wbRo')) && $('wbRo').textContent.indexOf('เจ้าของร้านหรือผู้ดูแล') !== -1);
     ok('ช่องตั้งค่าไม่ถูกเติมค่า (ไม่รั่วค่าให้พนักงานอ่านจากช่องที่ซ่อน)', $('wbKeywords').value === '' && $('wbMaxHours').value === '', $('wbKeywords').value + '|' + $('wbMaxHours').value);
@@ -406,7 +417,7 @@ async function runTests() {
     ok('ผู้ดูแล (admin): เห็นฟอร์ม + ปุ่มบันทึก (ตรงกับ RLS booking_settings_admin_write ที่ให้ owner/admin)', shown($('wbSettings')) && shown($('wbSave')) && !shown($('wbRo')));
     $('wbMaxHours').value = '9';
     await wbSave();
-    ok('ผู้ดูแลบันทึกได้', updates().length === 1 && updates()[0].payload.max_hours_per_booking === 9 && !dlg.open, 'updates=' + updates().length);
+    ok('ผู้ดูแลบันทึกได้ — ส่งเฉพาะช่องที่แก้ ไม่ติดช่องของเจ้าของ (เก็บกี่เดือน/ล้างเอง)', updates().length === 1 && updates()[0].payload.max_hours_per_booking === 9 && !dlg.open && Object.keys(updates()[0].payload).sort().join(',') === 'max_hours_per_booking,updated_at,updated_by', 'updates=' + updates().length + ' ' + JSON.stringify(updates()[0] && updates()[0].payload));
   }
   L('=== สรุป: ' + pass + ' PASS / ' + fail + ' FAIL ===');
   L(fail ? 'RESULT:FAIL' : 'RESULT:PASS');
@@ -502,6 +513,180 @@ async function runTests() {
 }
 </script>`;
 
+// ───────── หน้า 6: ล้างข้อมูลส่วนตัวครบกำหนด (เจ้าของ) — ก้อนที่ 2 ─────────
+const T_ANON = PRE + `<script>
+const anonCalls = () => CALLS.filter(c => c.op === 'rpc' && c.name === 'booking_anonymize_expired');
+const realCalls = () => anonCalls().filter(c => c.args.p_dry === false);
+const BEFORE = '2025-10-06';
+const dryOk = n => ({ data: { ok: true, dry: true, count: n, before: BEFORE }, error: null });
+const GO = () => $('wbAnonGo'), OUT = () => $('wbAnon'), CONF = () => $('confirmDialog');
+let loads = 0, renders = 0;
+async function openConfirm() { GO().click(); await sleep(20); }
+async function runTests() {
+  L('=== จองออนไลน์: ล้างข้อมูลส่วนตัวครบกำหนด (เจ้าของ) ===');
+  await login();
+  showSection('booking');
+  await sleep(100);
+  // อีเวนต์ close ของ <dialog> ใน Chrome headless + งบเวลาเสมือนยิงตอนมี frame เท่านั้น (เห็นว่ามาตอนสิ้นงบ) ไม่ใช่ตอนปิด — onclose="confirmFn = null" ของรอบก่อนจะมาทับ confirmFn ของรอบใหม่
+  // (ของจริงยิงทันทีก่อนผู้ใช้กดอะไรได้) → ถอดตัวฟังนี้ในเทสต์เท่านั้น: askConfirm ตั้ง confirmFn ใหม่ทุกครั้งอยู่แล้ว โค้ดของแผงไม่เกี่ยว
+  CONF().onclose = null;
+  const origLoad = window.loadBookings;
+  window.loadBookings = async () => { loads++; return origLoad(); };
+  const origRender = window.renderBookings;
+  window.renderBookings = function () { renders++; return origRender.apply(this, arguments); };
+  MODE.anon = a => a.p_dry ? dryOk(7) : { data: { ok: true, dry: false, anonymized: 6 }, error: null };
+
+  // ── ตรวจจำนวน (dry-run) ──
+  await openDlg();
+  ok('เปิดหน้าต่าง: ยังไม่เรียกฟังก์ชันล้างข้อมูลเลย (ไม่ตรวจเอง ไม่ล้างเอง)', anonCalls().length === 0 && GO().hidden === true && OUT().textContent === '', 'calls=' + anonCalls().length);
+  $('wbAnonCheck').click(); await sleep(20);
+  ok('กด "ตรวจจำนวน": เรียก booking_anonymize_expired ด้วย p_dry=true อย่างเดียว (ไม่มี p_expected)', anonCalls().length === 1 && JSON.stringify(anonCalls()[0].args) === JSON.stringify({ p_dry: true }), JSON.stringify(anonCalls().map(c => c.args)));
+  const red = OUT().querySelector('.wk-red');
+  ok('ผลตรวจ: แดงตัวหนาบอก 7 ใบ · วันตัดรอบเป็นวันไทย พ.ศ. · ตรวจอย่างเดียวไม่ล้าง', !!red && red.textContent.indexOf('7 ใบ') !== -1 && bold(red) && isRed(red) && OUT().textContent.indexOf('2568') !== -1 && realCalls().length === 0, OUT().textContent);
+  ok('มีปุ่มล้างข้อมูล (ขอบแดง) บอกจำนวน 7 ใบ', shown(GO()) && GO().textContent.indexOf('7 ใบ') !== -1 && GO().classList.contains('btn-danger'), GO().textContent);
+
+  // ── ขั้นยืนยัน ──
+  await openConfirm();
+  const alertBox = $('confirmBody').querySelector('.alert-red');
+  ok('กดปุ่มล้าง: เปิดหน้าต่างยืนยัน — ยังไม่ล้างจริง', CONF().open && realCalls().length === 0, 'open=' + CONF().open);
+  ok('คำเตือนแดงตัวหนา: จำนวน · ย้อนกลับไม่ได้ · ของที่ถูกลบ/ที่ยังอยู่ · ไม่แตะใบที่พนักงานบันทึก', !!alertBox && bold(alertBox) && alertBox.textContent.indexOf('7 ใบ') !== -1 && alertBox.textContent.indexOf('ย้อนกลับไม่ได้') !== -1 && alertBox.textContent.indexOf('เบอร์โทร อีเมล LINE') !== -1 && alertBox.textContent.indexOf('วัน เวลา ชั่วโมง ราคา ยังอยู่') !== -1 && alertBox.textContent.indexOf('พนักงานบันทึกไม่ถูกแตะ') !== -1, alertBox && alertBox.textContent);
+  ok('ปุ่มยืนยันระบุจำนวน "ล้างข้อมูล 7 ใบ"', $('confirmOkBtn').textContent === 'ล้างข้อมูล 7 ใบ', $('confirmOkBtn').textContent);
+  CONF().close(); await sleep(10);
+  ok('ปิดหน้าต่างยืนยัน (ไม่ทำ): ไม่ล้าง · ผลตรวจยังอยู่ให้กดใหม่ได้', realCalls().length === 0 && shown(GO()), 'real=' + realCalls().length);
+
+  // ── ตรวจใหม่แล้วไม่มีใบครบกำหนด (ผลเก่ายังโชว์ปุ่มล้างอยู่ — ปุ่ม/ผลเก่าต้องหายทันที) ──
+  MODE.anon = a => dryOk(0);
+  $('wbAnonCheck').click(); await sleep(20);
+  ok('ไม่มีใบครบกำหนด: บอกว่าไม่มี · ไม่มีปุ่มล้าง · ไม่แดง', OUT().textContent.indexOf('ไม่มีการจองจากเว็บที่ครบกำหนดล้าง') !== -1 && GO().hidden === true && !OUT().querySelector('.wk-red'), OUT().textContent);
+  ok('กดยืนยันไม่ได้เมื่อไม่มีใบ (ผลตรวจเดิม 7 ใบถูกลืม)', (() => { wbAnonConfirm(); return !CONF().open; })());
+  MODE.anon = a => a.p_dry ? dryOk(7) : { data: { ok: true, dry: false, anonymized: 6 }, error: null };
+  $('wbAnonCheck').click(); await sleep(20);
+
+  // ── ล้างจริง ──
+  const l0 = loads, t0 = toast(), rd0 = renders;
+  await openConfirm();
+  $('confirmOkBtn').click(); await sleep(40);
+  ok('ยืนยัน: เรียกล้างจริงครั้งเดียว ส่ง p_dry=false + p_expected = จำนวนที่เห็น (7)', realCalls().length === 1 && JSON.stringify(realCalls()[0].args) === JSON.stringify({ p_dry: false, p_expected: 7 }), JSON.stringify(realCalls().map(c => c.args)));
+  ok('สำเร็จ: ปิดหน้าต่างยืนยัน · แจ้ง "ล้างข้อมูลส่วนตัวแล้ว 6 ใบ" ตามจำนวนที่ฐานรายงานว่าล้างจริง (ที่เห็นก่อนล้าง 7) · ซ่อนปุ่มล้าง · โหลดรายการจองใหม่', !CONF().open && OUT().textContent.indexOf('✅ ล้างข้อมูลส่วนตัวแล้ว 6 ใบ') !== -1 && toast() !== t0 && toast().indexOf('6 ใบ') !== -1 && GO().hidden === true && loads === l0 + 1 && renders > rd0, OUT().textContent + ' | loads+' + (loads - l0) + ' renders+' + (renders - rd0));
+  GO().hidden = false; wbAnonConfirm();
+  await sleep(10);
+  ok('ล้างแล้วใช้ผลตรวจเดิมกดยืนยันซ้ำไม่ได้ (ต้องตรวจใหม่)', !CONF().open && realCalls().length === 1, 'open=' + CONF().open);
+
+  // ── ตรวจล้ม ──
+  MODE.anon = a => ({ data: null, error: { message: 'เฉพาะเจ้าของเท่านั้น <img src=x onerror="window.XSS4=1">' } });
+  $('wbAnonCheck').click(); await sleep(20);
+  ok('ตรวจจำนวนล้ม: แดงตัวหนาบอกสาเหตุจริง (แสดงเป็นข้อความ ไม่ใช่ HTML) · ไม่มีปุ่มล้าง', !!OUT().querySelector('.wk-red') && OUT().textContent.indexOf('ตรวจจำนวนไม่สำเร็จ: เฉพาะเจ้าของเท่านั้น') !== -1 && !OUT().querySelector('img') && window.XSS4 === undefined && GO().hidden === true, OUT().textContent);
+  MODE.anon = a => ({ data: { ok: false, error: 'disabled' }, error: null });
+  $('wbAnonCheck').click(); await sleep(20);
+  ok('ฐานตอบ ok=false (เช่น ไม่มีแถวตั้งค่า): บอกรหัสสาเหตุ ไม่ขึ้นว่า "ไม่มีใบ"', OUT().textContent.indexOf('ตรวจจำนวนไม่สำเร็จ: disabled') !== -1 && GO().hidden === true, OUT().textContent);
+
+  // ── จำนวนเปลี่ยนระหว่างรอ ──
+  let n = 0;
+  MODE.anon = a => a.p_dry ? dryOk(n++ === 0 ? 7 : 9) : { data: { ok: false, error: 'count_changed', count: 9 }, error: null };
+  $('wbAnonCheck').click(); await sleep(20);
+  await openConfirm();
+  const r0 = realCalls().length, d0 = anonCalls().filter(c => c.args.p_dry).length;
+  $('confirmOkBtn').click(); await sleep(60);
+  ok('จำนวนเปลี่ยน (count_changed): ปิดหน้าต่างยืนยัน · บอกแดงตัวหนาว่ายังไม่ได้ล้างอะไร · ตรวจใหม่อัตโนมัติ เห็น 9 ใบ · ปุ่มล้างเป็น 9 ใบ (ไม่ล้างให้เอง)', !CONF().open && realCalls().length === r0 + 1 && anonCalls().filter(c => c.args.p_dry).length === d0 + 1 && OUT().textContent.indexOf('ยังไม่ได้ล้างอะไร') !== -1 && !!OUT().querySelector('.wk-red') && bold(OUT().querySelector('.wk-red')) && OUT().textContent.indexOf('9 ใบ') !== -1 && shown(GO()) && GO().textContent.indexOf('9 ใบ') !== -1 && OUT().textContent.indexOf('✅') === -1, OUT().textContent);
+
+  // ── ล้างจริงล้ม ──
+  MODE.anon = a => a.p_dry ? dryOk(3) : { data: null, error: { message: 'boom-anon' } };
+  $('wbAnonCheck').click(); await sleep(20);
+  await openConfirm();
+  const t1 = toast(), l1 = loads;
+  $('confirmOkBtn').click(); await sleep(40);
+  const fe = $('fatalError');
+  ok('ล้างจริงล้ม: แถบแดงบอกสาเหตุ + อาจล้างไปบางส่วน · ปิดหน้าต่างยืนยัน · ไม่ขึ้นว่าสำเร็จ · ซ่อนปุ่ม (ต้องตรวจใหม่) · ไม่โหลดรายการจองใหม่ทับ', !!fe && fe.textContent.indexOf('ล้างข้อมูลไม่สำเร็จ: boom-anon') !== -1 && fe.textContent.indexOf('บางส่วน') !== -1 && !CONF().open && toast() === t1 && OUT().textContent === '' && GO().hidden === true && wb.anon === null && loads === l1, fe && fe.textContent + ' | out=' + OUT().textContent);
+  if (fe) fe.remove();
+  MODE.anon = a => a.p_dry ? dryOk(3) : { data: { ok: false, error: 'disabled' }, error: null };
+  $('wbAnonCheck').click(); await sleep(20);
+  await openConfirm();
+  $('confirmOkBtn').click(); await sleep(40);
+  const fe2 = $('fatalError');
+  ok('ฐานตอบ ok=false ตอนล้างจริง: แถบแดงบอกรหัสสาเหตุ · ไม่ขึ้นว่าสำเร็จ', !!fe2 && fe2.textContent.indexOf('ล้างข้อมูลไม่สำเร็จ: disabled') !== -1 && OUT().textContent.indexOf('✅') === -1, fe2 && fe2.textContent);
+  if (fe2) fe2.remove();
+
+  // ── กดซ้ำ ──
+  MODE.anon = a => a.p_dry ? dryOk(5) : { data: { ok: true, dry: false, anonymized: 5 }, error: null };
+  $('wbAnonCheck').click(); await sleep(20);
+  await openConfirm();
+  let rel; MODE.holdRpc = new Promise(r => { rel = r; });
+  const r1 = realCalls().length;
+  $('confirmOkBtn').click(); $('confirmOkBtn').click(); await sleep(20);
+  rel(); await sleep(40); MODE.holdRpc = null;
+  ok('กดยืนยันรัว ๆ ระหว่างรอฐานตอบ: เรียกล้างจริงครั้งเดียว', realCalls().length === r1 + 1, 'real +' + (realCalls().length - r1));
+
+  // ── ออกจากระบบ/สลับบัญชีระหว่างทาง ──
+  MODE.anon = a => a.p_dry ? dryOk(4) : { data: { ok: true, dry: false, anonymized: 4 }, error: null };
+  await openDlg();
+  MODE.holdRpc = new Promise(r => { rel = r; });
+  $('wbAnonCheck').click(); await sleep(20);
+  ok('ระหว่างรอฐานตอบ: ขึ้น "กำลังตรวจ…" · ไม่มีปุ่มล้าง', OUT().textContent === 'กำลังตรวจ…' && GO().hidden === true, OUT().textContent);
+  wbReset();
+  rel(); await sleep(40); MODE.holdRpc = null;
+  ok('สลับบัญชีระหว่างตรวจจำนวน: ผลที่มาทีหลังถูกทิ้ง (ไม่โผล่ปุ่มล้างให้คนใหม่)', GO().hidden === true && wb.anon === null, 'anon=' + JSON.stringify(wb.anon));
+  await openDlg();
+  $('wbAnonCheck').click(); await sleep(20);
+  await openConfirm();
+  const t2 = toast(), l2 = loads, r2 = realCalls().length;
+  MODE.holdRpc = new Promise(r => { rel = r; });
+  $('confirmOkBtn').click(); await sleep(20);
+  wbReset();
+  rel(); await sleep(40); MODE.holdRpc = null;
+  ok('สลับบัญชีระหว่างล้างจริง: ปิดหน้าต่างยืนยัน · ไม่ขึ้นข้อความสำเร็จ · ไม่โหลดรายการจองใหม่ในหน้าจอคนใหม่', !CONF().open && toast() === t2 && OUT().textContent.indexOf('✅') === -1 && loads === l2 && realCalls().length === r2 + 1, 'open=' + CONF().open + ' loads+' + (loads - l2));
+  await openDlg();
+  $('wbAnonCheck').click(); await sleep(20);
+  await openConfirm();
+  const t3 = toast(), l3 = loads;
+  MODE.holdRpc = new Promise(r => { rel = r; });
+  $('confirmOkBtn').click(); await sleep(20);
+  currentUserId = 'u-someone-else';
+  rel(); await sleep(40); MODE.holdRpc = null;
+  currentUserId = 'u1';
+  ok('เปลี่ยนผู้ใช้ระหว่างล้างจริง (หน้าต่างยังเปิดอยู่): ปิดหน้าต่างยืนยัน · ไม่ขึ้นข้อความสำเร็จ · ไม่โหลดรายการจองใหม่', !CONF().open && toast() === t3 && OUT().textContent.indexOf('✅') === -1 && loads === l3, 'open=' + CONF().open + ' loads+' + (loads - l3));
+  await openDlg();
+  MODE.holdRpc = new Promise(r => { rel = r; });
+  $('wbAnonCheck').click(); await sleep(20);
+  currentUserId = 'u-someone-else';
+  rel(); await sleep(40); MODE.holdRpc = null;
+  currentUserId = 'u1';
+  ok('เปลี่ยนผู้ใช้ระหว่างตรวจจำนวน (หน้าต่างยังเปิด): ผลของคนเดิมถูกทิ้ง ไม่โผล่ปุ่มล้าง', GO().hidden === true && wb.anon === null, JSON.stringify(wb.anon));
+
+  // ── ผลตรวจค้างข้ามการโหลดใหม่/ล้างแผง ──
+  await openDlg();
+  MODE.anon = a => a.p_dry ? dryOk(2) : { data: { ok: true, dry: false, anonymized: 2 }, error: null };
+  $('wbAnonCheck').click(); await sleep(20);
+  $('wbReload').click(); await sleep(40);
+  ok('กด ↻ รีเฟรช: ผลตรวจเดิมหาย (ปุ่มล้างซ่อน · กดยืนยันไม่ได้) — ต้องตรวจใหม่', GO().hidden === true && OUT().textContent === '' && wb.anon === null && (() => { wbAnonConfirm(); return !CONF().open; })());
+  $('wbAnonCheck').click(); await sleep(20);
+  wbReset();
+  wbAnonConfirm(); await sleep(10);
+  ok('ล้างแผง (ออกจากระบบ/สลับบัญชี): ผลตรวจที่ค้างถูกลืม — กดยืนยันโดยตรงไม่เปิดหน้าต่าง', wb.anon === null && !CONF().open);
+
+  // ── ตั้งค่าเก็บข้อมูล/ล้างอัตโนมัติ ──
+  await openDlg();
+  const up0 = updates().length;
+  $('wbMonths').value = '24'; $('wbAuto').checked = true;
+  await wbSave();
+  const u = updates()[up0];
+  ok('แก้ "เก็บกี่เดือน" + ติ๊ก "บอทล้างเอง": ส่งเฉพาะสองช่องนี้ (เป็นตัวเลข/บูลีน) + ผู้แก้', !!u && Object.keys(u.payload).sort().join(',') === 'anonymize_after_months,auto_anonymize_enabled,updated_at,updated_by' && u.payload.anonymize_after_months === 24 && u.payload.auto_anonymize_enabled === true, JSON.stringify(u && u.payload));
+  ok('แจ้งผลบอกค่าเดิม → ค่าใหม่', toast().indexOf('เก็บข้อมูลลูกค้าเว็บกี่เดือนหลังวันจอง 12 → 24') !== -1 && toast().indexOf('ให้บอทล้างข้อมูลส่วนตัวเองวันละครั้ง: เปิด') !== -1, toast());
+  let badM = [];
+  for (const v of ['', '0', '121', '4.5', '1e1']) {
+    await openDlg(); $('wbMonths').value = v; $('wbErr').hidden = true;
+    const n2 = updates().length; await wbSave();
+    if (!(updates().length === n2 && !$('wbErr').hidden && $('wbErr').textContent.indexOf('เก็บข้อมูลลูกค้าเว็บกี่เดือนหลังวันจอง') !== -1 && $('wbErr').textContent.indexOf('1 ถึง 120') !== -1)) badM.push(v);
+  }
+  ok('จำนวนเดือน: ว่าง · 0 · 121 · ทศนิยม · 1e1 ถูกปฏิเสธ (ช่วง 1–120 ตรง check ของฐาน)', badM.length === 0, badM.join(','));
+  let okM = 0;
+  for (const v of [1, 120]) { await openDlg(); $('wbMonths').value = String(v); const n3 = updates().length; await wbSave(); if (updates().length === n3 + 1 && updates()[n3].payload.anonymize_after_months === v) okM++; }
+  ok('ขอบช่วง 1 และ 120 เดือนบันทึกผ่าน', okM === 2, 'ok=' + okM);
+
+  L('=== สรุป: ' + pass + ' PASS / ' + fail + ' FAIL ===');
+  L(fail ? 'RESULT:FAIL' : 'RESULT:PASS');
+}
+</script>`;
+
 const pages = [
   ['แถบสถานะซิงก์ (เจ้าของ)', { role: 'owner', v041: true }, T_STATUS],
   ['ฟอร์มตั้งค่า + บันทึก (เจ้าของ)', { role: 'owner', v041: true }, T_FORM],
@@ -509,6 +694,7 @@ const pages = [
   ['ผู้ดูแล (ตั้งค่าได้)', { role: 'admin', v041: true }, T_STAFF],
   ['ฐานยังไม่รัน 041', { role: 'owner', v041: false }, T_NO041],
   ['โหลดล้ม · ผลที่มาช้า · สลับบัญชี/ออกจากระบบ', { role: 'owner', v041: true }, T_EDGE],
+  ['ล้างข้อมูลส่วนตัวครบกำหนด (เจ้าของ)', { role: 'owner', v041: true }, T_ANON],
 ];
 let allOk = true;
 for (const [name, cfg, tests] of pages) {
