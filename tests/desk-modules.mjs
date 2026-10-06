@@ -109,7 +109,7 @@ window.supabase = {
       }
       return { data: null, error: null };
     },
-    channel: () => ({ on() { return this; }, subscribe() { return this; } }),
+    channel: () => ({ on(t, f, cb) { if (f && f.table) (window.RT = window.RT || {})[f.table] = cb; return this; }, subscribe() { return this; } }),     // RT[ตาราง]() = จำลองว่า realtime แจ้งว่ามีการเปลี่ยน
     storage: { from: () => ({
       async upload() { CALLS.push({ op: 'upload' }); return { error: null }; },
       async remove() { return { error: null }; },
@@ -164,16 +164,48 @@ async function runTests() {
   ok('ตารางการจองแสดงครบ 3 รายการ', document.querySelectorAll('#bookingRows tr[data-i]').length === 3);
   ok('นับรอยืนยันได้ 2', txt('bkStatPending') === '2', txt('bkStatPending'));
 
+  // ── เลขแดงข้างเมนู "จองห้อง" = ใบรอยืนยัน (ไม่ยืนยัน + ไม่ยกเลิก) · ตรงกับสถิติและไอคอนลัดหน้าแรก · ขยับเองเมื่อ realtime แจ้งว่ามีใบเข้า/เปลี่ยน ──
+  {
+    const nb = () => document.getElementById('navBadge-booking');
+    const launchN = () => LAUNCH_ITEMS.find(i => i.key === 'booking').badge();
+    const same = n => !!nb() && nb().textContent === String(n) && launchN() === n && txt('bkStatPending') === String(n);
+    ok('เมนู "จองห้อง" มีเลขแดง = ใบรอยืนยัน (2) ตรงกับสถิติและไอคอนลัดหน้าแรก · ไม่ซ่อน', !!nb() && !nb().hidden && same(2), nb() && nb().textContent + ' / ' + launchN() + ' / ' + txt('bkStatPending'));
+    const cs = getComputedStyle(nb());
+    ok('เลขแดงอ่านได้: พื้นแดงตัวขาวหนา ≥ 14px · มีคำกำกับให้โปรแกรมอ่านจอ "รอยืนยัน 2"', cs.backgroundColor === 'rgb(204, 0, 26)' && cs.color === 'rgb(255, 255, 255)' && parseInt(cs.fontWeight, 10) >= 700 && parseFloat(cs.fontSize) >= 14 && nb().getAttribute('aria-label') === 'รอยืนยัน 2', cs.backgroundColor + ' ' + cs.color + ' ' + cs.fontSize + ' ' + nb().getAttribute('aria-label'));
+    ok('ปุ่มเมนู "จองห้อง" เป็นตัวที่มีเลขแดง (อยู่ในปุ่มเมนูหมวด booking)', nb().closest('.nav-item') && nb().closest('.nav-item').getAttribute('data-s') === 'booking');
+    const rt = async () => { window.RT.room_bookings(); await sleep(300); };
+    ok('มีตัวฟัง realtime ของ room_bookings อยู่จริง', typeof (window.RT && window.RT.room_bookings) === 'function');
+    FAKE.room_bookings[0].confirmed = true; await rt();
+    ok('พนักงานอีกเครื่องยืนยันใบหนึ่ง (realtime แจ้ง) → เลขลดเป็น 1 ทันที ไม่ต้องรีเฟรช', same(1), nb().textContent);
+    FAKE.room_bookings.push({ id: 'rt1', customer_name: 'ใบเว็บเข้าใหม่', contact: '0800000009', date: TODAY, start_time: '21:00:00', hours: 1, room: 'Controller Setup', cost: 800, status: 'upcoming', confirmed: false, source: 'online_web', line_user_id: null, customer_id: null });
+    await rt();
+    ok('มีใบเว็บเข้าใหม่ (realtime แจ้ง) → เลขขึ้นเป็น 2 ทันที', same(2), nb().textContent);
+    FAKE.room_bookings.push({ id: 'rt2', customer_name: 'ใบที่ถูกยกเลิก', contact: '0800000008', date: TODAY, start_time: '22:00:00', hours: 1, room: 'Controller Setup', cost: 800, status: 'cancelled', confirmed: false, source: 'online_web', line_user_id: null, customer_id: null });
+    await rt();
+    ok('ใบที่ยกเลิกแล้ว (ไม่ยืนยัน) ไม่นับ → ยัง 2', same(2), nb().textContent);
+    FAKE.room_bookings.forEach(b => { b.confirmed = true; }); await rt();
+    ok('ยืนยันครบหมด → เลขหายไป (ซ่อน · ข้อความว่าง · คำกำกับ "รอยืนยัน 0")', nb().hidden === true && nb().textContent === '' && nb().getAttribute('aria-label') === 'รอยืนยัน 0' && launchN() === 0, nb().hidden + ' [' + nb().textContent + ']');
+    FAKE.room_bookings = FAKE.room_bookings.filter(b => b.id !== 'rt1' && b.id !== 'rt2');
+    FAKE.room_bookings[0].confirmed = false; FAKE.room_bookings[1].confirmed = false; FAKE.room_bookings[2].confirmed = true;    // คืนข้อมูลตั้งต้น (b1 · b2 รอยืนยัน · b3 ยืนยันแล้ว)
+    await rt();
+    ok('(คืนสถานะ) กลับเป็น 2 ตามข้อมูลตั้งต้น เพื่อให้เทสต์ต่อไปเริ่มจากจุดเดิม', same(2) && document.querySelectorAll('#bkTimeline .tl-block').length === 2, nb().textContent);
+  }
+
   openBooking('b1');
   ok('การจองผ่าน LINE ขึ้นแถบเขียว "ส่งข้อความทาง LINE อัตโนมัติ"',
     txt('detailBody').indexOf('ส่งข้อความแจ้งลูกค้าทาง LINE อัตโนมัติ') !== -1);
   openBooking('b2');
   ok('การจองที่ไม่มี LINE userId ขึ้นแถบเหลือง "ไม่มีช่องทาง LINE"',
     txt('detailBody').indexOf('ไม่มีช่องทาง LINE') !== -1);
+  // b1 (13:00–15:00) ทับตารางสอน 14:00–16:00 ในข้อมูลทดสอบ → ยืนยันต้องกดสองรอบ (รอบแรกเตือน) · ไม่เขียนฐานจนกว่าจะกดรอบสอง
   openBooking('b1');
   CALLS.length = 0;
   document.getElementById('bkConfirmBtn').click();
-  await sleep(200);
+  await sleep(300);
+  ok('ใบที่ทับตารางสอน: กดยืนยันรอบแรกยังไม่เขียนฐาน (เตือนก่อน)', writes().length === 0, JSON.stringify(writes().map(c => c.table + ':' + c.op)));
+  await sleep(700);
+  document.getElementById('bkConfirmBtn').click();
+  await sleep(300);
   const up = CALLS.find(c => c.op === 'update' && c.table === 'room_bookings');
   ok('ยืนยันการจองเขียน room_bookings.update ตรงแถว', !!up && up.where && up.where.col === 'id' && up.where.val === 'b1',
     JSON.stringify(up && { payload: up.payload, where: up.where }));
@@ -181,6 +213,69 @@ async function runTests() {
     !!up && JSON.stringify(Object.keys(up.payload).sort()) === JSON.stringify(OLD_CONFIRM_KEYS), up && Object.keys(up.payload).join(','));
   ok('ค่า confirmed = true และ confirmed_by = ผู้ที่ล็อกอิน', !!up && up.payload.confirmed === true && up.payload.confirmed_by === 'u1');
   ok('ไม่มีการเขียนอย่างอื่นพ่วงไปกับการยืนยัน', writes().length === 1, JSON.stringify(writes().map(c => c.table + ':' + c.op)));
+
+  // ── ยืนยันใบที่ค้าง: เห็นคำเตือนซ้อน/ทับตารางสอนก่อน + ต้องกด "ยืนยันจองซ้อน" ซ้ำ (หัวหน้าตัดสิน 6 ต.ค. 69) ──
+  {
+    const el = id => document.getElementById(id);
+    const upd = () => CALLS.filter(c => c.op === 'update' && c.table === 'room_bookings');
+    const cbox = () => el('bkConfirmConflict'), btn = () => el('bkConfirmBtn');
+    openBooking('b1');
+    ok('เปิดใบ b1 (13:00–15:00 ทับตารางสอน 14:00–16:00): เห็นคำเตือนในแผงทันที · นับ 1 รายการ · ไม่นับตัวเอง · ปุ่มยังเป็น "✓ ยืนยันการจอง"',
+      !!cbox() && cbox().textContent.indexOf('ซ้อนกับ 1 รายการ') !== -1 && cbox().textContent.indexOf('ทับตารางสอน (ห้องซ้อมถูกใช้สอน) 14:00–16:00') !== -1 && cbox().textContent.indexOf('ลูกค้า LINE') === -1 && btn().textContent === '✓ ยืนยันการจอง' && btn().classList.contains('btn-primary'), cbox() && cbox().textContent);
+    const cs2 = getComputedStyle(cbox());
+    ok('คำเตือนในแผง: แดงตัวหนา ≥ 14px · role=alert', cs2.color === 'rgb(138, 0, 18)' && parseInt(cs2.fontWeight, 10) >= 700 && parseFloat(cs2.fontSize) >= 14 && cbox().getAttribute('role') === 'alert', cs2.color + ' ' + cs2.fontWeight);
+    openBooking('b2');
+    ok('ใบ b2 (16:00–17:00 ติดกับตารางสอนที่จบ 16:00 พอดี) ไม่ซ้อน → ไม่มีกล่องเตือน', !cbox());
+    CALLS.length = 0; btn().click(); await sleep(350);
+    ok('ใบที่ไม่ซ้อนกดยืนยันรอบเดียวก็เขียน (พฤติกรรมเดิมไม่เปลี่ยน)', upd().length === 1 && upd()[0].where.val === 'b2', JSON.stringify(upd().map(u => u.where)));
+    openBooking('b1'); CALLS.length = 0; btn().click(); await sleep(350);
+    ok('b1 กดยืนยันรอบแรก: ไม่เขียนฐาน · ปุ่มเป็น "⚠️ ยืนยันจองซ้อน" (แดง) · แผงยังเปิดและมีคำเตือน · ขึ้นข้อความเตือน',
+      upd().length === 0 && btn().textContent === '⚠️ ยืนยันจองซ้อน' && btn().classList.contains('btn-danger') && !!cbox() && detailOpen() && txt('toast').indexOf('ซ้อน') !== -1, upd().length + ' ' + btn().textContent);
+    btn().click(); await sleep(150);
+    ok('กดซ้ำเร็วเกิน (ดับเบิลคลิก) ไม่นับเป็นการยืนยัน', upd().length === 0);
+    await sleep(700); btn().click(); await sleep(350);
+    ok('กดยืนยันจองซ้อนซ้ำจริง → เขียนยืนยัน (ไม่บล็อก) ตรงแถว b1', upd().length === 1 && upd()[0].where.val === 'b1' && upd()[0].payload.confirmed === true, JSON.stringify(upd().map(u => u.where)));
+    openBooking('b1'); CALLS.length = 0; btn().click(); await sleep(350);
+    openBooking('b2'); openBooking('b1');
+    ok('กดรอบแรกที่ b1 แล้วไปเปิดใบอื่นแล้วกลับมา → ปุ่มกลับเป็นขั้นแรก (ไม่ค้างสถานะยืนยัน)', btn().textContent === '✓ ยืนยันการจอง' && btn().classList.contains('btn-primary'), btn().textContent);
+    CALLS.length = 0; openBooking('b2');
+    ok('(เตรียม) b2 ไม่มีคำเตือนตอนเปิดแผง', !cbox());
+    FAKE.room_blocks.push({ starts_at: TODAY + 'T09:30:00Z', ends_at: TODAY + 'T10:30:00Z', all_day: false });      // 16:30–17:30 เวลาไทย (ซิงก์เข้ามาหลังเปิดแผง)
+    btn().click(); await sleep(350);
+    ok('บอทซิงก์ตารางสอนใหม่ทับ b2 ระหว่างที่แผงเปิด → กดยืนยันแล้วเตือน (ไม่ยืนยันเงียบ ๆ)', upd().length === 0 && !!cbox() && cbox().textContent.indexOf('16:30–17:30') !== -1 && btn().textContent === '⚠️ ยืนยันจองซ้อน', upd().length + ' ' + btn().textContent);
+    FAKE.room_blocks.pop(); await loadRoomBlocks(); bkConfAck = '';
+    FAKE.room_bookings.push({ id: 'x1', customer_name: '<img src=x onerror=window.__xss3=1>', contact: '0800000007', date: TODAY, start_time: '16:30:00', hours: 1, room: 'Controller Setup', cost: 800, status: 'upcoming', confirmed: true, source: 'staff', line_user_id: null, customer_id: null });
+    FAKE.room_bookings.push({ id: 'x2', customer_name: 'ใบยกเลิกซ้อน', contact: '0800000006', date: TODAY, start_time: '16:00:00', hours: 1, room: 'Controller Setup', cost: 800, status: 'cancelled', confirmed: true, source: 'staff', line_user_id: null, customer_id: null });
+    await loadBookings(); openBooking('b2');
+    ok('b2 ซ้อนกับ x1 (16:30–17:30 ยืนยันแล้ว): บอกชื่อ/ช่วง/สถานะ · ชื่อที่มีแท็กแสดงเป็นข้อความ · ใบยกเลิกซ้อนไม่นับ',
+      !!cbox() && cbox().textContent.indexOf('ซ้อนกับ 1 รายการ') !== -1 && cbox().textContent.indexOf('16:30–17:30 (ยืนยันแล้ว)') !== -1 && !cbox().querySelector('img') && window.__xss3 === undefined && cbox().textContent.indexOf('ใบยกเลิกซ้อน') === -1, cbox() && cbox().textContent);
+    FAKE.room_bookings = FAKE.room_bookings.filter(b => b.id !== 'x1' && b.id !== 'x2'); await loadBookings(); bkConfAck = '';
+    openBooking('b3');
+    ok('ใบที่ยืนยันแล้ว (b3): ไม่มีกล่องเตือนและไม่มีปุ่มยืนยัน', !cbox() && !btn());
+    // ใบที่ยืนยันแล้วแต่ซ้อนกับใบอื่น (ยืนยันไปก่อนแล้ว): ไม่เตือนซ้ำ — คำเตือนมีไว้ก่อนกดยืนยันเท่านั้น
+    FAKE.room_bookings.push({ id: 'x3', customer_name: 'ใบซ้อนใบประจำ', contact: '0800000005', date: '2026-09-01', start_time: '13:00:00', hours: 1, room: 'Controller Setup', cost: 800, status: 'upcoming', confirmed: true, source: 'staff', line_user_id: null, customer_id: null });
+    await loadBookings(); openBooking('b3');
+    ok('ใบที่ยืนยันแล้วและซ้อน x3 (b3 12:00–15:00 ซ้อน 13:00–14:00): ไม่มีกล่องเตือน', !cbox() && !btn());
+    // ซ้อนสองรายการ: นับสอง · แจ้งครบทั้งสองบรรทัด · บอกวิธีทำต่อ
+    FAKE.room_bookings.push({ id: 'x4', customer_name: 'ใบซ้อนก่อนหน้า', contact: '0800000004', date: TODAY, start_time: '13:00:00', hours: 1, room: 'Controller Setup', cost: 800, status: 'upcoming', confirmed: true, source: 'staff', line_user_id: null, customer_id: null });
+    await loadBookings(); bkConfAck = ''; openBooking('b1');
+    ok('b1 ซ้อน 2 รายการ (ใบ 13:00–14:00 + ตารางสอน 14:00–16:00): นับ 2 · แจ้งครบสองบรรทัด',
+      !!cbox() && cbox().textContent.indexOf('ซ้อนกับ 2 รายการ') !== -1 && (cbox().textContent.match(/•/g) || []).length === 2 && cbox().textContent.indexOf('13:00–14:00') !== -1 && cbox().textContent.indexOf('14:00–16:00') !== -1, cbox() && cbox().textContent);
+    ok('คำเตือนบอกวิธีทำต่อ: กดปุ่ม "ยืนยันจองซ้อน" ถ้าตั้งใจ', !!cbox() && cbox().textContent.indexOf('กดปุ่ม “ยืนยันจองซ้อน”') !== -1, cbox() && cbox().textContent);
+    // ดับเบิลคลิกเร็วมาก: สองคลิกก่อนดึงข้อมูลรอบแรกเสร็จ ต้องไม่ลื่นไปยืนยันทั้งที่ยังไม่ได้เห็นคำเตือน
+    CALLS.length = 0;
+    btn().click(); btn().click(); await sleep(450);
+    ok('สองคลิกติดกันก่อนดึงข้อมูลเสร็จ: ไม่เขียนฐาน · ปุ่มเป็นขั้น "⚠️ ยืนยันจองซ้อน"', upd().length === 0 && btn().textContent === '⚠️ ยืนยันจองซ้อน', upd().length + ' ' + btn().textContent);
+    FAKE.room_bookings = FAKE.room_bookings.filter(b => b.id !== 'x3' && b.id !== 'x4'); await loadBookings(); bkConfAck = '';
+    // ใบที่ถูกลบไปก่อนกดยืนยัน (แผงค้างอยู่): บอกตามจริง ไม่เขียนฐาน ไม่พัง
+    FAKE.room_bookings.push({ id: 'x5', customer_name: 'ใบที่จะหายไป', contact: '0800000003', date: '2026-09-02', start_time: '12:00:00', hours: 1, room: 'Controller Setup', cost: 800, status: 'upcoming', confirmed: false, source: 'staff', line_user_id: null, customer_id: null });
+    await loadBookings(); openBooking('x5');
+    FAKE.room_bookings = FAKE.room_bookings.filter(b => b.id !== 'x5');
+    CALLS.length = 0; el('toast').textContent = '';
+    let threw5 = ''; try { await confirmBookingClick('x5'); } catch (e) { threw5 = String(e); }
+    ok('ใบหายไปก่อนกดยืนยัน: ขึ้นข้อความ "ไม่พบการจองนี้" · ไม่เขียนฐาน · ฟังก์ชันไม่พัง', txt('toast').indexOf('ไม่พบการจองนี้') !== -1 && upd().length === 0 && threw5 === '', txt('toast') + ' ' + upd().length + ' ' + threw5);
+    await sleep(100); await loadBookings();
+  }
 
   CALLS.length = 0;
   openBookingForm();
@@ -648,4 +743,67 @@ const staffAdmin = loadWith('#admin', 'u2', `
   ok('บอกเหตุผลว่าเฉพาะเจ้าของร้าน/ผู้ดูแล', document.getElementById('toast').textContent.indexOf('เฉพาะเจ้าของร้าน') !== -1,
     document.getElementById('toast').textContent);`);
 
-process.exit(res.ok && onBooking.ok && staffAdmin.ok ? 0 : 1);
+// ── ลิงก์เปิดใบจองตรง #booking:<id> (ลิงก์ในแจ้งเตือนการจอง) — เปิดครั้งเดียว · ไม่พบใบ = ตกไปหน้าจองห้องปกติ · hash อื่นที่มีส่วนต่อท้ายไม่ถูกพาไปไหน ──
+const wait = "const sleep = ms => new Promise(r => setTimeout(r, ms)); const dh = () => document.querySelector('#detail .detail-head').textContent; await sleep(500);";
+const deepOwn = loadWith('#booking:b1', 'u1', wait + `
+  ok('เปิดหน้าด้วย #booking:b1 → เข้าหมวดจองห้อง + เปิดแผงใบ b1 ทันที (ไม่ต้องกดอะไร)', current === 'booking' && detailOpen() && dh().indexOf('ลูกค้า LINE') !== -1, current + ' ' + detailOpen());
+  ok('ไทม์ไลน์ไปที่วันของใบนั้น · แถวของใบนั้นถูกเลือก · ปุ่มยืนยันอยู่ในแผง', bkDate === TODAY && !!document.getElementById('bkConfirmBtn') && document.querySelectorAll('#bookingRows tr.sel').length === 1, bkDate);
+  closeDetail(); await loadAll(); await sleep(300);
+  ok('เปิดครั้งเดียว: ปิดแผงแล้วโหลดข้อมูลรอบถัดไป (เช่น realtime สินค้า/ขาย) ไม่เปิดใบนั้นซ้ำ', !detailOpen());`);
+const deepOldDate = loadWith('#booking:b3', 'u1', wait + `
+  ok('ใบของวันอื่น (b3 · 1 ก.ย.): ไทม์ไลน์ย้ายไปวันนั้น + เปิดแผงใบนั้น', current === 'booking' && bkDate === '2026-09-01' && detailOpen() && dh().indexOf('ลูกค้าประจำ') !== -1, bkDate + ' ' + detailOpen());`);
+const deepStaff = loadWith('#booking:b2', 'u2', wait + `
+  ok('พนักงาน (ไม่ใช่เจ้าของ) เปิดลิงก์ใบจองได้เหมือนกัน', current === 'booking' && detailOpen() && dh().indexOf('ลูกค้าเว็บ') !== -1, current);`);
+const deepEncoded = loadWith('#booking%3Ab1', 'u1', wait + `
+  ok('ลิงก์ที่เข้ารหัส : เป็น %3A ก็เปิดใบเดียวกัน', current === 'booking' && detailOpen() && dh().indexOf('ลูกค้า LINE') !== -1);`);
+const deepMissing = loadWith('#booking:no-such-id', 'u1', wait + `
+  ok('ไม่พบใบ → ตกไปหน้าจองห้องปกติ (ไม่เปิดแผง) · บอกว่าไม่พบ · URL กลับเป็น #booking', current === 'booking' && !detailOpen() && document.getElementById('toast').textContent.indexOf('ไม่พบการจอง') !== -1 && location.hash === '#booking', current + ' ' + detailOpen() + ' ' + location.hash + ' ' + document.getElementById('toast').textContent);
+  ok('ปุ่มย้อนกลับไม่ค้างลิงก์เสีย (hash ถูกแทน ไม่ได้ซ้อนใหม่)', document.getElementById('backBtn').disabled === true);`);
+const deepColon = loadWith('#booking:x:y', 'u1', wait + `
+  ok('id ที่มี : อยู่ข้างใน (#booking:x:y) ตัดที่ : ตัวแรก → หมวดจองห้อง + ไม่พบใบ (ไม่ตกไปหน้าแรก)', current === 'booking' && !detailOpen() && document.getElementById('toast').textContent.indexOf('ไม่พบการจอง') !== -1, current);`);
+const deepEmpty = loadWith('#booking:', 'u1', wait + `
+  ok('#booking: (ไม่มี id) = หน้าจองห้องปกติ ไม่เปิดแผง ไม่ฟ้องว่าไม่พบ', current === 'booking' && !detailOpen() && document.getElementById('toast').textContent.indexOf('ไม่พบ') === -1);`);
+const deepOther = loadWith('#stock:b1', 'u1', wait + `
+  ok('hash อื่นที่มีส่วนต่อท้าย (#stock:b1) ไม่ถูกตีความ → หน้าแรกตามเดิม ไม่เปิดใบจอง', current === 'home' && !detailOpen(), current);`);
+const deepNav = loadWith('#home', 'u1', wait + `
+  location.hash = '#booking:b2'; await sleep(400);
+  ok('พิมพ์/กดลิงก์ #booking:b2 ตอนเปิดหน้าอยู่แล้ว (popstate) → ไปหมวดจองห้อง + เปิดใบนั้น', current === 'booking' && detailOpen() && dh().indexOf('ลูกค้าเว็บ') !== -1, current);
+  closeDetail(); showSection('home'); await sleep(100);
+  const hl = history.length; document.getElementById('toast').textContent = '';
+  location.hash = '#booking:ghost2'; await sleep(400);
+  ok('พิมพ์ลิงก์ใบที่ไม่มี (#booking:ghost2) ตอนเปิดหน้าอยู่ → หมวดจองห้องปกติ + บอกว่าไม่พบ + URL ถูกแทนเป็น #booking (ไม่ซ้อนประวัติเพิ่ม · ปุ่มย้อนไม่ค้างลิงก์เสีย)',
+    current === 'booking' && !detailOpen() && document.getElementById('toast').textContent.indexOf('ไม่พบการจอง') !== -1 && location.hash === '#booking' && history.length === hl + 1, current + ' ' + location.hash + ' ' + history.length + '/' + hl);
+  showSection('home'); await sleep(100);
+  notifOnMessage({ data: { type: 'djlab-notification-click', hash: '#booking:b1' } }); await sleep(300);
+  ok('แจ้งเตือนถูกกดตอนหน้าเปิดอยู่ (SW ส่ง hash #booking:b1) → เปิดใบ b1 ตรง ๆ', current === 'booking' && detailOpen() && dh().indexOf('ลูกค้า LINE') !== -1, current);
+  closeDetail(); showSection('home'); await sleep(100);
+  notifOnMessage({ data: { type: 'djlab-notification-click', hash: '#booking' } }); await sleep(200);
+  ok('แจ้งเตือนที่ลิงก์เป็น #booking เฉย ๆ → ไปหมวดจองห้อง ไม่เปิดแผง', current === 'booking' && !detailOpen(), current);
+  showSection('home'); await sleep(100);
+  notifOnMessage({ data: { type: 'djlab-notification-click', hash: '#booking:ghost' } }); await sleep(300);
+  ok('แจ้งเตือนชี้ใบที่ไม่มี → หมวดจองห้องปกติ + บอกว่าไม่พบ', current === 'booking' && !detailOpen() && document.getElementById('toast').textContent.indexOf('ไม่พบการจอง') !== -1, current);
+  for (const h of ['#tasks', undefined, '', '#home', '#stock:b1', '#bookingx']) {
+    showSection('home'); await sleep(60);
+    notifOnMessage({ data: { type: 'djlab-notification-click', hash: h } }); await sleep(120);
+    ok('แจ้งเตือนอื่น (hash ' + JSON.stringify(h) + ') ยังพาไป "งานของฉัน" เหมือนเดิม', current === 'tasks', current);
+  }`);
+
+// ยังไม่ล็อกอิน: ลิงก์ที่มากับ URL/popstate ต้องไม่ถูกใช้ทิ้งก่อนมีข้อมูล (ไม่งั้นล็อกอินเสร็จแล้วใบไม่เปิด) — เปิดหน้าแบบไม่มี session
+const deepLoggedOut = runPage({ root, file: 'desk.html', mock: MOCK, hash: '#booking:b1', tests: `<script>
+window.addEventListener('load', () => setTimeout(runTests, 600));
+${HARNESS}
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const dh = () => document.querySelector('#detail .detail-head').textContent;
+async function runTests() {
+  ok('(เตรียม) ยังไม่ล็อกอิน: ไม่เปิดแผง ไม่ฟ้องว่าไม่พบใบ', document.getElementById('loginOverlay').style.display !== 'none' && !detailOpen() && document.getElementById('toast').textContent.indexOf('ไม่พบ') === -1);
+  location.hash = '#booking:b2'; await sleep(300);
+  ok('ยังไม่ล็อกอิน + มีลิงก์เข้ามา (popstate): ไม่ถูกใช้ทิ้ง ไม่ฟ้องว่าไม่พบใบ', !detailOpen() && document.getElementById('toast').textContent.indexOf('ไม่พบ') === -1, document.getElementById('toast').textContent);
+  document.getElementById('loginEmail').value = 'owner@djlabsiam.com'; document.getElementById('loginPassword').value = 'x';
+  await doLogin(); await sleep(700);
+  ok('ล็อกอินเสร็จ → เปิดใบ b2 ตามลิงก์ล่าสุดทันที', current === 'booking' && detailOpen() && dh().indexOf('ลูกค้าเว็บ') !== -1, current + ' ' + detailOpen());
+  L('=== สรุป: ' + pass + ' PASS / ' + fail + ' FAIL ===');
+  L(fail ? 'RESULT:FAIL' : 'RESULT:PASS');
+}
+</script>` });
+
+process.exit(res.ok && deepColon.ok && deepLoggedOut.ok && onBooking.ok && staffAdmin.ok && deepOwn.ok && deepOldDate.ok && deepStaff.ok && deepEncoded.ok && deepMissing.ok && deepEmpty.ok && deepOther.ok && deepNav.ok ? 0 : 1);
