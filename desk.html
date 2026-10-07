@@ -228,6 +228,11 @@
 
   .alert { padding: 10px 14px; border: 1px solid; font-size: 14px; margin-bottom: 14px; }   /* กรอบ 1px รอบตัว (ไม่ใช้แถบสีข้างซ้าย) — ชุดเดียวกับ stock.html */
   .alert-red { background: var(--red-soft); border-color: #F0B8C1; color: #8A0012; }
+  /* ฟอร์มสินค้า (หน้าจัดการข้อมูล): ช่องบาร์โค้ด + ปุ่มกล้อง · ช่องเพิ่มยี่ห้อใหม่ */
+  .ad-row { display: flex; gap: 8px; align-items: stretch; }
+  .ad-row .input { flex: 1 1 auto; min-width: 0; }
+  .ad-row .btn { flex: none; min-width: 44px; min-height: 44px; }
+  .ad-newbrand { margin-top: 10px; }
   .alert-warn { background: var(--warn-soft); border-color: #E8D1A0; color: var(--warn); }
   .alert-plain { background: var(--surface2); border-color: var(--line-strong); color: var(--text2); }
 
@@ -3152,7 +3157,7 @@ if (!window.supabase || !window.supabase.createClient) {
 }
 const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-const BRAND_OPTIONS = ['Pioneer DJ', 'AlphaTheta', 'NEO by OYAIDE', 'Other'];
+const BRAND_OPTIONS = ['Pioneer DJ', 'AlphaTheta', 'NEO by OYAIDE', 'Other'];    // ยี่ห้อเดิมตาม CHECK ของ 001 — ใช้เป็นตัวเลือกสำรองตอนยังไม่มีตาราง product_brands (migration 045)
 const TYPE_LABEL = { in: '▲ รับเข้า', out: '▼ ตัดออก', adjustment: '◆ ปรับยอด' };
 const UNIT_STATUS_LABEL = { in_stock: 'อยู่ในสต็อก', sold: 'ขายแล้ว', reserved: 'จองไว้', defective: 'มีตำหนิ' };
 
@@ -3489,7 +3494,7 @@ bkPollSchedule();
 // โหลดข้อมูล — query ชุดเดียวกับ stock.html / sales.html
 // ---------------------------------------------------------------------------
 async function loadAll() {
-  await Promise.all([loadProducts(), loadStockLevels(), loadMovements(), loadCustomers(), loadSalesHistory(), loadStats(),
+  await Promise.all([loadProducts(), loadBrands(), loadStockLevels(), loadMovements(), loadCustomers(), loadSalesHistory(), loadStats(),
                      loadBookings(), loadBookingSettings()]);
   renderAll();
   bkOpenDeepLink();               // ลิงก์ #booking:<id> (เช่น จากแจ้งเตือนการจอง) เปิดใบนั้นเมื่อข้อมูลพร้อม
@@ -3500,6 +3505,16 @@ async function loadProducts() {
   const { data, error } = await db.from('products').select('*').order('name');
   if (error) { console.error('[Load products]', error); showFatalError('โหลดรายการสินค้าไม่สำเร็จ: ' + error.message); return; }
   products = data || [];
+}
+
+// ยี่ห้อสินค้า (ตาราง product_brands — migration 045) · ยังไม่มีตาราง/อ่านไม่ได้/ว่างเปล่า = ใช้ BRAND_OPTIONS เดิม และฟอร์มสินค้าขึ้นแถบเหลืองบอกให้รัน 045 (ไม่ขึ้นแถบแดงทั้งหน้า)
+let brandRows = [];
+let brandsMissing = false;
+async function loadBrands() {
+  const { data, error } = await db.from('product_brands').select('name, is_active, sort_order').order('sort_order').order('name');
+  if (error) console.error('[Load brands]', error);
+  brandsMissing = !(data && data.length);
+  brandRows = data || [];
 }
 
 async function loadStockLevels() {
@@ -3697,8 +3712,10 @@ function detailOpen() { return !document.getElementById('detail').hidden; }
 //   จัดตามหมวด  — ปีกละหมวด เลื่อนแนวนอน · แบรนด์เป็นตัวกรอง
 // สามโหมดบนช่องยิง: หา (ยิงแล้วกระโดดไปรุ่นนั้น) · รับเข้า (ถาดล่างเก็บการ์ดทีละเครื่อง) · นับ (นับสต็อกแล้วลงปรับยอดเฉพาะที่ไม่ตรง)
 // ---------------------------------------------------------------------------
-// ลำดับปีกตามที่เจ้าของเคาะ · ค่าต้องตรงกับ check ของ products.brand (migration 001) ทุกตัวอักษร
+// ลำดับปีกตามที่เจ้าของเคาะ · ชื่อสามปีกแรกต้องตรงกับยี่ห้อตั้งต้นใน product_brands (045 · เดิม CHECK ของ 001) ทุกตัวอักษร
 const WALL_BRANDS = ['AlphaTheta', 'Pioneer DJ', 'NEO by OYAIDE', 'Other'];
+// ยี่ห้อที่เพิ่มทีหลังใน product_brands ยังไม่มีปีกของตัวเอง — รวมไว้ปีก "แบรนด์อื่น" (ไม่งั้นรุ่นของยี่ห้อนั้นหายจากผนัง/หน้านับสต็อก)
+function wallBrand(p) { return WALL_BRANDS.includes(p.brand) ? p.brand : 'Other'; }
 function brandLabel(b) { return b === 'Other' ? 'แบรนด์อื่น' : b; }
 
 // หมวดมาจากข้อมูลจริง (products.category) ไม่ได้ฝังรายการไว้ — ค่าที่รู้จักแปลเป็นไทย ที่ไม่รู้จักแสดงตามที่พิมพ์ไว้
@@ -3805,7 +3822,7 @@ function wallVisible(p, ignore) {
     if (!((wall.low && s === 'low') || (wall.out && s === 'out'))) return false;
   }
   if (ignore !== 'chip' && wall.filter) {
-    if (wall.group === 'brand' ? catLabel(p.category) !== wall.filter : p.brand !== wall.filter) return false;
+    if (wall.group === 'brand' ? catLabel(p.category) !== wall.filter : wallBrand(p) !== wall.filter) return false;
   }
   return true;
 }
@@ -3814,7 +3831,7 @@ function buildWings(merged) {
   const vis = merged.filter(p => wallVisible(p)).sort(byModel);
   if (wall.group === 'brand') {
     return WALL_BRANDS.map(b => {
-      const inBrand = vis.filter(p => p.brand === b);
+      const inBrand = vis.filter(p => wallBrand(p) === b);
       const shelves = [...new Set(inBrand.map(p => catLabel(p.category)))].sort(catCmp)
         .map(c => ({ label: c, items: inBrand.filter(p => catLabel(p.category) === c) }));
       return { key: 'b:' + b, title: brandLabel(b), cls: b === 'Other' ? 'w-other' : '',
@@ -3932,7 +3949,7 @@ function renderWallChips(merged) {
   const opts = wall.group === 'brand'
     ? [...new Set(merged.map(p => catLabel(p.category)))].sort(catCmp)
         .map(c => ({ v: c, t: c, n: pool.filter(p => catLabel(p.category) === c).length }))
-    : WALL_BRANDS.map(b => ({ v: b, t: brandLabel(b), n: pool.filter(p => p.brand === b).length }));
+    : WALL_BRANDS.map(b => ({ v: b, t: brandLabel(b), n: pool.filter(p => wallBrand(p) === b).length }));
   const all = { v: '', t: wall.group === 'brand' ? 'ทุกหมวด' : 'ทุกแบรนด์', n: pool.length };
   const box = document.getElementById('wallChips');
   box.setAttribute('aria-label', wall.group === 'brand' ? 'กรองตามหมวด' : 'กรองตามแบรนด์');
@@ -4712,7 +4729,7 @@ async function rcvConfirm() {
 // ---- นับสต็อก: เลือกขอบเขต → ยิง/กด +− → ลงปรับยอดเฉพาะรุ่นที่ไม่ตรง ------------
 const cnt = { scope: '', picks: [], started: false, ids: [], counted: {}, seen: {}, units: {}, touched: [] };
 function countScopeOptions() {
-  const brands = WALL_BRANDS.filter(b => products.some(p => p.brand === b && onShelf(p)));
+  const brands = WALL_BRANDS.filter(b => products.some(p => wallBrand(p) === b && onShelf(p)));
   const cats = [...new Set(products.filter(onShelf).map(p => catLabel(p.category)))].sort(catCmp);
   return '<optgroup label="ทั้งปีกแบรนด์">' + brands.map(b => '<option value="' + escapeHtml('b:' + b) + '">' + escapeHtml(brandLabel(b)) + '</option>').join('') + '</optgroup>' +
     '<optgroup label="ทั้งหมวด">' + cats.map(c => '<option value="' + escapeHtml('c:' + c) + '">' + escapeHtml(c) + '</option>').join('') + '</optgroup>' +
@@ -4726,7 +4743,7 @@ function scopeLabel(key) {
 function scopeIds(key) {
   if (key === 'pick') return cnt.picks.slice();
   const live = p => (p.is_active || qtyOf(p.id) !== 0) && onShelf(p);
-  if (key.startsWith('b:')) return products.filter(p => live(p) && p.brand === key.slice(2)).map(p => p.id);
+  if (key.startsWith('b:')) return products.filter(p => live(p) && wallBrand(p) === key.slice(2)).map(p => p.id);
   if (key.startsWith('c:')) return products.filter(p => live(p) && catLabel(p.category) === key.slice(2)).map(p => p.id);
   return [];
 }
@@ -5741,8 +5758,9 @@ if (window.visualViewport) {
 const SCAN_ROI = { left: 0.08, right: 0.92, top: 0.32, bottom: 0.68 };
 const SCAN_FORMATS = ['ean_13', 'code_128', 'code_39', 'qr_code'];
 const ZXING_SRC = 'https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js';
-const CAM_MODE = { search: 'หา', receive: 'รับเข้า', count: 'นับ', cart: 'ขาย', serial: 'ซีเรียล', movement: 'เลือกสินค้า' };
+const CAM_MODE = { search: 'หา', receive: 'รับเข้า', count: 'นับ', cart: 'ขาย', serial: 'ซีเรียล', movement: 'เลือกสินค้า', field: 'ใส่ช่องบาร์โค้ด' };
 const cam = { stream: null, track: null, scanning: false, detector: null, reader: null, torch: false, last: '', lastAt: 0, zxAt: 0, token: 0 };
+let adCamField = false;                        // กล้องเปิดจากปุ่ม 📷 ของช่องบาร์โค้ดในฟอร์มสินค้า (หน้าจัดการข้อมูล) — ปิดกล้องแล้วล้าง
 const camCanvas = document.createElement('canvas');
 const camCtx = camCanvas.getContext('2d', { willReadFrequently: true });
 
@@ -5894,7 +5912,7 @@ async function camScanned(code) {
   const purpose = await routeScan(value, false);
   if (token !== cam.token) return;           // ระหว่างนั้นปิดกล้องไปแล้ว (เช่น เปลี่ยนหมวด)
   // หาเจอ = เปิดแผงสินค้าให้แล้ว · รหัสที่ไม่รู้จักเปิดหน้าต่างถาม — ปิดกล้องให้คนตัดสินใจ ไม่อ่านต่อลับหลัง
-  if (!purpose || purpose === 'search' || purpose === 'movement' || document.querySelector('dialog[open]')) { closeCam(); return; }
+  if (!purpose || purpose === 'search' || purpose === 'movement' || purpose === 'field' || document.querySelector('dialog[open]')) { closeCam(); return; }
   const more = purpose === 'cart' ? ' · ในตะกร้า ' + cart.length + ' รายการ'
     : purpose === 'receive' ? ' · ในถาดรับเข้า ' + rcvTotal() + ' ชิ้น' : '';
   camRearm('อ่านได้: ' + value + more + ' — สแกนชิ้นถัดไปได้เลย');
@@ -5922,6 +5940,7 @@ function camTorch() {
 function closeCam() {
   cam.token++;
   cam.scanning = false;
+  adCamField = false;
   // ปิดกล้องจริง ๆ ไม่งั้นไฟกล้องค้างและกินแบตทั้งวัน
   if (cam.stream) { cam.stream.getTracks().forEach(t => t.stop()); cam.stream = null; }
   cam.track = null; cam.detector = null; cam.reader = null; cam.torch = false;
@@ -9369,6 +9388,8 @@ function adOpenRow(row) {
     const label = '<label class="lbl" for="fld_' + escapeHtml(name) + '">' + escapeHtml(th) + (c.is_nullable ? '' : ' *') +
       '<span class="colname">' + escapeHtml(th !== name ? name + ' · ' : '') + escapeHtml(c.data_type) + '</span></label>';
     if (locked) return '<div class="field">' + label + '<div class="ro">' + escapeHtml(displayValue(raw)) + '</div></div>';
+    if (adTable.name === 'products' && name === 'brand') return '<div class="field">' + label + adBrandControl(raw) + '</div>';
+    if (adTable.name === 'products' && name === 'barcode_ean13') return '<div class="field">' + label + adBarcodeControl(raw) + '</div>';
     const kind = inputTypeFor(c.data_type);
     const id = 'fld_' + name;
     if (kind === 'boolean') {
@@ -9386,7 +9407,10 @@ function adOpenRow(row) {
   openDetail(isNew ? 'เพิ่มแถวใน ' + adTable.label : adTable.label,
     (adTable.mode === 'read' ? '<div class="alert alert-warn">👁 ตารางนี้ดูได้อย่างเดียว</div>' : '') +
     (adColumns.filter(c => !isSystemColumn(c.column_name)).length > 4 ? '<p class="hint" style="margin:0 0 14px;">ตารางซ่อนบางคอลัมน์ไว้ระหว่างเปิดแผงนี้ — ข้อมูลครบอยู่ในฟอร์มด้านล่าง</p>' : '') +
+    (adTable.name === 'products' && brandsMissing
+      ? '<div class="alert alert-warn" id="adBrandWarn"><strong class="wk-red">ยังเพิ่มยี่ห้อใหม่ไม่ได้</strong> — ฐานข้อมูลยังไม่มีตารางยี่ห้อ (ให้ผู้ดูแลระบบรัน migration 045 ก่อน) ตอนนี้เลือกได้เฉพาะ 4 ยี่ห้อเดิม</div>' : '') +
     '<div id="adFields">' + fields + '</div>' +
+    '<div id="adSaveErr" class="alert alert-red" role="alert" hidden></div>' +
     '<div class="actions">' +
       (canEditTable() && (!isNew || canAddRow()) ? '<button class="btn btn-primary" id="adSaveBtn" type="button" onclick="adSaveRow()">บันทึก</button>' : '') +
       (!isNew && canDeleteRow() ? '<button class="btn btn-danger" type="button" onclick="adDeleteRow()">ลบแถวนี้</button>' : '') +
@@ -9398,6 +9422,7 @@ function adCollect() {
   document.querySelectorAll('#adFields [data-col]').forEach(el => {
     const col = el.getAttribute('data-col'), kind = el.getAttribute('data-kind'), raw = el.value;
     if (kind === 'boolean') { payload[col] = raw === '' ? null : raw === 'true'; return; }
+    if (col === 'barcode_ean13') { payload[col] = raw.trim() || null; return; }      // ช่องว่างท้ายจากเครื่องยิง/วางข้อความ ทำให้บาร์โค้ดไม่ตรงตอนค้นหา
     if (raw === '') { payload[col] = null; return; }
     if (kind === 'number') { const n = Number(raw); payload[col] = isNaN(n) ? null : n; return; }
     if (kind === 'datetime-local') { payload[col] = new Date(raw).toISOString(); return; }
@@ -9406,17 +9431,124 @@ function adCollect() {
   return payload;
 }
 
+// ---- ฟอร์มสินค้า: ยี่ห้อ (ตัวเลือกจาก product_brands) · บาร์โค้ด (กล้อง/เครื่องยิง) · ข้อความ error ภาษาไทย ----------
+const NEW_BRAND = '__new__';
+// sel = ค่าที่เลือกอยู่ · current = ยี่ห้อที่บันทึกในสินค้าตัวนี้ (ยี่ห้อที่ปิดใช้งานแล้วยังต้องโชว์ ไม่งั้นค่าเดิมหาย)
+function adBrandOptions(sel, current) {
+  const list = brandsMissing ? BRAND_OPTIONS.map(name => ({ name, is_active: true })) : brandRows;
+  return '<option value="">— เลือกยี่ห้อ —</option>' +
+    (current && !list.some(b => b.name === current) ? '<option value="' + escapeHtml(current) + '"' + (current === sel ? ' selected' : '') + '>' + escapeHtml(brandLabel(current)) + '</option>' : '') +
+    list.filter(b => b.is_active || b.name === current).map(b => '<option value="' + escapeHtml(b.name) + '"' + (b.name === sel ? ' selected' : '') + '>' +
+      escapeHtml(brandLabel(b.name)) + (b.is_active ? '' : ' (ปิดใช้งานแล้ว)') + '</option>').join('') +
+    (isManager() && !brandsMissing ? '<option value="' + NEW_BRAND + '">+ เพิ่มยี่ห้อใหม่…</option>' : '');
+}
+function adBrandControl(raw) {
+  const cur = raw === null || raw === undefined ? '' : String(raw);
+  return '<select class="input" id="fld_brand" data-col="brand" data-kind="text" onchange="adBrandChanged()">' + adBrandOptions(cur, cur) + '</select>' +
+    '<div id="adNewBrand" class="ad-newbrand" hidden>' +
+      '<label class="lbl" for="adNewBrandName">ชื่อยี่ห้อใหม่</label>' +
+      '<div class="ad-row"><input type="text" class="input" id="adNewBrandName" maxlength="60" autocomplete="off" placeholder="เช่น Reloop" onkeydown="if (event.key === \'Enter\') { event.preventDefault(); adAddBrand(); }">' +
+      '<button class="btn btn-primary" type="button" id="adNewBrandBtn" onclick="adAddBrand()">เพิ่มยี่ห้อ</button></div>' +
+      '<div id="adNewBrandErr" class="alert alert-red" role="alert" hidden></div></div>';
+}
+function adBrandChanged() {
+  const box = document.getElementById('adNewBrand');
+  box.hidden = document.getElementById('fld_brand').value !== NEW_BRAND;
+  if (!box.hidden) document.getElementById('adNewBrandName').focus();
+}
+async function adAddBrand() {
+  const input = document.getElementById('adNewBrandName'), btn = document.getElementById('adNewBrandBtn'), err = document.getElementById('adNewBrandErr');
+  const showErr = m => { err.innerHTML = '<strong class="wk-red">' + escapeHtml(m) + '</strong>'; err.hidden = false; };
+  err.hidden = true;
+  const name = input.value.trim();
+  if (!name) { showErr('พิมพ์ชื่อยี่ห้อก่อน'); return; }
+  const dup = brandRows.find(b => b.name.toLowerCase() === name.toLowerCase());
+  if (dup) { showErr('ยี่ห้อ "' + dup.name + '" มีอยู่แล้ว' + (dup.is_active ? ' — เลือกจากรายการได้เลย' : ' แต่ถูกปิดใช้งานอยู่ — ให้ผู้ดูแลระบบเปิดใช้ใหม่')); return; }
+  btn.disabled = true;
+  const { error } = await db.from('product_brands').insert({ name });
+  btn.disabled = false;
+  if (error) { console.error('[Add brand]', error); showErr(adDbErrorText(error, {}) || 'เพิ่มยี่ห้อไม่สำเร็จ: ' + error.message); return; }
+  await loadBrands();
+  const sel = document.getElementById('fld_brand');
+  if (!sel) return;                                      // ปิดแผงระหว่างรอ
+  sel.innerHTML = adBrandOptions(name, adEditingRow ? adEditingRow.brand : '');
+  document.getElementById('adNewBrand').hidden = true;
+  input.value = '';
+  showToast('✅ เพิ่มยี่ห้อ "' + name + '" แล้ว');
+}
+
+// เครื่องยิง USB ลงช่องนี้ตอนโฟกัสอยู่ที่ช่อง · กล้อง (ปุ่ม 📷 · adCamField) ลงช่องนี้เสมอ — wedgeRoute คืน 'field' (หน้าจัดการข้อมูลช่องอื่นยังเป็น wrongpage)
+function adBarcodeEl() { return document.getElementById('fld_barcode_ean13'); }
+function adBarcodeTarget() { const el = adBarcodeEl(); return adCamField || document.activeElement === el ? el : null; }
+function adBarcodeControl(raw) {
+  const v = raw === null || raw === undefined ? '' : String(raw);
+  return '<div class="ad-row"><input type="text" class="input" id="fld_barcode_ean13" data-col="barcode_ean13" data-kind="text" inputmode="numeric" autocomplete="off" value="' + escapeHtml(v) + '" oninput="adBarcodeHint()">' +
+    '<button class="btn" type="button" id="adCamBtn" onclick="adScanBarcode()" aria-label="สแกนบาร์โค้ดด้วยกล้อง">📷</button></div>' +
+    '<div id="adBarcodeHint" aria-live="polite"></div>';
+}
+function adScanBarcode() { adCamField = true; openCam(); }
+function adBarcodeHint() {
+  const el = adBarcodeEl(), box = document.getElementById('adBarcodeHint');
+  const v = el.value.trim();
+  const other = v && products.find(p => p.barcode_ean13 === v && !(adEditingRow && p.id === adEditingRow.id));
+  box.innerHTML = other ? '<strong class="wk-red">บาร์โค้ดนี้ผูกกับสินค้า ' + escapeHtml(other.name) + ' (' + escapeHtml(other.sku) + ') แล้ว</strong>'
+    : v && !/^\d{8,14}$/.test(v) ? '<strong class="wk-red">บาร์โค้ดของรุ่นควรเป็นตัวเลข 8–14 หลัก (EAN-13 = 13 หลัก)</strong>' : '';
+}
+function adBarcodeFill(value) {
+  adBarcodeEl().value = value;
+  adBarcodeHint();
+  showToast('✅ ใส่บาร์โค้ด ' + value + ' ในช่องแล้ว');
+}
+
+function adFormError(msg) {
+  const box = document.getElementById('adSaveErr');
+  if (!box) return;
+  box.hidden = !msg;
+  box.innerHTML = msg ? '<strong class="wk-red">' + escapeHtml(msg) + '</strong>' : '';
+}
+// แปลง error ของฐานข้อมูลตอนบันทึกสินค้า/ยี่ห้อเป็นไทยที่อ่านเข้าใจ · คืน '' = ไม่รู้จัก (ผู้เรียกใช้ข้อความดิบแทน)
+function adDbErrorText(error, ctx) {
+  const msg = String(error.message || ''), code = String(error.code || '');       // รหัส SQLSTATE ของ PostgREST (ข้อความดิบเป็นอังกฤษ ไม่ใช้ตัดสิน)
+  const con = (msg.match(/constraint "([^"]+)"/) || [])[1] || '';
+  if (code === '42501') return 'ไม่มีสิทธิ์บันทึกข้อมูลนี้ — เพิ่ม/แก้สินค้าและยี่ห้อได้เฉพาะเจ้าของร้านและผู้ดูแลระบบ';
+  if (code === '23505') {
+    if (con === 'products_sku_key') return 'SKU นี้มีอยู่แล้ว' + (ctx.sku ? ' (' + ctx.sku + ')' : '') + ' — ใช้ SKU อื่น หรือเปิดสินค้าเดิมมาแก้';
+    if (con === 'products_barcode_ean13_key') {
+      const other = products.find(p => p.barcode_ean13 === ctx.barcode_ean13 && !(adEditingRow && p.id === adEditingRow.id));
+      return 'บาร์โค้ดนี้ผูกกับสินค้า ' + (other ? other.name + ' (' + other.sku + ')' : 'อื่น') + ' แล้ว';
+    }
+    if (/product_brands/.test(msg)) return 'ยี่ห้อนี้มีอยู่แล้ว (ไม่สนตัวพิมพ์ใหญ่เล็ก)';
+    return 'ข้อมูลนี้ซ้ำกับที่มีอยู่แล้ว';
+  }
+  if (code === '23503') {
+    if (con === 'products_brand_fkey') return 'ยี่ห้อ "' + (ctx.brand || '') + '" ยังไม่อยู่ในรายการยี่ห้อ — เลือก "+ เพิ่มยี่ห้อใหม่" ก่อนบันทึก';
+    return 'ข้อมูลที่อ้างถึงไม่มีอยู่จริง';
+  }
+  if (code === '23514') {
+    if (con === 'products_brand_check') return 'ฐานข้อมูลยังไม่รองรับยี่ห้อใหม่ — ให้ผู้ดูแลระบบรัน migration 045 ก่อน';
+    if (con === 'product_brands_name_check') return 'ชื่อยี่ห้อต้องไม่ว่าง ไม่ยาวเกิน 60 ตัวอักษร ไม่มีช่องว่างหัว/ท้าย และไม่มีอักขระควบคุม';
+    return 'ค่าบางช่องไม่ผ่านเงื่อนไขของฐานข้อมูล' + (con ? ' (' + con + ')' : '');
+  }
+  if (code === '23502') {
+    const col = (msg.match(/column "([^"]+)"/) || [])[1];
+    return 'ต้องกรอก' + (col ? ': ' + (AD_LABELS.products[col] || col) : ' ช่องที่จำเป็น');
+  }
+  return '';
+}
+
 async function adSaveRow() {
   // รั้วชั้นแรกของตารางดูอย่างเดียว — ปุ่มไม่โผล่ก็จริง แต่ฟังก์ชันต้องไม่ยอมเขียนเองด้วย
   if (!canEditTable()) { showToast('⚠️ ตาราง "' + adTable.label + '" ดูได้อย่างเดียว แก้ไขไม่ได้'); return; }
   if (!adEditingRow && !canAddRow()) { showToast('⚠️ ตาราง "' + adTable.label + '" เพิ่มแถวไม่ได้'); return; }
+  adFormError('');
   const payload = adCollect();
+  if (payload.brand === NEW_BRAND) { adFormError('เลือกยี่ห้อจากรายการ หรือพิมพ์ชื่อแล้วกด "เพิ่มยี่ห้อ" ก่อนบันทึก'); return; }
   if (!adEditingRow) {
     adColumns.forEach(c => { if (ACTOR_COLUMNS.indexOf(c.column_name) !== -1 && currentUserId) payload[c.column_name] = currentUserId; });
   }
   const missing = adColumns.filter(c => !c.is_nullable && !c.has_default && !isSystemColumn(c.column_name) &&
     !isComplexType(c.data_type) && (payload[c.column_name] === null || payload[c.column_name] === undefined)).map(c => c.column_name);
-  if (missing.length) { showToast('⚠️ ต้องกรอก: ' + missing.join(', ')); return; }
+  if (missing.length) { showToast('⚠️ ต้องกรอก: ' + missing.map(adLabel).join(', ')); return; }
   if (adColumns.some(c => c.column_name === 'updated_at')) payload.updated_at = new Date().toISOString();
   const btn = document.getElementById('adSaveBtn');
   if (btn) btn.disabled = true;
@@ -9425,7 +9557,12 @@ async function adSaveRow() {
     ? await db.from(adTable.name).update(payload).eq('id', adEditingRow.id).select('id')
     : await db.from(adTable.name).insert(payload);
   if (btn) btn.disabled = false;
-  if (error) { console.error('[Save row]', error); showFatalError('บันทึกไม่สำเร็จ: ' + error.message); return; }
+  if (error) {
+    console.error('[Save row]', error);
+    // สินค้า: ข้อความของ Postgres (check/unique/FK/RLS) อ่านไม่รู้เรื่อง → แปลเป็นไทย แสดงในแผงเป็นแดงตัวหนา · ตารางอื่นเหมือนเดิม
+    if (adTable.name === 'products') { adFormError(adDbErrorText(error, payload) || 'บันทึกไม่สำเร็จ: ' + error.message); return; }
+    showFatalError('บันทึกไม่สำเร็จ: ' + error.message); return;
+  }
   if (adEditingRow && !(saved && saved.length)) {
     showFatalError('บันทึกไม่สำเร็จ: ฐานข้อมูลไม่ได้แก้แถวนี้ (ไม่มีสิทธิ์แก้ หรือแถวถูกลบ/เปลี่ยนไปแล้ว) — ข้อมูลยังเหมือนเดิม');
     return;
@@ -13895,6 +14032,7 @@ async function onScanned(code, viaGun) {
   const value = String(code || '').trim();
   if (!value) return;
 
+  if (scanPurpose === 'field') { adBarcodeFill(value); return; }
   if (scanPurpose === 'serial') { await handleSerialScan(value); return; }
   if (scanPurpose === 'receive') { await receiveScan(value); return; }
   if (scanPurpose === 'count') { await countScan(value); return; }
@@ -14100,6 +14238,8 @@ function wedgeRestore(s) {
 function wedgeRoute() {
   if (loginVisible()) return null;
   if (document.querySelector('dialog[open]')) return 'blocked';
+  // หน้าจัดการข้อมูล: ลงเฉพาะช่องบาร์โค้ดของฟอร์มสินค้า (โฟกัสอยู่ที่ช่อง หรือกล้องเปิดจากปุ่ม 📷) — ช่องอื่นยังเป็น wrongpage
+  if (current === 'admin') return adBarcodeTarget() ? 'field' : 'wrongpage';
   if (current === 'pos') return 'cart';
   if (current === 'movement') {
     // เลือกสินค้าแล้วและกำลังรับเข้า = กำลังยิงซีเรียลทีละเครื่อง
