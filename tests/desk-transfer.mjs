@@ -139,8 +139,9 @@ async function runTests() {
   ok('ประวัติบอก ใคร · ทำอะไร (เป็นคำ) · ไฟล์ไหน — Zen เปิดดู คลิปรีวิว FLX4.mp4', L1.some(r => /Zen/.test(r) && /เปิดดู/.test(r) && /คลิปรีวิว FLX4\\.mp4/.test(r)), L1.slice(0, 3).join(' / '));
   ok('ประวัติมีทั้ง อัปโหลด · เปิดดู · ดาวน์โหลด · ลบ ครบ', ['อัปโหลด', 'เปิดดู', 'ดาวน์โหลด', 'ลบ'].every(w => L1.some(r => r.indexOf(w) >= 0)));
   ok('ประวัติไฟล์ที่ลบแล้ว (deleted-by-zen.mp3) ยังอยู่ พร้อมชื่อไฟล์', L1.some(r => /Zen/.test(r) && /ลบ/.test(r) && /deleted-by-zen\\.mp3/.test(r)));
-  ok('ไฟล์ครบ 30 วันที่ระบบลบ = ผู้ทำ "ระบบ" + คำว่า "ครบ 30 วัน"', L1.some(r => /ระบบ/.test(r) && /ครบ 30 วัน/.test(r) && /expired-photo\\.jpg/.test(r)), L1.join(' / '));
-  ok('ชื่อไฟล์/ชื่อคนที่เป็น HTML ในประวัติแสดงเป็นข้อความ', window.XSS === undefined && !document.querySelector('#trLog img, #trLog script, #trLog b'));
+  const expRow = [...document.querySelectorAll('#trLog .tr-ev')].find(e => /expired-photo\\.jpg/.test(e.textContent));
+  ok('ไฟล์ครบ 30 วันที่ระบบลบ = ช่องผู้ทำเป็น "ระบบ" (ไม่ใช่ "ไม่ทราบผู้ใช้") + ป้าย "ครบ 30 วัน"', !!expRow && expRow.querySelector('.tr-who').textContent === 'ระบบ' && /ครบ 30 วัน/.test(expRow.querySelector('.st').textContent), expRow && expRow.textContent);
+  ok('ชื่อไฟล์/ชื่อคนที่เป็น HTML ในประวัติแสดงเป็นข้อความ (เห็นเป็นตัวอักษร ไม่กลายเป็นแท็ก)', window.XSS === undefined && !document.querySelector('#trLog img, #trLog script, #trLog b, #trLog i') && L1.some(r => r.indexOf('Evil <i>Name</i>') >= 0) && L1.some(r => r.indexOf('<img src=x onerror=window.XSS=1>.mp4') >= 0));
   $('trEvAct').value = 'view'; $('trEvAct').dispatchEvent(new Event('change', { bubbles: true })); await sleep(250);
   ok('กรอง "เปิดดู" → ถามฐานด้วย kind = view และเห็นเฉพาะแถวเปิดดู', CALLS.some(c => c.op === 'select' && c.table === 'transfer_events' && c.where.some(w => w[0] === 'kind' && w[1] === 'view')) && logRows().length > 0 && logRows().every(r => /เปิดดู/.test(r)));
   $('trEvAct').value = ''; $('trEvAct').dispatchEvent(new Event('change', { bubbles: true })); await sleep(250);
@@ -250,7 +251,9 @@ async function runTests() {
   ok('...ทุกแถวที่กวาดถูกทำเครื่องหมาย purged · fx กลายเป็น expired · มีประวัติ "ระบบ" ครบ 30 วัน', ['fx', 'fe', 'fd'].every(i => !!TRN.files.find(f => f.id === i).purged_at) && TRN.files.find(f => f.id === 'fx').status === 'expired' && TRN.events.some(e => e.file_id === 'fx' && e.kind === 'expire' && e.actor_id === null));
   ok('...รายการไฟล์ยังเหมือนเดิม (ไฟล์ที่หมดอายุไม่อยู่) · ไม่มีแถบแดง/เหลือง', groups().indexOf('เอกสาร:1') >= 0 && !fatal() && !document.querySelector('#trAlert .alert'));
   const sw1 = rpcs('transfer_sweep').length;
+  TRN.files.find(f => f.id === 'f8').expires_at = new Date(Date.now() - 1000).toISOString();     // ครบ 30 วันแล้วแต่ฐานยังไม่ถูกกวาด (status ยัง ready)
   TRN.fail.rpc_transfer_sweep = 'boom'; $('trReload').click(); await sleep(450);
+  ok('ไฟล์ที่ครบ 30 วันแล้วแต่ยังไม่ถูกกวาด (กวาดไม่สำเร็จ) ถูกซ่อนจากรายการ — ไม่โชว์ไฟล์ที่เปิดไม่ได้แล้ว', TRN.files.find(f => f.id === 'f8').status === 'ready' && !rowOf('f8'));
   ok('กวาดไม่สำเร็จ → แถบเหลืองบอกตามจริง (ไม่ใช่แดง ไม่ขวางการใช้งาน) · รายการไฟล์ยังใช้ได้', rpcs('transfer_sweep').length === sw1 + 1 && /เก็บกวาดไฟล์ที่หมดอายุไม่สำเร็จ: boom/.test(txt('trAlert')) && !!document.querySelector('#trAlert .alert-warn') && !fatal() && rows().length > 0);
   delete TRN.fail.rpc_transfer_sweep;
   TRN.fail.select = 'connection reset'; $('trReload').click(); await sleep(450);
