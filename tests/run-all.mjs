@@ -8,7 +8,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const suites = ['wedge-scanner.mjs', 'wedge-scanner-sales.mjs', 'desk.mjs', 'desk-modules.mjs', 'desk-staff.mjs', 'desk-home3.mjs', 'desk-home4.mjs', 'stock-wall.mjs', 'stock-phone.mjs', 'desk-batch5.mjs', 'desk-discord.mjs', 'desk-polish.mjs', 'desk-ipad.mjs', 'desk-iphone.mjs', 'desk-ops.mjs', 'desk-worklist.mjs', 'stocked.mjs', 'catalog.mjs', 'catalog-pdf.mjs', 'desk-timer.mjs', 'old-app-redirect.mjs', 'desk-sw.mjs', 'desk-notify.mjs', 'book.mjs', 'desk-webbooking.mjs', 'desk-register.mjs', 'desk-brands.mjs'];
+const suites = ['wedge-scanner.mjs', 'wedge-scanner-sales.mjs', 'desk.mjs', 'desk-modules.mjs', 'desk-staff.mjs', 'desk-home3.mjs', 'desk-home4.mjs', 'stock-wall.mjs', 'stock-phone.mjs', 'desk-batch5.mjs', 'desk-discord.mjs', 'desk-polish.mjs', 'desk-ipad.mjs', 'desk-iphone.mjs', 'desk-ops.mjs', 'desk-worklist.mjs', 'stocked.mjs', 'catalog.mjs', 'catalog-pdf.mjs', 'desk-timer.mjs', 'old-app-redirect.mjs', 'desk-sw.mjs', 'desk-notify.mjs', 'book.mjs', 'desk-webbooking.mjs', 'desk-register.mjs', 'desk-brands.mjs', 'desk-transfer.mjs'];
 
 let failed = 0;
 for (const s of suites) {
