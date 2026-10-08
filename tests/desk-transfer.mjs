@@ -78,6 +78,7 @@ const clearQ = () => { const b = document.querySelector('#trQueue [data-act="q-c
 async function runTests() {
   L('=== โอนไฟล์ (#transfer · migration 049 + 050) ===');
   TRN.seed();
+  localStorage.setItem('djlab.transfer.view.v1', 'list');          // ชุดเดิมตรวจมุมมองรายการ (มุมมองไอคอนเป็นค่าตั้งต้นของหน้า — ตรวจแยกในส่วนโฟลเดอร์)
   let gate;
 
   // ── 1. เมนู ──
@@ -589,167 +590,239 @@ async function runTests() {
   TRN.v1 = false; await reload();
   ok('รัน 050 แล้วกดรีเฟรช → ของ 050 กลับมาครบ (แถบเหลืองหาย · แท็บคำขอ · ป้าย Tag)', !/migration 050/.test(txt('trAlert')) && !$('trReqTab').hidden && /ถึง:/.test(txt('trList')));
 
-  // ── 16b. อัปโหลดทั้งโฟลเดอร์ (migration 051) ──
+  // ── 16b. โฟลเดอร์แบบ Google Drive (migration 051 + 052): ไอคอน · เข้าไปทีละชั้น · สร้างโฟลเดอร์ · อัปโหลดทั้งโฟลเดอร์ ──
   const relFile = (rel, type, size) => { const nm = rel.split('/').pop(); const f = size ? bigFile(nm, type || '', size) : mkFile(nm, type || ''); Object.defineProperty(f, 'webkitRelativePath', { value: rel }); return f; };
   const fe = (name, type) => ({ isFile: true, isDirectory: false, name: name, file: ok => ok(mkFile(name, type || '')) });
   const fd = (name, kids, page) => ({ isFile: false, isDirectory: true, name: name, createReader() { let i = 0; const n = page || 100; return { readEntries(res) { const part = kids.slice(i, i + n); i += n; res(part); } }; } });
   const dropEntries = async entries => { const items = entries.map(e => ({ kind: 'file', webkitGetAsEntry: () => e })); await trDropped({ files: [], items: items }); await sleep(250); };
   const stageNames = () => [...$('trStageList').querySelectorAll('.tr-row')].map(r => flat(r.querySelector('.tr-name').textContent));
-  const fcard = top => [...document.querySelectorAll('#trList details.tr-folder')].find(d => d.querySelector('.tr-fname').textContent === top);
   const resetUpload = () => { trStageClear(); clearFatal(); clearQ(); };
+  const tiles = () => [...document.querySelectorAll('#trList .tr-tile')];
+  const tile = name => tiles().find(t => t.querySelector('.tr-tile-name').textContent === name);
+  const tileNames = () => tiles().map(t => t.querySelector('.tr-tile-name').textContent).sort().join('|');
+  const cards = () => [...document.querySelectorAll('#trList .tr-card')];
+  const cardNames = () => cards().map(c => flat(c.querySelector('.tr-name').textContent)).sort().join('|');
+  const crumbTxt = () => flat($('trCrumbs').textContent);
+  const openF = async p => { const b = [...document.querySelectorAll('#trList [data-act="nav"], #trCrumbs [data-act="nav"]')].find(x => x.dataset.path === p); if (!b) throw new Error('ไม่พบปุ่มเข้าโฟลเดอร์ ' + p); b.click(); await sleep(150); };
+  const newFolder = async name => { $('trNewFolder').click(); await sleep(100); $('trNewName').value = name; $('trNewDlgSave').click(); await sleep(450); };
+  const setView = async v => { document.querySelector('#trViewSw [data-view="' + v + '"]').click(); await sleep(120); };
+  const hasDisc = el => !!el.querySelector('.fi-disc');
 
   await relogin('zen'); await openPage(); resetUpload();
-  ok('ปุ่ม "เลือกทั้งโฟลเดอร์" มี (รัน 051 แล้ว) · ช่องเลือกโฟลเดอร์เป็น webkitdirectory · ไม่มีแถบเหลืองเรื่อง 051', !$('trDirBtn').hidden && $('trDir').hasAttribute('webkitdirectory') && !/migration 051/.test(txt('trAlert')));
-  ok('...ถามฐานด้วยคอลัมน์ folder_path ในครั้งแรก', CALLS.some(c => c.op === 'select' && c.table === 'transfer_files' && /folder_path/.test(c.cols)));
+  localStorage.removeItem('djlab.transfer.view.v1'); await reload();
+  const rootN = trVisibleFiles().filter(f => !f.folder_path).length;
+  // 1) มุมมองไอคอนเป็นค่าตั้งต้น + สลับรายการ
+  ok('มุมมองตั้งต้น = ไอคอน (การ์ดแบบ Drive): ปุ่ม "ไอคอน" ถูกเลือก · ไฟล์ทุกไฟล์เป็นการ์ดในหัวกลุ่ม ไม่ใช่แถว', document.querySelector('#trViewSw [data-view="grid"]').getAttribute('aria-pressed') === 'true' && cards().length === rootN && rows().length === 0 && !!document.querySelector('#trList .tr-group .tr-cards'), cards().length + '/' + rootN);
+  ok('...การ์ดมีพื้นที่รูปตัวอย่างใหญ่ (ปุ่มเปิดดูหรือไอคอนตามกลุ่ม) · ชื่อ · ขนาด · ปุ่มดาวน์โหลด/ประวัติ ครบ', cards().every(c => c.querySelector('.tr-card-thumb') && c.querySelector('.tr-name') && c.querySelector('[data-act="download"]') && c.querySelector('[data-act="hist"]')) && cards().some(c => c.querySelector('.tr-card-thumb img') || c.querySelector('.tr-card-thumb svg')));
+  await setView('list');
+  ok('สลับเป็น "รายการ": แถวเดิมกลับมา · จำค่าไว้ในเครื่อง (localStorage) · ไม่มีการ์ด', rows().length === rootN && cards().length === 0 && localStorage.getItem('djlab.transfer.view.v1') === 'list' && document.querySelector('#trViewSw [data-view="list"]').getAttribute('aria-pressed') === 'true');
+  await setView('grid');
+  ok('ที่ชั้นบนสุด: เส้นทาง "คลังไฟล์" เป็นหน้าปัจจุบัน (aria-current) · ปุ่ม "+ โฟลเดอร์ใหม่" แสดง (รัน 052 แล้ว) · ยังไม่มีไอคอนโฟลเดอร์', crumbTxt() === 'คลังไฟล์' && !!$('trCrumbs').querySelector('[aria-current="page"]') && !$('trNewFolder').hidden && tiles().length === 0);
 
-  // A) เลือกโฟลเดอร์ (webkitRelativePath) — ข้ามไฟล์ระบบ · ชื่อโฟลเดอร์ + ไฟล์ในโฟลเดอร์ย่อย
-  trPick([relFile('End credit/2026/ep1/คลิป.mp4', 'video/mp4'), relFile('End credit/logo.png', 'image/png'), relFile('End credit/.DS_Store'), relFile('End credit/2026/Thumbs.db'), relFile('End credit/~$draft.docx'), relFile('End credit/._logo.png'), mkFile('solo.pdf', 'application/pdf')]);
+  // 2) อัปโหลดทั้งโฟลเดอร์ที่มีโฟลเดอร์ย่อยซ้อนกัน → โครงสร้างอยู่ครบ
+  trPick([relFile('End credit/2026/ep1/คลิป.mp4', 'video/mp4'), relFile('End credit/2026/ep2/คลิป2.mp4', 'video/mp4'), relFile('End credit/logo.png', 'image/png'), relFile('End credit/.DS_Store'), mkFile('solo.pdf', 'application/pdf')]);
   await sleep(300);
-  ok('เลือกโฟลเดอร์: ไฟล์จริง 2 + ไฟล์เดี่ยว 1 ขึ้นรอยืนยัน · ไฟล์ระบบ 4 ไฟล์ (.DS_Store · Thumbs.db · ~$ · ._) ไม่ขึ้น', stageNames().length === 3 && stageNames().indexOf('End credit/2026/ep1/คลิป.mp4') >= 0 && stageNames().indexOf('End credit/logo.png') >= 0 && stageNames().indexOf('solo.pdf') >= 0, JSON.stringify(stageNames()));
-  ok('...มีข้อความบอกว่าข้ามไฟล์ระบบ 4 ไฟล์ · หัวรายการบอก "จาก 1 โฟลเดอร์"', /ข้ามไฟล์ระบบ 4 ไฟล์/.test(txt('trStageNote')) && /จาก 1 โฟลเดอร์/.test(txt('trStageHead')), txt('trStageNote') + ' | ' + txt('trStageHead'));
-  ok('...แถบโฟลเดอร์ในรอยืนยัน: ชื่อ · 2 ไฟล์ · ปุ่ม "เอาออก" ของทั้งโฟลเดอร์ (ปุ่มกดได้ มีชื่อโฟลเดอร์ใน aria-label)', !$('trStageFolders').hidden && /End credit · 2 ไฟล์/.test(txt('trStageFolders')) && /ออกจากรายการ/.test($('trStageFolders').querySelector('button').getAttribute('aria-label')));
-  $('trConfirm').click(); await idle();
-  const fb = rpcs('transfer_begin').slice(-3);
-  ok('อัปโหลด: begin ส่ง p_folder เฉพาะไฟล์ในโฟลเดอร์ (พาธเต็มของชั้นที่อยู่) · ไฟล์เดี่ยวไม่ส่งคีย์ p_folder', fb.filter(c => c.args.p_folder === 'End credit/2026/ep1').length === 1 && fb.filter(c => c.args.p_folder === 'End credit').length === 1 && fb.filter(c => !('p_folder' in c.args)).length === 1, JSON.stringify(fb.map(c => c.args)));
-  ok('...ฐานเก็บ folder_path ตามนั้น · พาธในถังไม่มีชื่อโฟลเดอร์ (<กลุ่ม>/<id>.<นามสกุล>)', TRN.files.filter(f => f.folder_path === 'End credit/2026/ep1').length === 1 && TRN.files.filter(f => f.folder_path && /End credit/.test(f.object_path)).length === 0);
-  ok('...ไม่มีแถบแดง · ไม่มี insert/update ตรง', !fatal() && TRN.writes.length === 0);
-  clearQ();
-  ok('รายการ: ไฟล์ในโฟลเดอร์รวมเป็นโฟลเดอร์ "End credit" (2 ไฟล์) แยกจากหัวกลุ่มไฟล์ปกติ · ไฟล์เดี่ยว solo.pdf ยังอยู่กลุ่มเอกสาร', !!fcard('End credit') && /2 ไฟล์/.test(fcard('End credit').querySelector('summary').textContent) && !!document.querySelector('#trList .tr-group[aria-label="โฟลเดอร์"]') && !!fileRow('solo.pdf') && !fcard('End credit').contains(fileRow('solo.pdf')));
-  ok('...ไฟล์ของโฟลเดอร์ไม่โผล่ซ้ำในกลุ่มวิดีโอ/รูปภาพ (นับแถวชื่อ logo.png ได้ 1)', rows().filter(r => r.querySelector('.tr-name').textContent.indexOf('logo.png') >= 0).length === 1);
-  ok('...โฟลเดอร์ปิดอยู่ตอนแรก (details ไม่ open) · สรุปมีจำนวนไฟล์ ขนาด ผู้อัปโหลด วันที่', !fcard('End credit').open && /ลงโดย Zen/.test(fcard('End credit').querySelector('summary').textContent));
-  fcard('End credit').querySelector('summary').click(); await sleep(150);
-  const subs = [...fcard('End credit').querySelectorAll('.tr-name')].map(n => flat(n.textContent)).sort();
-  ok('กางโฟลเดอร์: เห็นไฟล์พร้อมพาธย่อย (2026/ep1/คลิป.mp4 · logo.png) ไม่ซ้ำชื่อโฟลเดอร์ชั้นบนสุด', subs.length === 2 && subs.indexOf('2026/ep1/คลิป.mp4') >= 0 && subs.indexOf('logo.png') >= 0, JSON.stringify(subs));
-  await reload();
-  ok('รีเฟรช/วาดใหม่แล้วโฟลเดอร์ที่กางไว้ยังกางอยู่', !!fcard('End credit') && fcard('End credit').open);
-  fcard('End credit').querySelector('summary').click(); await sleep(100); await reload();
-  ok('พับแล้วรีเฟรช → ยังพับ (จำสถานะต่อโฟลเดอร์)', !fcard('End credit').open);
+  ok('เลือกโฟลเดอร์: ไฟล์จริง 3 + ไฟล์เดี่ยว 1 ขึ้นรอยืนยัน · ข้ามไฟล์ระบบ 1 · แถบโฟลเดอร์บอก "End credit · 3 ไฟล์"', stageNames().length === 4 && /ข้ามไฟล์ระบบ 1 ไฟล์/.test(txt('trStageNote')) && /End credit · 3 ไฟล์/.test(txt('trStageFolders')) && /จาก 1 โฟลเดอร์/.test(txt('trStageHead')), JSON.stringify(stageNames()));
+  $('trConfirm').click(); await idle(); clearQ(); await sleep(200);
+  const fb = rpcs('transfer_begin').slice(-4).map(c => c.args.p_folder || '');
+  ok('อัปโหลด: ส่ง p_folder เป็นพาธเต็มของแต่ละชั้น (End credit/2026/ep1 · End credit/2026/ep2 · End credit) · ไฟล์เดี่ยวไม่ส่ง', fb.slice().sort().join('|') === '|End credit|End credit/2026/ep1|End credit/2026/ep2', JSON.stringify(fb));
+  ok('ที่ชั้นบนสุดตอนนี้: เห็นไอคอนโฟลเดอร์ "End credit" ใบเดียว (3 ไฟล์ รวมโฟลเดอร์ย่อย) · solo.pdf เป็นการ์ดปกติ · ไฟล์ในโฟลเดอร์ไม่โผล่เป็นการ์ดที่ชั้นนี้', tileNames() === 'End credit' && /3 ไฟล์/.test(tile('End credit').textContent) && !!tile('End credit').querySelector('.tr-fico') && cardNames().indexOf('solo.pdf') >= 0 && cardNames().indexOf('logo.png') < 0, tileNames() + ' / ' + cardNames());
+  ok('ไอคอนโฟลเดอร์ที่มีไฟล์ = ปกแผ่นเสียงมีแผ่นโผล่ (fi-disc) · ใช้สีแบรนด์ (หลังปกแดง หน้าปกดำ) — ตรวจสีจริงจาก computed style', hasDisc(tile('End credit')) && getComputedStyle(tile('End credit').querySelector('.fi-back')).fill === 'rgb(204, 0, 26)' && getComputedStyle(tile('End credit').querySelector('.fi-front')).fill === 'rgb(27, 27, 27)');
+  await openF('End credit');
+  ok('เข้าโฟลเดอร์ End credit: เส้นทาง "คลังไฟล์ › End credit" · เห็นโฟลเดอร์ย่อย 2026 (2 ไฟล์) และไฟล์ logo.png เป็นการ์ด · ชื่อไฟล์ไม่มีพาธนำหน้า', crumbTxt() === 'คลังไฟล์›End credit' && tileNames() === '2026' && /2 ไฟล์/.test(tile('2026').textContent) && cardNames() === 'logo.png', crumbTxt() + ' / ' + tileNames() + ' / ' + cardNames());
+  await openF('End credit/2026');
+  ok('เข้า 2026: โฟลเดอร์ย่อย ep1 · ep2 (ไอคอนมีแผ่นเสียงทั้งคู่) ไม่มีไฟล์ตรงชั้นนี้', tileNames() === 'ep1|ep2' && tiles().every(hasDisc) && cards().length === 0);
+  await openF('End credit/2026/ep1');
+  ok('เข้า ep1: เห็นคลิป.mp4 ชั้นลึกสุด · เส้นทาง 4 ชั้น · ไม่มีโฟลเดอร์ย่อย', cardNames() === 'คลิป.mp4' && tiles().length === 0 && crumbTxt() === 'คลังไฟล์›End credit›2026›ep1');
+  await openF('End credit');
+  ok('คลิกชื่อชั้นบนในเส้นทางเพื่อย้อนกลับได้ (End credit)', tr.path === 'End credit' && tileNames() === '2026');
 
-  // B) ตัวกรองกลุ่ม + ค้นหา
-  document.querySelector('#trChips .tr-chip[data-cat="photo"]').click(); await sleep(100);
-  ok('เลือกชิปกลุ่ม "รูปภาพ": รายการแบนตามกลุ่ม — ไฟล์จากโฟลเดอร์ขึ้นพร้อมพาธ (End credit/) · ไม่มีหัว "โฟลเดอร์"', !document.querySelector('#trList .tr-group[aria-label="โฟลเดอร์"]') && rows().some(r => flat(r.querySelector('.tr-name').textContent) === 'End credit/logo.png'));
-  document.querySelector('#trChips .tr-chip[data-cat=""]').click(); await sleep(100);
-  $('trSearch').value = 'ep1'; $('trSearch').dispatchEvent(new Event('input', { bubbles: true })); await sleep(150);
-  ok('ค้นหา "ep1" (ตรงกับพาธโฟลเดอร์): แสดงเฉพาะไฟล์ที่ตรง · โฟลเดอร์กางให้เอง', !!fcard('End credit') && fcard('End credit').open && fcard('End credit').querySelectorAll('.tr-row').length === 1);
-  $('trSearch').value = ''; $('trSearch').dispatchEvent(new Event('input', { bubbles: true })); await sleep(100);
+  // 3) อัปโหลดเข้าโฟลเดอร์ที่เปิดอยู่ (ปลายทางจำตอนวาง ไม่ใช่ตอนกดยืนยัน)
+  await openF('End credit/2026');
+  ok('เปิดอยู่ใน End credit/2026: มีบรรทัดบอกปลายทางการอัปโหลดสีหนา', !$('trDest').hidden && /อัปโหลดเข้าโฟลเดอร์: End credit\\/2026/.test(txt('trDest')));
+  trPick([mkFile('extra.txt', 'text/plain'), relFile('Sub/x.txt', 'text/plain')]); await sleep(250);
+  ok('วางไฟล์ในโฟลเดอร์ที่เปิดอยู่: รอยืนยันแสดงพาธปลายทางเต็ม (End credit/2026/extra.txt · End credit/2026/Sub/x.txt) · แถบโฟลเดอร์เป็น "Sub" (ชื่อที่ลากมา ไม่ใช่ปลายทาง)', stageNames().join('|') === 'End credit/2026/extra.txt|End credit/2026/Sub/x.txt' && /Sub · 1 ไฟล์/.test(txt('trStageFolders')) && !/End credit · /.test(txt('trStageFolders')), JSON.stringify(stageNames()) + txt('trStageFolders'));
+  await openF('End credit');
+  $('trConfirm').click(); await idle(); clearQ(); await sleep(250);
+  const fb2 = rpcs('transfer_begin').slice(-2).map(c => c.args.p_folder).sort().join('|');
+  ok('...เปลี่ยนไปเปิดชั้นอื่นก่อนกดยืนยัน: ไฟล์ยังเข้าโฟลเดอร์ที่ตั้งไว้ตอนวาง (ไม่ตามชั้นที่เปิดตอนกด)', fb2 === 'End credit/2026|End credit/2026/Sub', fb2);
+  await openF('End credit/2026');
+  ok('...2026 มี Sub โผล่เป็นโฟลเดอร์ย่อยใหม่ + extra.txt เป็นการ์ด + ep1 ep2 เดิม', tileNames() === 'Sub|ep1|ep2' && cardNames() === 'extra.txt');
 
-  // C) ลากโฟลเดอร์มาวาง — เดินเข้าไปทุกชั้น (readEntries ทีละ 2 รายการ) พร้อมไฟล์เดี่ยวในจังหวะเดียวกัน
+  // 4) สร้างโฟลเดอร์ใหม่
+  await openF('');
+  $('trNewFolder').click(); await sleep(100);
+  ok('กด "+ โฟลเดอร์ใหม่": หน้าต่างเปิด · บอกว่าสร้างที่ไหน (คลังไฟล์ ชั้นบนสุด) · ช่องชื่อว่าง', dlgOpen('trNewDlg') && /ชั้นบนสุด/.test(txt('trNewDlgIn')) && $('trNewName').value === '');
+  $('trNewDlgSave').click(); await sleep(80);
+  ok('ชื่อว่าง → ข้อความแดงในหน้าต่าง ไม่เรียกฐาน', !$('trNewDlgErr').hidden && /กรอกชื่อ/.test(txt('trNewDlgErr')) && rpcs('transfer_folder_create').length === 0);
+  $('trNewName').value = 'a/b'; $('trNewDlgSave').click(); await sleep(80);
+  ok('ชื่อมี / → ปฏิเสธ', /ห้ามมี/.test(txt('trNewDlgErr')) && rpcs('transfer_folder_create').length === 0);
+  $('trNewName').value = '..'; $('trNewDlgSave').click(); await sleep(80);
+  ok('ชื่อ ".." → ปฏิเสธ', /ไม่ถูกต้อง/.test(txt('trNewDlgErr')) && rpcs('transfer_folder_create').length === 0);
+  $('trNewName').value = 'end CREDIT'; $('trNewDlgSave').click(); await sleep(80);
+  ok('ชื่อซ้ำกับโฟลเดอร์ที่มี (ไม่สนตัวพิมพ์) → ปฏิเสธ บอกชื่อที่ซ้ำ', /มีโฟลเดอร์ชื่อ "End credit"/.test(txt('trNewDlgErr')) && rpcs('transfer_folder_create').length === 0);
+  TRN.fail.rpc_transfer_folder_create = 'ระบบขัดข้อง';
+  $('trNewName').value = 'Logos'; $('trNewDlgSave').click(); await sleep(300); TRN.fail = {};
+  ok('ฐานปฏิเสธ → ข้อความแดงในหน้าต่าง (หน้าต่างไม่ปิด · ไม่ขึ้นว่าสร้างแล้ว)', dlgOpen('trNewDlg') && /ระบบขัดข้อง/.test(txt('trNewDlgErr')) && !tile('Logos'));
+  $('trNewDlgSave').click(); await sleep(500);
+  ok('สร้าง "Logos" สำเร็จ: เรียก transfer_folder_create พาธ "Logos" · หน้าต่างปิด · ไอคอนโฟลเดอร์ใหม่ขึ้น "โฟลเดอร์ว่าง" และเป็นปกเปล่า (ไม่มีแผ่นเสียง)', lastRpc('transfer_folder_create').args.p_path === 'Logos' && !dlgOpen('trNewDlg') && !!tile('Logos') && /โฟลเดอร์ว่าง/.test(tile('Logos').textContent) && !hasDisc(tile('Logos')) && !fatal());
+  await openF('Logos');
+  ok('เปิดโฟลเดอร์ว่าง: ข้อความ "โฟลเดอร์นี้ยังว่าง" บอกวิธีอัปโหลดเข้าโฟลเดอร์นี้', /โฟลเดอร์นี้ยังว่าง/.test(txt('trList')));
+  $('trNewFolder').click(); await sleep(100); $('trNewName').value = 'Dark'; $('trNewName').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await sleep(500);
+  ok('สร้างโฟลเดอร์ซ้อนในโฟลเดอร์ที่เปิดอยู่ (กด Enter ในช่องชื่อก็บันทึก): พาธ "Logos/Dark" · ขึ้นเป็นโฟลเดอร์ย่อยของ Logos', lastRpc('transfer_folder_create').args.p_path === 'Logos/Dark' && tileNames() === 'Dark');
+  await up([mkFile('mark.svg', 'image/svg+xml')]); clearQ(); await sleep(200);
+  ok('อัปโหลดเข้าโฟลเดอร์ว่างที่เปิดอยู่ (Logos): begin ส่ง p_folder = Logos · ข้อความว่างหาย · ไฟล์ขึ้นเป็นการ์ด', lastRpc('transfer_begin').args.p_folder === 'Logos' && cardNames() === 'mark.svg' && !/ยังว่าง/.test(txt('trList')));
+  await openF('');
+  ok('กลับชั้นบนสุด: ไอคอน Logos เปลี่ยนเป็นมีแผ่นเสียง (มีไฟล์แล้ว) · ตัวนับรวมโฟลเดอร์ย่อย', hasDisc(tile('Logos')) && /1 ไฟล์/.test(tile('Logos').textContent));
+
+  // 5) ลากโฟลเดอร์มาวาง: โฟลเดอร์ย่อยว่างยังอยู่ด้วย
   resetUpload();
-  await dropEntries([fd('Assets', [fe('a.png', 'image/png'), fd('img', [fe('b.jpg', 'image/jpeg'), fe('.DS_Store'), fd('deep', [fe('c.mp3', 'audio/mpeg')], 2), fe('d.pdf', 'application/pdf')], 2), fe('Thumbs.db'), fe('e.zip', 'application/zip')], 2), fe('alone.txt', 'text/plain')]);
-  ok('ลากโฟลเดอร์ซ้อนหลายชั้น (อ่านทีละ 2): ได้ครบ 6 ไฟล์ พาธถูกต้องทุกชั้น · ไฟล์เดี่ยวไม่มีพาธ', JSON.stringify(stageNames().sort()) === JSON.stringify(['Assets/a.png', 'Assets/e.zip', 'Assets/img/b.jpg', 'Assets/img/d.pdf', 'Assets/img/deep/c.mp3', 'alone.txt'].sort()), JSON.stringify(stageNames()));
-  ok('...ไฟล์ระบบที่ซ่อนในชั้นล่าง (.DS_Store · Thumbs.db) ถูกข้าม และบอกจำนวน', /ข้ามไฟล์ระบบ 2 ไฟล์/.test(txt('trStageNote')), txt('trStageNote'));
+  await dropEntries([fd('Assets', [fe('a.png', 'image/png'), fd('empty', []), fd('onlyjunk', [fe('.DS_Store')]), fd('deep', [fd('deeper', [])], 1), fd('img', [fe('b.jpg', 'image/jpeg'), fd('deep2', [fe('c.mp3', 'audio/mpeg')], 2)], 2)], 2), fe('alone.txt', 'text/plain')]);
+  ok('ลากโฟลเดอร์ที่มีโฟลเดอร์ย่อยว่าง: ไฟล์ 4 (a.png · b.jpg · c.mp3 · alone.txt) · โฟลเดอร์ว่างที่จะสร้างเฉพาะชั้นลึกสุด (Assets/empty · Assets/onlyjunk · Assets/deep/deeper = 3 ไม่รวม Assets/deep ที่มีลูก)', stageNames().length === 4 && tr.stageDirs.map(d => d.path).sort().join('|') === 'Assets/deep/deeper|Assets/empty|Assets/onlyjunk', JSON.stringify(stageNames()) + JSON.stringify(tr.stageDirs));
+  ok('...หัวรอยืนยันบอก "โฟลเดอร์ว่างที่จะสร้าง 3" · แถบโฟลเดอร์ Assets บอกจำนวนโฟลเดอร์ว่าง · ปุ่มยืนยันบอกทั้งสองอย่าง', /โฟลเดอร์ว่างที่จะสร้าง 3/.test(txt('trStageHead')) && /Assets · 3 ไฟล์.*โฟลเดอร์ว่าง 3/.test(txt('trStageFolders')) && /ยืนยันอัปโหลด 4 ไฟล์ \\+ สร้างโฟลเดอร์ว่าง 3/.test($('trConfirm').textContent), txt('trStageFolders') + ' | ' + $('trConfirm').textContent);
+  $('trConfirm').click(); await idle(); clearQ(); await sleep(500);
+  const mk = lastRpc('transfer_folder_create_many');
+  ok('ยืนยัน: เรียก transfer_folder_create_many ครั้งเดียวด้วย 3 พาธ (ไม่ส่งชั้นที่มีลูก) · ไม่มีแถบแดง', rpcs('transfer_folder_create_many').length === 1 && mk.args.p_paths.slice().sort().join('|') === 'Assets/deep/deeper|Assets/empty|Assets/onlyjunk' && !fatal(), JSON.stringify(mk && mk.args));
+  await openF('Assets');
+  ok('Assets: โฟลเดอร์ย่อยครบทุกชั้นที่ลากมา (deep · deep2 อยู่ใน img · empty · img · onlyjunk) ทั้งที่ว่างและไม่ว่าง · a.png เป็นการ์ด', tileNames() === 'deep|empty|img|onlyjunk' && cardNames() === 'a.png', tileNames() + ' / ' + cardNames());
+  ok('...ว่าง = ปกเปล่า · มีไฟล์ = มีแผ่นเสียง ในหน้าเดียวกัน', !hasDisc(tile('empty')) && !hasDisc(tile('onlyjunk')) && hasDisc(tile('img')) && !hasDisc(tile('deep')));
+  await openF('Assets/deep');
+  ok('Assets/deep → เห็นโฟลเดอร์ว่าง deeper (สร้างจากตัวหมาย)', tileNames() === 'deeper' && /โฟลเดอร์ว่าง/.test(tile('deeper').textContent));
+  resetUpload(); await openF('');
+  await dropEntries([fd('JustEmpty', [])]);
+  ok('ลากโฟลเดอร์ว่างเปล่าอย่างเดียว → เตรียมสร้างโฟลเดอร์ว่าง 1 โฟลเดอร์ (ไม่ใช่แถบแดง "ว่าง") · ปุ่มยืนยันกดได้', !fatal() && tr.stageDirs.length === 1 && stageNames().length === 0 && !$('trConfirm').disabled && /สร้างโฟลเดอร์ว่าง 1 โฟลเดอร์/.test($('trConfirm').textContent), $('trConfirm').textContent);
   document.querySelector('#trStageFolders [data-act="stage-rm-dir"]').click(); await sleep(100);
-  ok('ปุ่ม "เอาออก" ของโฟลเดอร์ → ไฟล์ทั้งโฟลเดอร์ออกจากรอยืนยัน เหลือไฟล์เดี่ยว', stageNames().join('|') === 'alone.txt' && $('trStageFolders').hidden);
+  ok('ปุ่ม "เอาออก" ของโฟลเดอร์ ลบทั้งไฟล์และโฟลเดอร์ว่างของมันออกจากรอยืนยัน · กล่องรอยืนยันซ่อน', tr.stageDirs.length === 0 && $('trStage').hidden);
   resetUpload();
-  await dropEntries([fd('Empty', [])]);
-  ok('ลากโฟลเดอร์ว่าง → แถบแดง "โฟลเดอร์ว่าง" ไม่มีอะไรขึ้นรอยืนยัน', /โฟลเดอร์ว่าง/.test(fatal() ? fatal().textContent : '') && !stageNames().length);
-  clearFatal();
   await dropEntries([fd('Junk', [fe('.DS_Store'), fe('Thumbs.db')])]);
-  ok('โฟลเดอร์ที่มีแต่ไฟล์ระบบ → แถบแดงบอกว่าไม่มีไฟล์ให้อัปโหลด', /มีแต่ไฟล์ระบบ/.test(fatal() ? fatal().textContent : '') && !stageNames().length);
-  clearFatal();
-  const plainDrop = await (async () => { await trDropped({ files: [mkFile('plain-1.txt'), mkFile('plain-2.txt')], items: [] }); await sleep(200); return stageNames(); })();
-  ok('ลากไฟล์ล้วน (ไม่มีโฟลเดอร์) → ทางเดิม ไม่มีพาธ ไม่มีแถบโฟลเดอร์', plainDrop.join('|') === 'plain-1.txt|plain-2.txt' && $('trStageFolders').hidden);
+  ok('โฟลเดอร์ที่มีแต่ไฟล์ระบบ → นับเป็นโฟลเดอร์ว่าง 1 (สร้างได้) ไม่ใช่ error', tr.stageDirs.map(d => d.path).join() === 'Junk' && !fatal());
   resetUpload();
 
-  // D) เพดาน + ชื่อยาว/ลึก
+  // 6) ค้นหา/ตัวกรอง = ผลลัพธ์ทุกโฟลเดอร์แบบแบน
+  $('trSearch').value = 'ep1'; $('trSearch').dispatchEvent(new Event('input', { bubbles: true })); await sleep(150);
+  ok('ค้นหา "ep1": หยุดเรียกดูตามชั้น — มีข้อความ "ผลลัพธ์จากทุกโฟลเดอร์" แทนเส้นทาง · เห็นโฟลเดอร์ ep1 ที่ชื่อตรง (บอกว่าอยู่ใน End credit/2026) และไฟล์ที่พาธตรงพร้อมพาธนำหน้า', /ผลลัพธ์จากทุกโฟลเดอร์/.test(crumbTxt()) && tileNames() === 'ep1' && /ใน End credit\\/2026/.test(tile('ep1').textContent) && cardNames() === 'End credit/2026/ep1/คลิป.mp4', crumbTxt() + ' / ' + tileNames() + ' / ' + cardNames());
+  await openF('End credit/2026/ep1');
+  ok('คลิกไอคอนโฟลเดอร์จากผลค้นหา → ล้างช่องค้นหาแล้วเข้าโฟลเดอร์นั้นจริง (เส้นทางเต็ม · ช่องค้นหาว่าง)', $('trSearch').value === '' && tr.q === '' && tr.path === 'End credit/2026/ep1' && cardNames() === 'คลิป.mp4');
+  await openF('');
+  document.querySelector('#trChips .tr-chip[data-cat="video"]').click(); await sleep(120);
+  ok('ชิปกลุ่ม "วิดีโอ": แบนทุกโฟลเดอร์ — การ์ดวิดีโอจากโฟลเดอร์ขึ้นพร้อมพาธ · ไม่มีไอคอนโฟลเดอร์', cardNames().indexOf('End credit/2026/ep1/คลิป.mp4') >= 0 && cardNames().indexOf('End credit/2026/ep2/คลิป2.mp4') >= 0 && tiles().length === 0);
+  document.querySelector('#trChips .tr-chip[data-cat=""]').click(); await sleep(100);
+  ok('ล้างตัวกรอง → กลับมาเรียกดูตามชั้น (ชั้นบนสุด · มีไอคอนโฟลเดอร์)', !trFlat() && tr.path === '' && tiles().length > 0);
+
+  // 7) รายการ (list) ก็มีโฟลเดอร์ + เส้นทางเหมือนกัน
+  await setView('list');
+  ok('มุมมองรายการ: โฟลเดอร์เป็นแถว (ไอคอนเล็ก + ชื่อ + จำนวนไฟล์) อยู่เหนือกลุ่มไฟล์ · แถวไฟล์ปกติไม่ปนโฟลเดอร์', document.querySelectorAll('#trList .tr-frow').length >= 3 && document.querySelectorAll('#trList .tr-tile').length === 0 && rows().every(r => !r.classList.contains('tr-frow')));
+  document.querySelector('#trList .tr-frow [data-act="nav"][data-path="End credit"]').click(); await sleep(150);
+  ok('...แตะแถวโฟลเดอร์ = เข้าโฟลเดอร์ (เส้นทางเปลี่ยน) · ไฟล์ logo.png เป็นแถว', tr.path === 'End credit' && rows().some(r => flat(r.querySelector('.tr-name').textContent) === 'logo.png'));
+  await openF(''); await setView('grid');
+
+  // 8) โฟลเดอร์ชื่อเดียวกันของคนละคน = โฟลเดอร์เดียว (คลังร่วมของทีม)
+  trPick([relFile('Same/z.txt', 'text/plain')]); await sleep(200); $('trConfirm').click(); await idle(); clearQ();
+  await relogin('nutty'); await openPage();
+  trPick([relFile('Same/n.txt', 'text/plain')]); await sleep(200); $('trConfirm').click(); await idle(); clearQ(); await sleep(200);
+  ok('โฟลเดอร์ชื่อเดียวกันของคนละคน (Zen / Nutty) รวมเป็นโฟลเดอร์เดียว 2 ไฟล์ — เหมือนไดรฟ์ร่วมของทีม', tileNames().split('|').filter(n => n === 'Same').length === 1 && /2 ไฟล์/.test(tile('Same').textContent), tileNames());
+  const fcardDel = tile('Same').querySelector('[data-act="dir-del"]');
+  ok('Nutty เห็นปุ่มลบบนโฟลเดอร์ Same (มีไฟล์ของตัวเอง) · ไม่เห็นปุ่มลบบน End credit/Assets/Logos ของ Zen', !!fcardDel && !tile('End credit').querySelector('[data-act="dir-del"]') && !tile('Assets').querySelector('[data-act="dir-del"]') && !tile('Logos').querySelector('[data-act="dir-del"]'));
+  const dBase = rpcs('transfer_delete').length;
+  fcardDel.click(); await sleep(150);
+  ok('กดลบโฟลเดอร์ Same → ยืนยันบอกจะลบ 1 ไฟล์ (ของ Nutty) และเตือนว่า 1 ไฟล์ของคนอื่นลบไม่ได้ · ยังไม่เรียกฐาน', dlgOpen('confirmDialog') && /1 ไฟล์/.test($('confirmBody').textContent) && /ลบไม่ได้/.test($('confirmBody').textContent) && rpcs('transfer_delete').length === dBase, $('confirmBody').textContent);
+  $('confirmOkBtn').click(); await sleep(700);
+  ok('ยืนยัน → ลบเฉพาะ n.txt (1 ครั้ง) · z.txt ของ Zen ยังอยู่ · โฟลเดอร์ Same เหลือ 1 ไฟล์', rpcs('transfer_delete').length - dBase === 1 && /1 ไฟล์/.test(tile('Same').textContent) && !!TRN.files.find(f => f.file_name === 'z.txt' && f.status === 'ready') && !TRN.files.find(f => f.file_name === 'n.txt' && f.status === 'ready'), tile('Same') && tile('Same').textContent);
+
+  // 9) ลบทั้งโฟลเดอร์ (ซ้อนหลายชั้น + ตัวหมาย) / ไฟล์ถาวร / เจ้าของร้าน
+  TRN.add('fpin', 'doc', 'asset.pdf', 'u2', 20, { folder_path: 'Assets/img', is_permanent: true, permanent_by: 'u1' });
+  await relogin('zen'); await openPage();
+  ok('Zen เห็นปุ่มลบบนโฟลเดอร์ของตัวเอง (Assets · End credit · Logos)', !!tile('Assets').querySelector('[data-act="dir-del"]') && !!tile('End credit').querySelector('[data-act="dir-del"]') && !!tile('Logos').querySelector('[data-act="dir-del"]'));
+  const dBase2 = rpcs('transfer_delete').length, rmBase = TRN.removed.reduce((n, r) => n + r.paths.length, 0), pgBase = rpcs('transfer_mark_purged').length;
+  tile('Assets').querySelector('[data-act="dir-del"]').click(); await sleep(150);
+  ok('ลบ Assets: ยืนยันบอกจำนวนไฟล์ที่ลบได้ (a.png · b.jpg · c.mp3 = 3) + โฟลเดอร์ที่สร้างไว้ (empty · onlyjunk · deep/deeper = 3 ตัวหมาย) + เตือนไฟล์ถาวร asset.pdf ลบไม่ได้', dlgOpen('confirmDialog') && /3 ไฟล์/.test($('confirmBody').textContent) && /โฟลเดอร์ที่สร้างไว้ 3/.test($('confirmBody').textContent) && /ลบไม่ได้/.test($('confirmBody').textContent), $('confirmBody').textContent);
+  $('confirmOkBtn').click(); await sleep(900);
+  ok('ยืนยัน → transfer_delete 3 ครั้ง (ไม่แตะไฟล์ถาวร) · ล้างตัวไฟล์ในถังเป็นชุด · เรียก transfer_folder_delete พาธ Assets ครั้งเดียว · ไม่มีแถบแดง', rpcs('transfer_delete').length - dBase2 === 3 && !rpcs('transfer_delete').slice(-3).some(c => c.args.p_id === 'fpin') && TRN.removed.reduce((n, r) => n + r.paths.length, 0) - rmBase === 3 && rpcs('transfer_mark_purged').length - pgBase >= 1 && lastRpc('transfer_folder_delete').args.p_path === 'Assets' && !fatal(), 'del=' + (rpcs('transfer_delete').length - dBase2));
+  await openF('Assets');
+  ok('Assets เหลือเฉพาะทางไปไฟล์ถาวร (img → asset.pdf) — ตัวหมายโฟลเดอร์ว่างหายหมด · ไม่มีปุ่มลบให้ Zen บน img (ไฟล์ถาวรลบไม่ได้)', tileNames() === 'img' && !tile('img').querySelector('[data-act="dir-del"]') && /1 ไฟล์/.test(tile('img').textContent), tileNames());
+  await relogin('tibass'); await openPage(); await openF('Assets');
+  ok('เจ้าของร้านเห็นปุ่มลบบนโฟลเดอร์ที่มีไฟล์ถาวรของคนอื่น → ยืนยันเตือน "ไฟล์ถาวร (Asset) 1 ไฟล์" ตัวหนา', (() => { tile('img').querySelector('[data-act="dir-del"]').click(); return true; })());
+  await sleep(150);
+  ok('...ข้อความเตือนไฟล์ถาวรเป็นตัวหนา', dlgOpen('confirmDialog') && /ไฟล์ถาวร \\(Asset\\) 1 ไฟล์/.test($('confirmBody').textContent) && !!$('confirmBody').querySelector('strong'));
+  $('confirmOkBtn').click(); await sleep(700);
+  ok('...ลบแล้ว: ไฟล์ถาวรหาย · เหลือโฟลเดอร์ Assets ว่างไม่มีลูก → ระบบถอยขึ้นชั้นบนสุดเอง (โฟลเดอร์ที่เปิดอยู่หายไป)', !TRN.files.find(f => f.id === 'fpin' && f.status === 'ready') && tr.path === '' && !tile('Assets'), 'path=' + tr.path);
+  tile('Logos').querySelector('[data-act="dir-del"]').click(); await sleep(150); $('confirmOkBtn').click(); await sleep(800);
+  ok('เจ้าของร้านลบโฟลเดอร์ของคนอื่น (Logos + Logos/Dark ที่ Zen สร้าง): ลบไฟล์ mark.svg และตัวหมายทั้งสอง (ตัวหมายถูกลบ ไม่เหลือค้าง)', !tile('Logos') && TRN.folders.filter(k => /^Logos/.test(k.path) && !k.deleted_at).length === 0 && TRN.folders.filter(k => /^Logos/.test(k.path) && k.deleted_by === 'u1').length === 2);
+  tr.path = 'ghost/deep'; await reload();
+  ok('เส้นทางที่เปิดอยู่หายไป (ไม่มีโฟลเดอร์นี้แล้ว) → ถอยขึ้นชั้นบนสุดเอง ไม่ค้างหน้าว่างเปล่า', tr.path === '' && crumbTxt() === 'คลังไฟล์');
+
+  // 10) ความปลอดภัยของ DOM: ชื่อโฟลเดอร์เป็น HTML
+  await relogin('zen'); await openPage(); window.XSS = undefined;
+  trPick([relFile('<img src=x onerror=window.XSS=9>/<b>sub</b>/n<i>.txt', 'text/plain')]); await sleep(250);
+  ok('ชื่อโฟลเดอร์ที่เป็น HTML ในรอยืนยัน (รายการ + แถบโฟลเดอร์): เป็นข้อความ ไม่รันสคริปต์ ไม่สร้างแท็ก', window.XSS === undefined && !$('trStageList').querySelector('img,b,i') && !$('trStageFolders').querySelector('img,b,i') && /<img src=x/.test(txt('trStageList')));
+  $('trConfirm').click(); await idle(); clearQ(); await sleep(250);
+  const xt = [...document.querySelectorAll('#trList .tr-tile')].find(t => /<img src=x/.test(t.textContent));
+  ok('...ไอคอนโฟลเดอร์ในรายการ: ชื่อเป็นข้อความ (ทั้งป้าย ปุ่ม aria-label)', window.XSS === undefined && !!xt && !xt.querySelector('img,b,i') && /^เปิดโฟลเดอร์ <img/.test(xt.querySelector('[data-act="nav"]').getAttribute('aria-label')));
+  xt.querySelector('[data-act="nav"]').click(); await sleep(150);
+  ok('...เส้นทาง (breadcrumb) และชื่อโฟลเดอร์ย่อยเป็นข้อความ · ปลายทางอัปโหลดเป็นข้อความ', window.XSS === undefined && !$('trCrumbs').querySelector('img,b,i') && /<img src=x/.test(crumbTxt()) && !$('trList').querySelector('img[src="x"],b,i') && !$('trDest').querySelector('*'));
+  $('trNewFolder').click(); await sleep(100);
+  ok('...หน้าต่างสร้างโฟลเดอร์บอกที่สร้างเป็นข้อความ', window.XSS === undefined && !$('trNewDlgIn').querySelector('*') && /<img src=x/.test(txt('trNewDlgIn')));
+  $('trNewDlgCancel').click(); await sleep(60);
+  tr.path = ''; await reload();
+
+  // 11) โฟลเดอร์ใหญ่ — คิวย่อแถว · ล้มรวมเป็นแถบเดียว
+  const bulk = []; for (let i = 0; i < 35; i++) bulk.push(relFile('Bulk/f' + (i < 10 ? '0' : '') + i + '.txt', 'text/plain'));
+  trPick(bulk); await sleep(300); $('trConfirm').click(); await idle();
+  ok('โฟลเดอร์ 35 ไฟล์: อัปโหลดครบ 35 (folder_path=Bulk) · ไม่มีแถบแดง', TRN.files.filter(f => f.folder_path === 'Bulk' && f.status === 'ready').length === 35 && !fatal());
+  ok('...คิวยาวเกิน 30: สรุป "อัปโหลดแล้ว 35 จาก 35 ไฟล์" · ซ่อนแถวที่เสร็จแล้ว เหลือ 3', /อัปโหลดแล้ว 35 จาก 35 ไฟล์/.test(txt('trQueue')) && document.querySelectorAll('#trQueue .tr-q').length === 3 && /ซ่อนแถวที่เสร็จแล้ว 32/.test(txt('trQueue')));
+  clearQ(); clearFatal();
+  trPick([relFile('Fail/a.txt', 'text/plain'), relFile('Fail/b.txt', 'text/plain'), relFile('Fail/c.txt', 'text/plain')]); await sleep(250);
+  TRN.fail.rpc_transfer_begin = 'ระบบขัดข้อง'; $('trConfirm').click(); await idle(); TRN.fail = {};
+  ok('อัปโหลดโฟลเดอร์ล้ม 3 ไฟล์ → แถบแดงเดียว "ไม่สำเร็จ 3 ไฟล์" · แถวในคิวเป็น "ไม่สำเร็จ" ทุกแถว · ไม่มีไฟล์ค้างในฐาน', document.querySelectorAll('#fatalError').length === 1 && /ไม่สำเร็จ 3 ไฟล์/.test(fatal().textContent) && [...document.querySelectorAll('#trQueue .tr-q')].filter(q => /ไม่สำเร็จ/.test(q.textContent)).length === 3 && !TRN.files.some(f => f.folder_path === 'Fail'));
+  clearFatal(); clearQ();
+  { const origMake = window.trMakeThumb; let cur = 0, peak = 0;
+    window.trMakeThumb = () => new Promise(r => { cur++; peak = Math.max(peak, cur); setTimeout(() => { cur--; r(null); }, 25); });
+    const gp = []; for (let i = 0; i < 12; i++) gp.push(trThumbQueued(mkFile('g' + i + '.png', 'image/png')));
+    await Promise.all(gp); window.trMakeThumb = origMake;
+    ok('สร้างรูปตัวอย่างพร้อมกันไม่เกิน 3 ไฟล์ (ส่ง 12 ไฟล์ → พร้อมกันสูงสุด 3) · คิวว่างหลังเสร็จ', peak === 3 && trGate.n === 0 && trGate.q.length === 0, 'peak=' + peak); }
+
+  // 12) ขอบเขต: เพดาน 500 · ลึก 12 · พาธยาว · .. \\ ในพาธ
   const many = []; for (let i = 0; i < 501; i++) many.push(relFile('Big/f' + i + '.txt', 'text/plain'));
   trPick(many); await sleep(200);
   ok('โฟลเดอร์ 501 ไฟล์ → ปฏิเสธทั้งโฟลเดอร์ (แถบแดงบอกเพดาน 500) ไม่มีอะไรขึ้นรอยืนยัน', /เกิน 500 ไฟล์/.test(fatal() ? fatal().textContent : '') && !stageNames().length);
   clearFatal();
   const few = []; for (let i = 0; i < 500; i++) few.push(relFile('Ok500/f' + i + '.txt', 'text/plain'));
   trPick(few); await sleep(400);
-  ok('โฟลเดอร์ 500 ไฟล์ (พอดีเพดาน) → ขึ้นรอยืนยันครบ 500 ไฟล์ · ไม่มีแถบแดง', stageNames().length === 500 && !fatal(), stageNames().length);
-  ok('...คิวสร้างรูปตัวอย่างไม่ค้าง (trGate ว่างเมื่อเสร็จ)', trGate.n === 0 && trGate.q.length === 0);
-  { const origMake = window.trMakeThumb; let cur = 0, peak = 0;
-    window.trMakeThumb = () => new Promise(r => { cur++; peak = Math.max(peak, cur); setTimeout(() => { cur--; r(null); }, 25); });
-    const gp = []; for (let i = 0; i < 12; i++) gp.push(trThumbQueued(mkFile('g' + i + '.png', 'image/png')));
-    await Promise.all(gp); window.trMakeThumb = origMake;
-    ok('สร้างรูปตัวอย่างพร้อมกันไม่เกิน 3 ไฟล์ (ส่ง 12 ไฟล์ → พร้อมกันสูงสุด 3) · คิวว่างหลังเสร็จ — โฟลเดอร์ใหญ่ไม่กินหน่วยความจำ', peak === 3 && trGate.n === 0 && trGate.q.length === 0, 'peak=' + peak); }
+  ok('โฟลเดอร์ 500 ไฟล์ (พอดีเพดาน) → ขึ้นรอยืนยันครบ · ไม่มีแถบแดง · คิวรูปตัวอย่างไม่ค้าง', stageNames().length === 500 && !fatal() && trGate.n === 0 && trGate.q.length === 0);
   trStageClear(); clearFatal();
-  const deep = Array.from({ length: 13 }, (_, i) => 'd' + i).join('/');
-  trPick([relFile(deep + '/x.txt', 'text/plain'), relFile('Fine/y.txt', 'text/plain')]); await sleep(250);
+  const deepP = Array.from({ length: 13 }, (_, i) => 'd' + i).join('/');
+  trPick([relFile(deepP + '/x.txt', 'text/plain'), relFile('Fine/y.txt', 'text/plain')]); await sleep(250);
   const badRows = [...$('trStageList').querySelectorAll('.tr-bad')].map(b => flat(b.textContent));
-  ok('โฟลเดอร์ซ้อนลึกเกิน 12 ชั้น → ไฟล์นั้นขึ้น "ไม่ถูกอัปโหลด" พร้อมเหตุผล · ไฟล์อื่นไม่ติดไปด้วย · ปุ่มยืนยันนับเฉพาะไฟล์ที่ผ่าน', badRows.length === 1 && /ลึกเกิน 12 ชั้น/.test(badRows[0]) && /ยืนยันอัปโหลด 1 ไฟล์/.test($('trConfirm').textContent), JSON.stringify(badRows) + $('trConfirm').textContent);
-  const longSeg = 'ย'.repeat(120);
-  trPick([relFile([longSeg, longSeg, longSeg, longSeg].join('/') + '/z.txt', 'text/plain')]); await sleep(200);
-  ok('พาธโฟลเดอร์รวมเกิน 400 ตัวอักษร → ไฟล์นั้นถูกปฏิเสธพร้อมเหตุผล', [...$('trStageList').querySelectorAll('.tr-bad')].some(b => /ยาวเกิน 400/.test(b.textContent)));
+  ok('ซ้อนลึกเกิน 12 ชั้น → ไฟล์นั้น "ไม่ถูกอัปโหลด" พร้อมเหตุผล · ไฟล์อื่นไม่ติดไปด้วย · ปุ่มยืนยันนับเฉพาะไฟล์ที่ผ่าน', badRows.length === 1 && /ลึกเกิน 12 ชั้น/.test(badRows[0]) && /ยืนยันอัปโหลด 1 ไฟล์/.test($('trConfirm').textContent));
+  trStageClear();
+  tr.path = 'End credit'; trRenderList();
+  trPick([relFile(Array.from({ length: 11 }, (_, i) => 'e' + i).join('/') + '/z.txt', 'text/plain')]); await sleep(200);
+  ok('ความลึกนับรวมโฟลเดอร์ปลายทางที่เปิดอยู่ (End credit + 11 ชั้น = 12 ผ่านพอดี · + 12 ชั้น = 13 เกิน)', !([...$('trStageList').querySelectorAll('.tr-bad')].length));
+  trStageClear();
+  trPick([relFile(Array.from({ length: 12 }, (_, i) => 'e' + i).join('/') + '/z.txt', 'text/plain')]); await sleep(200);
+  ok('...ลึกเกิน (ปลายทาง 1 + 12) → ปฏิเสธ', [...$('trStageList').querySelectorAll('.tr-bad')].some(b => /ลึกเกิน 12/.test(b.textContent)));
+  trStageClear(); tr.path = ''; trRenderList();
   trPick([relFile('Trav/../..\\\\evil/./ok.txt', 'text/plain')]); await sleep(200);
-  ok('พาธที่มี .. . และ \\\\ ถูกล้างฝั่งหน้าเว็บ (Trav/evil/) ก่อนส่ง', stageNames().indexOf('Trav/evil/ok.txt') >= 0, JSON.stringify(stageNames()));
+  ok('พาธที่มี .. . และ \\\\ ถูกล้างก่อนส่ง (Trav/evil/ok.txt)', stageNames().indexOf('Trav/evil/ok.txt') >= 0, JSON.stringify(stageNames()));
   trStageClear(); clearFatal();
 
-  // E) ความปลอดภัยของ DOM: ชื่อโฟลเดอร์/ไฟล์เป็น HTML
-  window.XSS = undefined;
-  trPick([relFile('<img src=x onerror=window.XSS=9>/<b>sub</b>/n<i>.txt', 'text/plain')]); await sleep(250);
-  ok('ชื่อโฟลเดอร์ที่เป็น HTML ในรอยืนยัน: แสดงเป็นข้อความ ไม่สร้างแท็ก ไม่รันสคริปต์ (แถวรายการ + แถบโฟลเดอร์)', window.XSS === undefined && !$('trStageList').querySelector('img,b,i') && !$('trStageFolders').querySelector('img,b,i') && /<img src=x/.test(txt('trStageList')));
-  $('trConfirm').click(); await idle(); clearQ(); await sleep(200);
-  ok('...และในรายการหลังอัปโหลด: ชื่อโฟลเดอร์/พาธย่อย/ชื่อไฟล์เป็นข้อความทั้งหมด', window.XSS === undefined && !document.querySelector('#trList details.tr-folder img, #trList details.tr-folder b, #trList details.tr-folder i') && /<img src=x/.test(txt('trList')));
+  // 13) ยังไม่รัน 052 (รัน 051 แล้ว) — โฟลเดอร์จากไฟล์ใช้ได้ สร้างโฟลเดอร์ว่างไม่ได้
+  TRN.v3 = true; await reload();
+  ok('ยังไม่รัน 052 → แถบเหลืองบอกให้รัน 052 (ไม่ใช่แดง) · ซ่อนปุ่ม "+ โฟลเดอร์ใหม่" · ไอคอนโฟลเดอร์จากไฟล์ยังขึ้น · ไม่มี error บนจอ', /migration 052/.test(txt('trAlert')) && !/migration 051/.test(txt('trAlert')) && $('trNewFolder').hidden && tiles().length > 0 && !fatal());
+  await dropEntries([fd('NoMk', [fe('k.txt', 'text/plain'), fd('emptyKid', [])])]);
+  ok('...ลากโฟลเดอร์ที่มีโฟลเดอร์ย่อยว่าง: ไฟล์ขึ้นรอยืนยัน · โน้ตบอกว่าโฟลเดอร์ว่าง 1 จะไม่ถูกสร้าง (ต้องรัน 052) · ไม่มีรายการโฟลเดอร์ว่างรอสร้าง', stageNames().join() === 'NoMk/k.txt' && /ไม่ถูกสร้าง \\(ต้องรัน migration 052\\)/.test(txt('trStageNote')) && tr.stageDirs.length === 0, txt('trStageNote'));
+  const cmk0 = rpcs('transfer_folder_create_many').length;
+  $('trConfirm').click(); await idle(); clearQ();
+  ok('...อัปโหลดไฟล์ได้ตามปกติ · ไม่เรียกฟังก์ชันสร้างโฟลเดอร์', rpcs('transfer_folder_create_many').length === cmk0 && TRN.files.some(f => f.folder_path === 'NoMk' && f.status === 'ready') && !fatal());
+  TRN.v3 = false; await reload();
+  ok('รัน 052 แล้วกดรีเฟรช → แถบเหลืองหาย · ปุ่มสร้างโฟลเดอร์กลับมา', !/migration 052/.test(txt('trAlert')) && !$('trNewFolder').hidden);
 
-  // F) โฟลเดอร์ใหญ่ — คิวย่อแถวที่เสร็จแล้ว · อัปโหลดสำเร็จทั้งหมด
-  const bulk = []; for (let i = 0; i < 35; i++) bulk.push(relFile('Bulk/f' + (i < 10 ? '0' : '') + i + '.txt', 'text/plain'));
-  trPick(bulk); await sleep(300);
-  $('trConfirm').click(); await idle();
-  ok('โฟลเดอร์ 35 ไฟล์: อัปโหลดครบทั้ง 35 (begin 35 ครั้ง · ฐานมี folder_path=Bulk 35 แถว)', TRN.files.filter(f => f.folder_path === 'Bulk' && f.status === 'ready').length === 35 && !fatal());
-  ok('...คิวยาวเกิน 30 แถว: มีบรรทัดสรุป "อัปโหลดแล้ว 35 จาก 35 ไฟล์" · ซ่อนแถวที่เสร็จแล้ว เหลือ 3 แถวล่าสุด', /อัปโหลดแล้ว 35 จาก 35 ไฟล์/.test(txt('trQueue')) && document.querySelectorAll('#trQueue .tr-q').length === 3 && /ซ่อนแถวที่เสร็จแล้ว 32/.test(txt('trQueue')), txt('trQueue').slice(0, 200));
-  clearQ();
-
-  // G) ล้มบางไฟล์ในโฟลเดอร์ → แถบแดงรวมอันเดียว (ไม่ท่วมจอ) + แถว "ไม่สำเร็จ" ทุกไฟล์
-  clearFatal();
-  trPick([relFile('Fail/a.txt', 'text/plain'), relFile('Fail/b.txt', 'text/plain'), relFile('Fail/c.txt', 'text/plain')]); await sleep(250);
-  TRN.fail.rpc_transfer_begin = 'ระบบขัดข้อง';
-  $('trConfirm').click(); await idle(); TRN.fail = {};
-  ok('อัปโหลดโฟลเดอร์ล้ม 3 ไฟล์ → แถบแดงเดียวบอก "ไม่สำเร็จ 3 ไฟล์" · ทุกแถวในคิวเป็น "ไม่สำเร็จ" พร้อมเหตุผล · ไม่มีไฟล์ค้างในฐาน', document.querySelectorAll('#fatalError').length === 1 && /ไม่สำเร็จ 3 ไฟล์/.test(fatal().textContent) && [...document.querySelectorAll('#trQueue .tr-q')].filter(q => /ไม่สำเร็จ/.test(q.textContent)).length === 3 && !TRN.files.some(f => f.folder_path === 'Fail'), fatal() && fatal().textContent);
-  clearFatal(); clearQ();
-
-  // H) ลบทั้งโฟลเดอร์
-  await relogin('nutty'); await openPage();
-  ok('พนักงานที่ไม่ใช่ผู้อัปโหลด (Nutty) ไม่เห็นปุ่ม "ลบทั้งโฟลเดอร์" ของโฟลเดอร์ Bulk', !!fcard('Bulk') && !fcard('Bulk').querySelector('[data-act="dir-del"]'));
-  await relogin('zen'); await openPage();
-  TRN.add('fperm', 'doc', 'asset.pdf', 'u2', 20, { folder_path: 'Bulk/pinned', is_permanent: true, permanent_by: 'u1' }); await reload();
-  ok('ผู้อัปโหลด (Zen) เห็นปุ่ม "ลบทั้งโฟลเดอร์" ที่หัวโฟลเดอร์ (ภายในที่กางแล้ว)', !!fcard('Bulk') && !!fcard('Bulk').querySelector('[data-act="dir-del"]'));
-  const del0 = rpcs('transfer_delete').length, pg0 = rpcs('transfer_mark_purged').length, rmN = () => TRN.removed.reduce((n, r) => n + r.paths.length, 0), rmBase = rmN();
-  fcard('Bulk').querySelector('[data-act="dir-del"]').click(); await sleep(150);
-  ok('กดลบทั้งโฟลเดอร์ → หน้าต่างยืนยันบอกจำนวน (35 ไฟล์) และเตือนว่ามีไฟล์ที่ลบไม่ได้ (ไฟล์ถาวร 1) · ยังไม่เรียกฐาน', dlgOpen('confirmDialog') && /35 ไฟล์/.test($('confirmBody').textContent) && /ลบไม่ได้/.test($('confirmBody').textContent) && rpcs('transfer_delete').length === del0, $('confirmBody').textContent);
-  $('confirmOkBtn').click(); await sleep(1500);
-  ok('ยืนยัน → เรียก transfer_delete ครบ 35 ไฟล์ (ไม่แตะไฟล์ถาวรที่ลบไม่ได้) · ล้างตัวไฟล์ในถังเป็นชุด (mark_purged < 35 ครั้ง) · ไม่มีแถบแดง', rpcs('transfer_delete').length - del0 === 35 && !rpcs('transfer_delete').slice(-35).some(c => c.args.p_id === 'fperm') && rpcs('transfer_mark_purged').length - pg0 >= 1 && rpcs('transfer_mark_purged').length - pg0 < 35 && !fatal(), 'del=' + (rpcs('transfer_delete').length - del0) + ' purge=' + (rpcs('transfer_mark_purged').length - pg0));
-  ok('...โฟลเดอร์เหลือเฉพาะไฟล์ถาวร (asset.pdf) · ไฟล์อื่นของโฟลเดอร์หายจากรายการ · ตัวไฟล์ถูกลบออกจากถัง 35 ไฟล์', !!fcard('Bulk') && fcard('Bulk').querySelectorAll('.tr-row').length === 1 && rmN() - rmBase === 35, 'rows=' + (fcard('Bulk') ? fcard('Bulk').querySelectorAll('.tr-row').length : 'no card') + ' removed=' + (rmN() - rmBase));
-  await relogin('tibass'); await openPage();
-  ok('เจ้าของร้านลบไฟล์ถาวรในโฟลเดอร์ได้ → ปุ่มลบทั้งโฟลเดอร์ขึ้นหน้าต่างเตือน "ไฟล์ถาวร (Asset)" ชัด', (() => { fcard('Bulk').querySelector('[data-act="dir-del"]').click(); return true; })());
-  await sleep(150);
-  ok('...ข้อความเตือนไฟล์ถาวรแดงตัวหนา และอ้างจำนวน 1 ไฟล์', dlgOpen('confirmDialog') && /ไฟล์ถาวร \\(Asset\\) 1 ไฟล์/.test($('confirmBody').textContent) && !!$('confirmBody').querySelector('strong'));
-  $('confirmOkBtn').click(); await sleep(700);
-  ok('...ยืนยันแล้วโฟลเดอร์ Bulk หายจากรายการ', !fcard('Bulk'));
-  // ฐานปฏิเสธบางไฟล์ → แถบแดงเดียว นับตามจริง
-  await relogin('zen'); await openPage();
-  trPick([relFile('Rej/a.txt', 'text/plain'), relFile('Rej/b.txt', 'text/plain')]); await sleep(250); $('trConfirm').click(); await idle(); clearQ(); clearFatal();
-  TRN.fail.rpc_transfer_delete = 'ไม่มีสิทธิ์ลบ';
-  fcard('Rej').querySelector('[data-act="dir-del"]').click(); await sleep(150); $('confirmOkBtn').click(); await sleep(700); TRN.fail = {};
-  ok('ลบโฟลเดอร์แล้วฐานปฏิเสธ → แถบแดงเดียว "ไม่สำเร็จ 2 จาก 2 ไฟล์" + เหตุผล · ไฟล์ยังอยู่ในรายการ (ไม่หลอกว่าลบแล้ว)', document.querySelectorAll('#fatalError').length === 1 && /ไม่สำเร็จ 2 จาก 2 ไฟล์/.test(fatal().textContent) && /ไม่มีสิทธิ์ลบ/.test(fatal().textContent) && !!fcard('Rej') && fcard('Rej').querySelectorAll('.tr-row').length === 2);
-  clearFatal();
-
-  // H2) โฟลเดอร์ชื่อเดียวกันของคนละคน = คนละโฟลเดอร์
-  trPick([relFile('Same/z.txt', 'text/plain')]); await sleep(200); $('trConfirm').click(); await idle(); clearQ();
-  await relogin('nutty'); await openPage();
-  trPick([relFile('Same/n.txt', 'text/plain')]); await sleep(200); $('trConfirm').click(); await idle(); clearQ(); await sleep(200);
-  const sameCards = [...document.querySelectorAll('#trList details.tr-folder')].filter(d => d.querySelector('.tr-fname').textContent === 'Same');
-  ok('โฟลเดอร์ชื่อเดียวกันของคนละคน (Zen / Nutty) แยกเป็น 2 โฟลเดอร์ ไม่รวมกัน · แต่ละโฟลเดอร์ 1 ไฟล์ · Nutty เห็นปุ่ม "ลบทั้งโฟลเดอร์" เฉพาะของตัวเอง', sameCards.length === 2 && sameCards.every(d => d.querySelectorAll('.tr-row').length === 1) && sameCards.filter(d => d.querySelector('[data-act="dir-del"]')).length === 1, sameCards.length);
-  await relogin('zen'); await openPage();
-
-  // I) ยังไม่รัน 051 (รัน 049 + 050 แล้ว)
-  TRN.v2 = true; const selN0 = CALLS.filter(c => c.op === 'select' && c.table === 'transfer_files').length; await reload();
-  const sel051 = CALLS.filter(c => c.op === 'select' && c.table === 'transfer_files').slice(selN0).map(c => /folder_path/.test(c.cols));
-  ok('ยังไม่รัน 051 → ถามด้วย folder_path ก่อน ล้มแล้วถอยไปคอลัมน์ของ 050 (ไม่ถอยไปถึง 049) · แถบเหลืองบอกให้รัน 051 (ไม่ใช่แดง) · ของ 050 ยังอยู่ (แท็บคำขอ)', sel051[0] === true && sel051.indexOf(false) > 0 && /migration 051/.test(txt('trAlert')) && !/migration 050/.test(txt('trAlert')) && !$('trReqTab').hidden && !fatal(), JSON.stringify(sel051));
-  ok('...ซ่อนปุ่มเลือกโฟลเดอร์ + คำอธิบาย · ไม่มีการจัดกลุ่มโฟลเดอร์ในรายการ', $('trDirBtn').hidden && $('trDirHint').hidden && !document.querySelector('#trList details.tr-folder'));
-  trPick([relFile('NoFolder/a.txt', 'text/plain'), mkFile('free.txt', 'text/plain')]); await sleep(250);
-  ok('...เลือกโฟลเดอร์ตอนยังไม่รัน 051 → แถบแดงบอกให้รัน · ไฟล์ในโฟลเดอร์ไม่ถูกนำเข้า (เหลือแต่ไฟล์เดี่ยว)', /migration 051/.test(fatal() ? fatal().textContent : '') && stageNames().join('|') === 'free.txt', JSON.stringify(stageNames()));
-  clearFatal(); $('trConfirm').click(); await idle();
-  ok('...อัปโหลดไฟล์เดี่ยวยังได้ตามเดิม: begin ไม่ส่ง p_folder', !('p_folder' in lastRpc('transfer_begin').args) && !!fid('free.txt') && !fatal());
-  clearQ();
+  // 14) ยังไม่รัน 051 (รัน 050 แล้ว) — ไม่มีโฟลเดอร์ เหลือไฟล์ล้วนแบบเดิม
+  TRN.v2 = true; await reload();
+  ok('ยังไม่รัน 051 → ไม่มีเส้นทาง/ไอคอนโฟลเดอร์ · ปุ่มสร้าง/เลือกโฟลเดอร์ซ่อน · ไฟล์ทั้งหมดขึ้นเป็นการ์ดตามกลุ่ม (ไม่มีไฟล์หาย) · เส้นทางคงที่ที่ชั้นบนสุด', $('trCrumbs').innerHTML === '' && tiles().length === 0 && $('trNewFolder').hidden && $('trDirBtn').hidden && cards().length === trVisibleFiles().length && tr.path === '', cards().length + '/' + trVisibleFiles().length);
+  ok('...แถบเหลืองบอกให้รัน 051 เพียงอันเดียว (ไม่ซ้อนแถบ 052)', /migration 051/.test(txt('trAlert')) && !/migration 052/.test(txt('trAlert')));
   TRN.v2 = false; await reload();
-  ok('รัน 051 แล้วกดรีเฟรช → แถบเหลืองหาย · ปุ่มเลือกโฟลเดอร์กลับมา', !/migration 051/.test(txt('trAlert')) && !$('trDirBtn').hidden);
-  TRN.v1 = true; await reload();
-  trPick([relFile('V1Folder/a.txt', 'text/plain')]); await sleep(200);
-  ok('ยังไม่รัน 050 (v1) → อัปโหลดโฟลเดอร์ไม่ได้เช่นกัน · ปุ่มเลือกโฟลเดอร์ซ่อน', $('trDirBtn').hidden && /migration 051/.test(fatal() ? fatal().textContent : '') && !stageNames().length);
-  clearFatal(); TRN.v1 = false; await reload();
+  await setView('list');           // ส่วนถัดไป (ออกจากระบบ/สลับบัญชี) ตรวจมุมมองรายการ
 
   // ── 17. ออกจากระบบ/สลับบัญชี ──
   ok('ทุกการเขียนผ่านฟังก์ชัน transfer_* — ไม่มี insert/update/delete ตารางตรง ๆ', TRN.writes.length === 0 && CALLS.every(c => !(['insert', 'update', 'delete', 'upsert'].indexOf(c.op) >= 0 && /^transfer_/.test(c.table || ''))));

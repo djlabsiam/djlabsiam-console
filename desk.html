@@ -1246,16 +1246,44 @@
   .tr-dirrow .hint { margin: 0; flex: 1 1 260px; }
   .tr-folderbar { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 10px; }
   .tr-folderbar .tr-fchip { display: inline-flex; align-items: center; gap: 8px; min-height: 36px; padding: 4px 6px 4px 12px; border: 1px solid var(--line-strong); background: var(--surface2); font-size: 14px; overflow-wrap: anywhere; }
-  .tr-folder { border: 1px solid var(--line); border-top: 0; background: var(--surface); }
-  .tr-folder > summary { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; min-height: 48px; padding: 8px 14px; cursor: pointer; list-style: none; font-size: 15px; }
-  .tr-folder > summary::-webkit-details-marker { display: none; }
-  .tr-folder > summary::before { content: "\25B8"; color: var(--text2); flex: 0 0 auto; }
-  .tr-folder[open] > summary::before { content: "\25BE"; }
-  .tr-folder > summary:focus-visible { outline: 2px solid var(--black); outline-offset: -2px; }
-  .tr-folder > summary svg { width: 24px; height: 24px; fill: none; stroke: var(--text2); stroke-width: 1.75; flex: 0 0 auto; }
-  .tr-folder > summary .tr-fname { font-weight: 700; overflow-wrap: anywhere; flex: 1 1 200px; min-width: 0; }
-  .tr-folder-acts { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 14px; background: var(--surface2); border-top: 1px solid var(--line); }
-  .tr-folder .tr-row:first-of-type { border-top: 1px solid var(--line); }
+  .tr-navbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 14px; margin: 0 0 12px; }
+  .tr-crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 4px; min-width: 0; flex: 1 1 280px; font-size: 15px; }
+  .tr-crumb { display: inline-flex; align-items: center; min-height: 36px; padding: 2px 8px; background: transparent; border: 0; font: inherit; color: var(--text); cursor: pointer; overflow-wrap: anywhere; text-align: left; }
+  .tr-crumb:hover { background: var(--sel); }
+  .tr-crumb[aria-current="page"] { font-weight: 700; cursor: default; }
+  .tr-crumb:focus-visible, .tr-tile-open:focus-visible, .tr-frow-open:focus-visible { outline: 2px solid var(--black); outline-offset: 1px; }
+  .tr-sep { color: var(--text2); }
+  .tr-flatnote { font-size: 14px; color: var(--text2); }
+  .tr-navtools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .tr-dest { margin: 6px 0 0; font-weight: 700; }
+  .tr-fico { width: 68px; height: 53px; flex: 0 0 auto; display: block; }
+  .tr-fico.s { width: 24px; height: 19px; }
+  .tr-fico .fi-back { fill: var(--red); }
+  .tr-fico .fi-front { fill: #1B1B1B; }
+  .tr-fico .fi-lip { fill: none; stroke: #fff; stroke-width: 1.6; }
+  .tr-fico .fi-bars { fill: #fff; }
+  .tr-fico .fi-disc > circle:first-child { fill: #0B0B0B; }
+  .tr-fico .fi-g { fill: none; stroke: #5A5A5A; stroke-width: 1; }
+  .tr-fico .fi-lbl { fill: var(--red); }
+  .tr-fico .fi-pin { fill: #fff; }
+  .tr-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; padding: 12px; background: var(--surface); border: 1px solid var(--line); border-top: 0; }
+  .tr-tile { display: flex; align-items: stretch; background: var(--surface2); border: 1px solid var(--line-strong); }
+  .tr-tile:hover { border-color: var(--black); background: var(--sel); }
+  .tr-tile-open { display: flex; align-items: center; gap: 12px; flex: 1 1 auto; min-width: 0; min-height: 84px; padding: 10px 12px; background: transparent; border: 0; font: inherit; color: var(--text); text-align: left; cursor: pointer; }
+  .tr-tile-txt { display: flex; flex-direction: column; min-width: 0; gap: 2px; }
+  .tr-tile-name { font-weight: 700; overflow-wrap: anywhere; }
+  .tr-tile .tr-tile-del { align-self: center; margin-right: 8px; }
+  .tr-frow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 8px 14px; background: var(--surface); border: 1px solid var(--line); border-top: 0; }
+  .tr-frow-open { display: inline-flex; align-items: center; gap: 12px; flex: 1 1 260px; min-width: 0; min-height: 44px; background: transparent; border: 0; font: inherit; color: var(--text); text-align: left; cursor: pointer; font-weight: 700; overflow-wrap: anywhere; }
+  .tr-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; padding: 12px; background: var(--surface); border: 1px solid var(--line); border-top: 0; }
+  .tr-card { display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--line-strong); min-width: 0; }
+  .tr-card .tr-card-thumb { display: flex; align-items: center; justify-content: center; aspect-ratio: 4 / 3; width: 100%; padding: 0; overflow: hidden; background: var(--surface2); border: 0; border-bottom: 1px solid var(--line); border-radius: 0; font: inherit; }
+  .tr-card button.tr-card-thumb { cursor: pointer; }
+  .tr-card button.tr-card-thumb:hover { background: var(--sel); }
+  .tr-card .tr-card-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .tr-card .tr-card-thumb svg { width: 56px; height: 56px; fill: none; stroke: var(--text2); stroke-width: 1.5; }
+  .tr-card-body { display: flex; flex-direction: column; gap: 4px; flex: 1 1 auto; padding: 10px 12px; min-width: 0; }
+  .tr-card-acts { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 12px 12px; }
   .tr-sub { color: var(--text2); font-weight: 500; }
   .tr-qsum { padding: 8px 14px; font-size: 14px; color: var(--text2); background: var(--surface2); border: 1px solid var(--line); border-top: 0; }
   .tr-thumb { flex: 0 0 56px; width: 56px; height: 56px; display: flex; align-items: center; justify-content: center; padding: 0; overflow: hidden;
@@ -1404,7 +1432,7 @@
     .ev-more { min-height: 44px; }
     table.data th .th { min-height: 44px; }
     table.data td { padding-top: 11px; padding-bottom: 11px; }
-    .tlist button, .mail-tab, .row-link, .gresult, .presult, .calc-h, .acct .pick, .swatch, .tr-chip, .tr-tagpick label { min-height: 44px; }
+    .tlist button, .mail-tab, .row-link, .gresult, .presult, .calc-h, .acct .pick, .swatch, .tr-chip, .tr-tagpick label, .tr-crumb, .tr-tile-open { min-height: 44px; }
     .t-x, .stepbtn { width: 44px; height: 44px; }
     /* ปุ่มเลื่อนปีกกว้าง 44 ต้องไม่ทับตัวเลขคงเหลือที่ขอบปีก — ตอนปีกล้นจอ (มีปุ่ม) ผนังหดเข้ามาข้างละ 16px
        ให้ปุ่มอยู่ในขอบว่างทั้งปุ่ม (28 + 16) · ปีกพอดีจอ = ไม่มีปุ่ม ไม่ต้องหด */
@@ -2315,6 +2343,7 @@
               <button class="drop" id="trDrop" type="button"><strong>ลากไฟล์หรือโฟลเดอร์มาวางที่นี่ หรือกดเพื่อเลือกไฟล์</strong><span class="hint">ได้ทุกประเภท · ไม่เกิน 1 GB ต่อไฟล์ · เลือกได้หลายไฟล์ · วางแล้วตรวจรายการ กด "ยืนยันอัปโหลด" ถึงจะอัปโหลดจริง · ระบบแยกไฟล์เข้ากลุ่ม (วิดีโอ เสียง รูปภาพ ดีไซน์ เอกสาร ไฟล์บีบอัด อื่น ๆ) ให้เอง</span></button>
               <input type="file" id="trFile" multiple hidden>
               <input type="file" id="trDir" webkitdirectory hidden>
+              <div class="hint tr-dest" id="trDest" hidden></div>
               <div class="tr-dirrow"><button class="btn" id="trDirBtn" type="button">เลือกทั้งโฟลเดอร์…</button><span class="hint" id="trDirHint">โฟลเดอร์ย่อยทั้งหมดไปด้วย · แสดงเป็นโฟลเดอร์ในรายการ · ไม่เกิน 500 ไฟล์ต่อครั้ง (ไฟล์ระบบอย่าง .DS_Store ข้ามให้เอง)</span></div>
               <div class="card tr-stage" id="trStage" hidden role="group" aria-label="รอยืนยันอัปโหลด">
                 <h3 id="trStageHead">รอยืนยันอัปโหลด</h3>
@@ -2335,6 +2364,13 @@
               <label class="btn" style="gap:8px;"><input type="checkbox" id="trPerm"> เฉพาะไฟล์ถาวร (Asset)</label>
             </div>
             <div class="tr-chips" id="trChips" role="group" aria-label="กลุ่มไฟล์"></div>
+            <div class="tr-navbar">
+              <nav class="tr-crumbs" id="trCrumbs" aria-label="ตำแหน่งโฟลเดอร์"></nav>
+              <div class="tr-navtools">
+                <button class="btn" id="trNewFolder" type="button">+ โฟลเดอร์ใหม่</button>
+                <div class="seg" id="trViewSw" role="group" aria-label="รูปแบบการแสดงผล"><button type="button" data-view="grid" aria-pressed="true">ไอคอน</button><button type="button" data-view="list" aria-pressed="false">รายการ</button></div>
+              </div>
+            </div>
             <div id="trList"></div>
           </div>
           <div id="trLogPane" hidden>
@@ -2599,6 +2635,17 @@
     <div class="alert alert-red" id="trTagDlgErr" hidden role="alert"></div>
   </div>
   <div class="dlg-foot"><button class="btn" id="trTagDlgCancel" type="button">ยกเลิก</button><button class="btn btn-primary" id="trTagDlgSave" type="button">บันทึก Tag</button></div>
+</dialog>
+
+<dialog id="trNewDlg" aria-labelledby="trNewDlgTitle">
+  <div class="dlg-head"><h2 id="trNewDlgTitle">โฟลเดอร์ใหม่</h2></div>
+  <div class="dlg-body">
+    <p class="hint" id="trNewDlgIn" style="margin:0 0 10px;"></p>
+    <div class="field"><label class="lbl" for="trNewName">ชื่อโฟลเดอร์</label><input type="text" id="trNewName" class="input" maxlength="120" autocomplete="off" placeholder="เช่น End credit"></div>
+    <p class="hint">ชื่อห้ามมี / หรือ \ · ทีมงานทุกคนเห็นโฟลเดอร์นี้ · ลบได้เฉพาะคนที่สร้างหรือเจ้าของร้าน · โฟลเดอร์เปล่าไม่หมดอายุ (ต่างจากไฟล์ที่เก็บ 30 วัน)</p>
+    <div class="alert alert-red" id="trNewDlgErr" hidden role="alert"></div>
+  </div>
+  <div class="dlg-foot"><button class="btn" id="trNewDlgCancel" type="button">ยกเลิก</button><button class="btn btn-primary" id="trNewDlgSave" type="button">สร้างโฟลเดอร์</button></div>
 </dialog>
 
 <dialog id="opsDialog" aria-labelledby="opsFormTitle">
@@ -13033,7 +13080,7 @@ const TR_KIND = { upload: ['อัปโหลด', 'st-ok'], view: ['เปิ�
 const TR_REQ_KIND = { keep: 'ขอเก็บถาวร', delete: 'ขอลบไฟล์ถาวร' };
 const TR_REQ_ST = { pending: ['รอเจ้าของตัดสิน', 'st-warn'], approved: ['อนุมัติแล้ว', 'st-ok'], rejected: ['ปฏิเสธ', 'st-bad'], withdrawn: ['ผู้ขอถอนแล้ว', 'st-off'], void: ['ยกเลิก (ไฟล์ถูกลบ/หมดอายุ)', 'st-off'] };
 function trBlank() {
-  return { loaded: false, loading: false, missing: false, v1: false, nofolder: false, openFolders: new Set(), stageSkip: 0, stageNote: '', dirFail: 0, error: '', note: '', files: [], events: [], reqs: [], evMore: false, evFile: null, evTok: 0,
+  return { loaded: false, loading: false, missing: false, v1: false, nofolder: false, nomk: false, marks: [], path: '', stageDirs: [], stageLost: 0, stageSkip: 0, stageNote: '', dirFail: 0, error: '', note: '', files: [], events: [], reqs: [], evMore: false, evFile: null, evTok: 0,
     tok: 0, tab: 'files', cat: '', q: '', mine: false, toMe: false, perm: false, evAct: '', evQ: '', stage: [], stageTags: [], stageKeep: false, queue: [], seq: 0,
     uploading: false, sweeping: false, busy: {}, unseen: 0, pend: 0, tagFor: null, decide: null };
 }
@@ -13043,6 +13090,7 @@ const trRole = () => (currentAdmin ? currentAdmin.role : null);
 const trCanKeep = () => !tr.v1 && (trRole() === 'owner' || trRole() === 'admin');       // ติ๊กถาวรตอนอัปโหลด: เจ้าของ = ตั้งเอง · ผู้ดูแล = ขอ
 const trBadge = () => (tr.unseen || 0) + (tr.pend || 0);
 const trCanFolder = () => !tr.v1 && !tr.nofolder && !tr.missing;                 // ต้องรัน 051 (คอลัมน์ folder_path + p_folder)
+const trCanMark = () => trCanFolder() && !tr.nomk;                              // ต้องรัน 052 ด้วย (สร้างโฟลเดอร์เปล่า)
 function trCleanDir(s) {        // สำเนาของ transfer_clean_folder (ฐานทำซ้ำเสมอ — ที่นี่แค่ให้เห็นผลก่อนส่ง)
   return String(s || '').replace(/\\/g, '/').split('/').map(x => x.replace(/[\u0000-\u001f\u007f]+/g, ' ').trim()).filter(x => x && x !== '.' && x !== '..').map(x => x.slice(0, TR_DIR_SEG));
 }
@@ -13143,17 +13191,19 @@ function trMakeThumb(f) {
   if (!kind) return Promise.resolve(null);
   return Promise.race([trThumbWork(f, kind).catch(() => null), new Promise(r => setTimeout(() => r(null), 12000))]);
 }
-function trThumbHtml(f) {
+function trThumbHtml(f, cls) {
+  cls = cls || 'tr-thumb';
   const id = escapeHtml(f.id);
   const inner = f.thumb && TR_THUMB_OK.test(f.thumb) ? '<img src="' + f.thumb + '" alt="" loading="lazy">' : '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">' + (TR_ICON[f.category] || TR_ICON.other) + '</svg>';
-  return trPreviewable(f) ? '<button class="tr-thumb" type="button" data-act="view" data-id="' + id + '" aria-label="เปิดดู ' + escapeHtml(f.file_name) + '"' + (tr.busy[f.id] ? ' disabled' : '') + '>' + inner + '</button>'
-    : '<span class="tr-thumb" aria-hidden="true">' + inner + '</span>';
+  return trPreviewable(f) ? '<button class="' + cls + '" type="button" data-act="view" data-id="' + id + '" aria-label="เปิดดู ' + escapeHtml(f.file_name) + '"' + (tr.busy[f.id] ? ' disabled' : '') + '>' + inner + '</button>'
+    : '<span class="' + cls + '" aria-hidden="true">' + inner + '</span>';
 }
 
 // ── โหลด ──
 const TR_FILE_COLS = 'id, category, file_name, mime_type, size_bytes, note, uploaded_by, uploaded_at, expires_at, status, uploader:admins!transfer_files_uploaded_by_fkey(full_name)';
 const TR_FILE_COLS2 = TR_FILE_COLS + ', thumb, is_permanent, tags:transfer_tags(admin_id, seen_at, who:admins(full_name))';
 const TR_FILE_COLS3 = TR_FILE_COLS2 + ', folder_path';
+const trMarksQuery = () => db.from('transfer_folders').select('id, path, created_by, created_at, creator:admins!transfer_folders_created_by_fkey(full_name)').order('path').limit(2000);
 const trFilesQuery = cols => db.from('transfer_files').select(cols).eq('status', 'ready').order('uploaded_at', { ascending: false }).limit(1000);
 const trReqQuery = () => db.from('transfer_requests').select('id, file_id, kind, status, created_at, decided_at, decision_note, requester_id, file:transfer_files(file_name, category, size_bytes, status, is_permanent, expires_at), requester:admins!transfer_requests_requester_id_fkey(full_name), decider:admins!transfer_requests_decided_by_fkey(full_name)')
   .order('created_at', { ascending: false }).limit(100);
@@ -13166,7 +13216,7 @@ function trEventsQuery(from) {
 function trCountUnseen() { return tr.files.filter(f => trAlive(f) && (f.tags || []).some(t => t.admin_id === currentUserId && !t.seen_at)).length; }
 function trCountPending() { return isOwner() ? tr.reqs.filter(r => r.status === 'pending' && r.file && r.file.status === 'ready').length : 0; }
 async function trFetch(uid, tok) {
-  let [fr, er, rq] = await Promise.all([trFilesQuery(TR_FILE_COLS3), trEventsQuery(0), trReqQuery()]);
+  let [fr, er, rq, mk] = await Promise.all([trFilesQuery(TR_FILE_COLS3), trEventsQuery(0), trReqQuery(), trMarksQuery()]);
   if (uid !== currentUserId || tok !== tr.tok) return false;            // ออกจากระบบ/สลับบัญชี/มีรอบโหลดใหม่ระหว่างรอ → ทิ้ง
   let v1 = false, nofolder = false;
   if (fr.error && trIsV1(fr.error)) {                                   // ยังไม่รัน 051 → คอลัมน์ของ 050 (ไม่มีโฟลเดอร์)
@@ -13180,10 +13230,12 @@ async function trFetch(uid, tok) {
     rq = { data: [], error: null };
     if (uid !== currentUserId || tok !== tr.tok) return false;
   }
-  if (trIsMissing(fr.error) || trIsMissing(er.error)) { tr.missing = true; tr.v1 = false; tr.nofolder = false; tr.error = ''; tr.files = []; tr.events = []; tr.reqs = []; tr.loaded = true; return true; }
+  if (trIsMissing(fr.error) || trIsMissing(er.error)) { tr.missing = true; tr.v1 = false; tr.nofolder = false; tr.nomk = false; tr.marks = []; tr.path = ''; tr.error = ''; tr.files = []; tr.events = []; tr.reqs = []; tr.loaded = true; return true; }
   tr.missing = false;
-  if (fr.error || er.error || rq.error) { tr.error = 'โหลดข้อมูลโอนไฟล์ไม่สำเร็จ: ' + trErrText(fr.error || er.error || rq.error); return true; }     // ข้อมูลเดิมที่โหลดไว้ยังอยู่ (ไม่ล้างจอเปล่า)
-  tr.v1 = v1; tr.nofolder = nofolder; tr.error = ''; tr.files = fr.data || []; tr.events = er.data || []; tr.reqs = rq.data || []; tr.evMore = (er.data || []).length >= TR_EV_PAGE; tr.loaded = true;
+  const nomk = nofolder || !!(mk.error && (trIsMissing(mk.error) || trIsV1(mk.error)));        // ยังไม่รัน 052 (หรือ 051) — โฟลเดอร์จากพาธไฟล์ยังใช้ได้ แค่สร้างโฟลเดอร์เปล่าไม่ได้
+  const mkErr = nomk ? null : mk.error;
+  if (fr.error || er.error || rq.error || mkErr) { tr.error = 'โหลดข้อมูลโอนไฟล์ไม่สำเร็จ: ' + trErrText(fr.error || er.error || rq.error || mkErr); return true; }     // ข้อมูลเดิมที่โหลดไว้ยังอยู่ (ไม่ล้างจอเปล่า)
+  tr.v1 = v1; tr.nofolder = nofolder; tr.nomk = nomk; tr.marks = nomk ? [] : (mk.data || []); tr.error = ''; tr.files = fr.data || []; tr.events = er.data || []; tr.reqs = rq.data || []; tr.evMore = (er.data || []).length >= TR_EV_PAGE; tr.loaded = true;
   tr.unseen = trCountUnseen(); tr.pend = trCountPending(); updateNavBadges();
   return true;
 }
@@ -13250,9 +13302,10 @@ function trRenderAlert() {
     : tr.error ? '<div class="alert alert-red"><strong>' + escapeHtml(tr.error) + '</strong></div>'
     : (tr.v1 ? '<div class="alert alert-warn">ยังไม่ได้รัน migration 050 — ยังไม่มี Tag พนักงาน รูปตัวอย่าง เก็บถาวร และคำขอ (อัปโหลด เปิดดู ดาวน์โหลด ลบ ใช้ได้ตามปกติ · เพดานไฟล์ยังเป็นค่าเดิมของ 049)</div>' : '')
       + (!tr.v1 && tr.nofolder && !tr.missing ? '<div class="alert alert-warn">ยังไม่ได้รัน migration 051 — อัปโหลดทั้งโฟลเดอร์ยังไม่ได้ (อัปโหลดทีละไฟล์ใช้ได้ตามปกติ)</div>' : '')
+      + (!tr.v1 && !tr.nofolder && tr.nomk && !tr.missing ? '<div class="alert alert-warn">ยังไม่ได้รัน migration 052 — สร้างโฟลเดอร์เปล่าไม่ได้ (โฟลเดอร์จากการอัปโหลดทั้งโฟลเดอร์ใช้ได้ตามปกติ)</div>' : '')
       + (tr.note ? '<div class="alert alert-warn">' + escapeHtml(tr.note) + '</div>' : '');
 }
-function trRowHtml(f, sub) {
+function trFileBits(f) {
   const id = escapeHtml(f.id), life = trLeft(f), dis = tr.busy[f.id] ? ' disabled' : '', role = trRole();
   const pk = trPendingReq(f.id, 'keep'), pd = trPendingReq(f.id, 'delete');
   const btn = (act, label, cls) => '<button class="btn btn-sm' + (cls ? ' ' + cls : '') + ' tr-act" type="button" data-act="' + act + '" data-id="' + id + '"' + dis + '>' + label + '</button>';
@@ -13274,10 +13327,22 @@ function trRowHtml(f, sub) {
   }).join('') + '</div>' : '';
   const pills = (f.is_permanent ? '<span class="st st-ok">ถาวร · Asset</span>' : '') + (life ? '<span class="st ' + life.cls + '">' + life.t + '</span>' : '')
     + (pk ? '<span class="st st-warn">รออนุมัติเก็บถาวร</span>' : '') + (pd ? '<span class="st st-bad">รอเจ้าของอนุมัติการลบ</span>' : '');
-  return '<div class="tr-row" data-id="' + id + '">' + trThumbHtml(f) + '<div class="tr-main"><div class="tr-name">' + (sub ? '<span class="tr-sub">' + escapeHtml(sub) + '/</span>' : '') + escapeHtml(f.file_name) + '</div>' +
+  return { id, acts, tagLine, pills };
+}
+const trSubSpan = sub => sub ? '<span class="tr-sub">' + escapeHtml(sub) + '/</span>' : '';
+function trRowHtml(f, sub) {
+  const b = trFileBits(f);
+  return '<div class="tr-row" data-id="' + b.id + '">' + trThumbHtml(f) + '<div class="tr-main"><div class="tr-name">' + trSubSpan(sub) + escapeHtml(f.file_name) + '</div>' +
     '<div class="tr-meta">' + trSize(f.size_bytes) + ' · ลงโดย ' + escapeHtml(trWho(f.uploader)) + ' · ' + formatDateTime(f.uploaded_at) + '</div>' +
-    (f.note ? '<div class="tr-note">หมายเหตุ: ' + escapeHtml(f.note) + '</div>' : '') + tagLine + '</div>' +
-    (pills ? '<div class="tr-pills">' + pills + '</div>' : '') + '<div class="tr-acts">' + acts.join('') + '</div></div>';
+    (f.note ? '<div class="tr-note">หมายเหตุ: ' + escapeHtml(f.note) + '</div>' : '') + b.tagLine + '</div>' +
+    (b.pills ? '<div class="tr-pills">' + b.pills + '</div>' : '') + '<div class="tr-acts">' + b.acts.join('') + '</div></div>';
+}
+function trCardHtml(f, sub) {                         // การ์ดแบบ Google Drive: รูปตัวอย่างใหญ่ + ชื่อ + ปุ่ม
+  const b = trFileBits(f);
+  return '<div class="tr-card" data-id="' + b.id + '">' + trThumbHtml(f, 'tr-card-thumb') + '<div class="tr-card-body"><div class="tr-name">' + trSubSpan(sub) + escapeHtml(f.file_name) + '</div>' +
+    '<div class="tr-meta">' + trSize(f.size_bytes) + ' · ' + escapeHtml(trWho(f.uploader)) + ' · ' + formatDateTime(f.uploaded_at) + '</div>' +
+    (f.note ? '<div class="tr-note">หมายเหตุ: ' + escapeHtml(f.note) + '</div>' : '') + b.tagLine +
+    (b.pills ? '<div class="tr-pills">' + b.pills + '</div>' : '') + '</div><div class="tr-card-acts">' + b.acts.join('') + '</div></div>';
 }
 function trVisibleFiles() {
   const q = tr.q.trim().toLowerCase();
@@ -13287,63 +13352,146 @@ function trVisibleFiles() {
 }
 function trRenderList() {
   const box = trEl('trList'), chips = trEl('trChips');
-  if (tr.missing) { box.innerHTML = ''; chips.innerHTML = ''; trEl('trFilesN').textContent = ''; return; }
-  if (!tr.loaded) { box.innerHTML = '<div class="empty">' + (tr.loading ? 'กำลังโหลดไฟล์…' : tr.error ? 'โหลดไม่สำเร็จ — กด ↻ รีเฟรช' : '') + '</div>'; chips.innerHTML = ''; return; }
+  if (tr.missing) { box.innerHTML = ''; chips.innerHTML = ''; trEl('trFilesN').textContent = ''; trRenderNav(false); return; }
+  if (!tr.loaded) { box.innerHTML = '<div class="empty">' + (tr.loading ? 'กำลังโหลดไฟล์…' : tr.error ? 'โหลดไม่สำเร็จ — กด ↻ รีเฟรช' : '') + '</div>'; chips.innerHTML = ''; trRenderNav(false); return; }
   const base = trVisibleFiles(), count = k => base.filter(f => f.category === k).length;
   const fa = document.activeElement, keep = fa && fa.classList && fa.classList.contains('tr-chip') ? fa.dataset.cat : null;
   chips.innerHTML = '<button class="tr-chip" type="button" data-cat="" aria-pressed="' + (tr.cat === '') + '">ทั้งหมด <span class="n">' + base.length + '</span></button>' +
     TR_CATS.map(c => '<button class="tr-chip" type="button" data-cat="' + c.k + '" aria-pressed="' + (tr.cat === c.k) + '">' + c.t + ' <span class="n">' + count(c.k) + '</span></button>').join('');
   if (keep !== null) { const again = chips.querySelector('.tr-chip[data-cat="' + keep + '"]'); if (again) again.focus({ preventScroll: true }); }
   trEl('trFilesN').textContent = String(base.length);
+  const fm = trFolderMap();
+  while (tr.path && !fm.has(tr.path)) tr.path = trParent(tr.path);               // โฟลเดอร์ที่เปิดอยู่หายไป (ถูกลบ/ไฟล์หมดอายุ) → ถอยขึ้นชั้นบน
+  if (!trCanFolder()) tr.path = '';
+  const flat = trFlat(), view = trView();
+  trRenderNav(flat);
   const shown = tr.cat ? base.filter(f => f.category === tr.cat) : base;
-  if (!shown.length) { box.innerHTML = '<div class="empty">' + (tr.files.length ? 'ไม่พบไฟล์ที่ตรงกับตัวกรอง' : 'ยังไม่มีไฟล์ — ลากไฟล์มาวางด้านบนเพื่อเริ่มโอนไฟล์ให้ทีม') + '</div>'; return; }
-  const inFolder = !tr.cat && trCanFolder() ? shown.filter(f => f.folder_path) : [], loose = tr.cat || !trCanFolder() ? shown : shown.filter(f => !f.folder_path);
-  box.innerHTML = trFoldersHtml(inFolder) + TR_CATS.map(c => {
-    const items = loose.filter(f => f.category === c.k);
-    return items.length ? '<section class="tr-group" aria-label="' + c.t + '"><h3 class="tr-group-h">' + c.t + ' <span class="en">· ' + c.en + '</span> <span class="n">' + items.length + '</span></h3>' + items.map(f => trRowHtml(f, tr.cat ? f.folder_path : '')).join('') + '</section>' : '';
+  const q = tr.q.trim().toLowerCase();
+  const files = flat ? shown : shown.filter(f => (f.folder_path || '') === tr.path);
+  const folders = flat ? (q && !tr.cat && !tr.mine && !tr.toMe && !tr.perm ? [...fm.values()].filter(e => trLeaf(e.path).toLowerCase().includes(q)) : []) : trChildren(fm, tr.path);
+  if (!files.length && !folders.length) {
+    box.innerHTML = '<div class="empty">' + (!flat && tr.path ? 'โฟลเดอร์นี้ยังว่าง — ลากไฟล์หรือโฟลเดอร์มาวางด้านบนเพื่ออัปโหลดเข้าโฟลเดอร์นี้' : tr.files.length ? 'ไม่พบไฟล์ที่ตรงกับตัวกรอง' : 'ยังไม่มีไฟล์ — ลากไฟล์มาวางด้านบนเพื่อเริ่มโอนไฟล์ให้ทีม') + '</div>';
+    return;
+  }
+  const fHtml = folders.length ? '<section class="tr-group" aria-label="โฟลเดอร์"><h3 class="tr-group-h">โฟลเดอร์ <span class="n">' + folders.length + '</span></h3>' +
+    (view === 'grid' ? '<div class="tr-tiles">' + folders.map(e => trTileHtml(e, flat)).join('') + '</div>' : folders.map(e => trFrowHtml(e, flat)).join('')) + '</section>' : '';
+  box.innerHTML = fHtml + TR_CATS.map(c => {
+    const items = files.filter(f => f.category === c.k);
+    if (!items.length) return '';
+    const body = view === 'grid' ? '<div class="tr-cards">' + items.map(f => trCardHtml(f, flat ? f.folder_path : '')).join('') + '</div>' : items.map(f => trRowHtml(f, flat ? f.folder_path : '')).join('');
+    return '<section class="tr-group" aria-label="' + c.t + '"><h3 class="tr-group-h">' + c.t + ' <span class="en">· ' + c.en + '</span> <span class="n">' + items.length + '</span></h3>' + body + '</section>';
   }).join('');
 }
-// ── โฟลเดอร์ (migration 051): ไฟล์ที่ folder_path ชั้นแรกเดียวกัน + ผู้อัปโหลดคนเดียวกัน = โฟลเดอร์เดียว ──
-const trFolderKey = f => (f.uploaded_by || '') + '|' + String(f.folder_path || '').split('/')[0];
-const TR_FOLDER_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2.5h8.5A1.5 1.5 0 0 1 21 9v9.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5z"/></svg>';
-function trFolderGroups(list) {
+// ── โฟลเดอร์ (051 = พาธของไฟล์ · 052 = ตัวหมายโฟลเดอร์เปล่า) · แสดงแบบ Google Drive: ไอคอนโฟลเดอร์ + เข้าไปทีละชั้น ──
+const TR_VIEW_KEY = 'djlab.transfer.view.v1';
+function trView() { try { return localStorage.getItem(TR_VIEW_KEY) === 'list' ? 'list' : 'grid'; } catch (x) { return 'grid'; } }
+const trParent = p => (p.lastIndexOf('/') < 0 ? '' : p.slice(0, p.lastIndexOf('/')));
+const trLeaf = p => p.slice(p.lastIndexOf('/') + 1);
+const trJoin = (a, b) => (a && b ? a + '/' + b : (a || b || ''));
+const trUnder = (fp, p) => !!p && !!fp && (fp === p || String(fp).indexOf(p + '/') === 0);                 // fp คือ p หรืออยู่ใต้ p
+const trFlat = () => !!(tr.q.trim() || tr.cat || tr.mine || tr.toMe || tr.perm);                           // มีตัวกรอง/ค้นหา = แสดงผลลัพธ์ทุกโฟลเดอร์แบบแบน
+const trPrefixes = p => { const a = String(p).split('/'), out = []; for (let i = 1; i <= a.length; i++) out.push(a.slice(0, i).join('/')); return out; };
+// โฟลเดอร์ทั้งหมดที่รู้จัก: จากพาธของไฟล์ที่ยังอยู่ (นับไฟล์รวมโฟลเดอร์ย่อย) + ตัวหมาย 052 — ชั้นบนของพาธเกิดเองโดยไม่ต้องมีตัวหมาย
+function trFolderMap() {
   const m = new Map();
-  for (const f of list) {
-    const k = trFolderKey(f);
-    if (!m.has(k)) m.set(k, { key: k, top: String(f.folder_path).split('/')[0], by: f.uploaded_by, who: f.uploader, files: [], bytes: 0, last: 0 });
-    const g = m.get(k); g.files.push(f); g.bytes += Number(f.size_bytes) || 0; g.last = Math.max(g.last, Date.parse(f.uploaded_at) || 0);
-  }
-  return [...m.values()].sort((a, b) => b.last - a.last);
+  const touch = p => { let e = m.get(p); if (!e) { e = { path: p, files: 0, bytes: 0, last: 0, mark: null }; m.set(p, e); } return e; };
+  for (const f of tr.files) if (f.folder_path && trAlive(f)) for (const p of trPrefixes(f.folder_path)) { const e = touch(p); e.files++; e.bytes += Number(f.size_bytes) || 0; e.last = Math.max(e.last, Date.parse(f.uploaded_at) || 0); }
+  for (const k of tr.marks) for (const p of trPrefixes(k.path)) { const e = touch(p); if (p === k.path) e.mark = k; }
+  return m;
 }
-function trFoldersHtml(list) {
-  const groups = trFolderGroups(list);
-  if (!groups.length) return '';
-  const searching = !!tr.q.trim();
-  return '<section class="tr-group" aria-label="โฟลเดอร์"><h3 class="tr-group-h">โฟลเดอร์ <span class="n">' + groups.length + '</span></h3>' + groups.map(g => {
-    const files = g.files.slice().sort((a, b) => (String(a.folder_path) + '/' + a.file_name).localeCompare(String(b.folder_path) + '/' + b.file_name, 'th'));
-    const open = searching || tr.openFolders.has(g.key);
-    const canDel = tr.files.some(f => f.folder_path && trFolderKey(f) === g.key && trAlive(f) && trCanDelete(f));
-    return '<details class="tr-folder" data-fk="' + escapeHtml(g.key) + '"' + (open ? ' open' : '') + '><summary>' + TR_FOLDER_ICON +
-      '<span class="tr-fname">' + escapeHtml(g.top) + '</span><span class="tr-meta">' + g.files.length + ' ไฟล์ · ' + trSize(g.bytes) + ' · ลงโดย ' + escapeHtml(trWho(g.who)) + ' · ' + formatDateTime(new Date(g.last).toISOString()) + '</span></summary>' +
-      (canDel ? '<div class="tr-folder-acts"><button class="btn btn-sm btn-danger tr-act" type="button" data-act="dir-del" data-fk="' + escapeHtml(g.key) + '">ลบทั้งโฟลเดอร์</button></div>' : '') +
-      files.map(f => trRowHtml(f, String(f.folder_path).split('/').slice(1).join('/'))).join('') + '</details>';
-  }).join('') + '</section>';
+const trChildren = (m, path) => [...m.values()].filter(e => trParent(e.path) === path).sort((a, b) => trLeaf(a.path).localeCompare(trLeaf(b.path), 'th'));
+// ไอคอนโฟลเดอร์ DJ LAB SIAM: ปกแผ่นเสียง (หลังแดง · หน้าดำ) — มีไฟล์ = แผ่นเสียงโผล่พ้นปก · ว่าง = ปกเปล่า · แถบสามแท่งมุมล่างขวาคือเครื่องวัดระดับของมิกเซอร์
+function trFolderSvg(full, cls) {
+  return '<svg class="tr-fico' + (cls ? ' ' + cls : '') + '" viewBox="2 4 92 72" aria-hidden="true" focusable="false"><path class="fi-back" d="M4 10h30l8 8h50v56H4z"/>' +
+    (full ? '<g class="fi-disc"><circle cx="62" cy="28" r="22"/><circle class="fi-g" cx="62" cy="28" r="17"/><circle class="fi-g" cx="62" cy="28" r="12.5"/><circle class="fi-lbl" cx="62" cy="28" r="7.5"/><circle class="fi-pin" cx="62" cy="28" r="1.9"/></g>' : '') +
+    '<path class="fi-front" d="M4 38h88v36H4z"/><path class="fi-lip" d="M4 38.8h88"/><path class="fi-bars" d="M68 62h4v6h-4zM75 56h4v12h-4zM82 59h4v9h-4z"/></svg>';
 }
-function trAskDeleteFolder(fk) {
-  const all = tr.files.filter(f => f.folder_path && trAlive(f) && trFolderKey(f) === fk);
-  if (!all.length) return;
-  const mine = all.filter(trCanDelete), perm = mine.filter(f => f.is_permanent), left = all.length - mine.length, top = String(all[0].folder_path).split('/')[0];
-  if (!mine.length) return;
-  askConfirm('ลบทั้งโฟลเดอร์?', '<p><strong>' + escapeHtml(top) + '</strong> — ' + mine.length + ' ไฟล์</p>' +
-    (perm.length ? '<p><strong>มีไฟล์ถาวร (Asset) ' + perm.length + ' ไฟล์ — ลบแล้วทีมงานทุกคนใช้ไม่ได้อีก</strong></p>' : '') +
-    (left ? '<p><strong>ไฟล์ ' + left + ' ไฟล์ในโฟลเดอร์นี้ลบไม่ได้ (ไม่ใช่ไฟล์ของคุณ หรือเป็นไฟล์ถาวร) — จะไม่ถูกลบ</strong></p>' : '') +
-    '<p>ลบแล้วทุกคนเปิดไฟล์เหล่านี้ไม่ได้อีกและกู้คืนไม่ได้ — ประวัติการลบ (ใครลบ เมื่อไหร่) ของแต่ละไฟล์จะถูกบันทึกไว้</p>', 'ลบทั้งโฟลเดอร์', () => trDeleteFolder(fk));
+function trFolderDeletables(path) {
+  const files = tr.files.filter(f => f.folder_path && trAlive(f) && trUnder(f.folder_path, path));
+  const marks = tr.marks.filter(k => trUnder(k.path, path));
+  return { files, mine: files.filter(trCanDelete), marks, myMarks: marks.filter(k => isOwner() || k.created_by === currentUserId) };
 }
-async function trDeleteFolder(fk) {
+const trCanDeleteFolder = path => { const d = trFolderDeletables(path); return d.mine.length > 0 || d.myMarks.length > 0; };
+function trTileHtml(e, showPath) {
+  const p = escapeHtml(e.path), name = escapeHtml(trLeaf(e.path)), meta = e.files ? e.files + ' ไฟล์ · ' + trSize(e.bytes) : 'โฟลเดอร์ว่าง';
+  return '<div class="tr-tile" data-path="' + p + '"><button class="tr-tile-open" type="button" data-act="nav" data-path="' + p + '" aria-label="เปิดโฟลเดอร์ ' + name + '">' + trFolderSvg(e.files > 0) +
+    '<span class="tr-tile-txt"><span class="tr-tile-name">' + name + '</span><span class="tr-meta">' + meta + '</span>' + (showPath && trParent(e.path) ? '<span class="tr-meta">ใน ' + escapeHtml(trParent(e.path)) + '</span>' : '') + '</span></button>' +
+    (trCanDeleteFolder(e.path) ? '<button class="btn btn-sm btn-danger tr-act tr-tile-del" type="button" data-act="dir-del" data-path="' + p + '" aria-label="ลบโฟลเดอร์ ' + name + '">ลบ</button>' : '') + '</div>';
+}
+function trFrowHtml(e, showPath) {
+  const p = escapeHtml(e.path), name = escapeHtml(trLeaf(e.path));
+  return '<div class="tr-frow" data-path="' + p + '"><button class="tr-frow-open" type="button" data-act="nav" data-path="' + p + '" aria-label="เปิดโฟลเดอร์ ' + name + '">' + trFolderSvg(e.files > 0, 's') + '<span>' + name + '</span></button>' +
+    '<span class="tr-meta">' + (e.files ? e.files + ' ไฟล์ · ' + trSize(e.bytes) : 'โฟลเดอร์ว่าง') + (showPath && trParent(e.path) ? ' · ใน ' + escapeHtml(trParent(e.path)) : '') + '</span>' +
+    (trCanDeleteFolder(e.path) ? '<div class="tr-acts"><button class="btn btn-sm btn-danger tr-act" type="button" data-act="dir-del" data-path="' + p + '" aria-label="ลบโฟลเดอร์ ' + name + '">ลบ</button></div>' : '') + '</div>';
+}
+function trRenderNav(flat) {
+  const nav = trEl('trCrumbs'), can = trCanFolder();
+  const segs = tr.path ? tr.path.split('/') : [];
+  let acc = '';
+  nav.innerHTML = !can ? '' : flat ? '<span class="tr-flatnote">ผลลัพธ์จากทุกโฟลเดอร์ — ล้างช่องค้นหา/ตัวกรองเพื่อกลับไปเรียกดูตามโฟลเดอร์</span>'
+    : '<button class="tr-crumb" type="button" data-act="nav" data-path=""' + (segs.length ? '' : ' aria-current="page"') + '>' + trFolderSvg(false, 's') + '&nbsp;คลังไฟล์</button>' +
+      segs.map((sg, i) => { acc = trJoin(acc, sg); return '<span class="tr-sep" aria-hidden="true">›</span><button class="tr-crumb" type="button" data-act="nav" data-path="' + escapeHtml(acc) + '"' + (i === segs.length - 1 ? ' aria-current="page"' : '') + '>' + escapeHtml(sg) + '</button>'; }).join('');
+  trEl('trNewFolder').hidden = !trCanMark();
+  const v = trView();
+  document.querySelectorAll('#trViewSw button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.view === v)));
+  const d = trEl('trDest');
+  d.hidden = !(can && tr.path); d.textContent = can && tr.path ? 'อัปโหลดเข้าโฟลเดอร์: ' + tr.path : '';
+}
+function trClearFilters() {
+  tr.q = ''; tr.cat = ''; tr.mine = false; tr.toMe = false; tr.perm = false;
+  trEl('trSearch').value = ''; trEl('trMine').checked = false; trEl('trToMe').checked = false; trEl('trPerm').checked = false;
+}
+// ── สร้างโฟลเดอร์ใหม่ (052) ──
+function trNewOpen() {
+  if (!trCanMark()) return;
+  trEl('trNewName').value = ''; trEl('trNewDlgErr').hidden = true; trEl('trNewDlgErr').textContent = '';
+  trEl('trNewDlgIn').textContent = 'สร้างใน: ' + (tr.path ? tr.path : 'คลังไฟล์ (ชั้นบนสุด)');
+  trEl('trNewDlg').showModal();
+  trEl('trNewName').focus();
+}
+function trNewErr(msg) { const e = trEl('trNewDlgErr'); e.textContent = msg; e.hidden = false; }
+async function trNewSave() {
+  const name = trEl('trNewName').value.replace(/[\u0000-\u001f\u007f]+/g, ' ').trim(), me = tr, uid = currentUserId;
+  if (!name) return trNewErr('กรอกชื่อโฟลเดอร์');
+  if (/[\\/]/.test(name)) return trNewErr('ชื่อโฟลเดอร์ห้ามมี / หรือ \\');
+  if (name === '.' || name === '..') return trNewErr('ชื่อโฟลเดอร์ไม่ถูกต้อง');
+  if (name.length > TR_DIR_SEG) return trNewErr('ชื่อโฟลเดอร์ยาวเกิน ' + TR_DIR_SEG + ' ตัวอักษร');
+  const path = trJoin(tr.path, name);
+  if (path.split('/').length > TR_DIR_MAX_DEPTH) return trNewErr('โฟลเดอร์ซ้อนลึกเกิน ' + TR_DIR_MAX_DEPTH + ' ชั้น');
+  const dup = trChildren(trFolderMap(), tr.path).find(e => trLeaf(e.path).toLowerCase() === name.toLowerCase());
+  if (dup) return trNewErr('มีโฟลเดอร์ชื่อ "' + trLeaf(dup.path) + '" อยู่ในที่นี้แล้ว');
+  const btn = trEl('trNewDlgSave'); btn.disabled = true;
+  try {
+    const r = await db.rpc('transfer_folder_create', { p_path: path });
+    if (tr !== me || uid !== currentUserId) return;
+    if (r.error) return trNewErr(trIsMissing(r.error) ? 'ยังไม่ได้รัน migration 052 ในฐานข้อมูล' : trErrText(r.error));
+    trEl('trNewDlg').close();
+    showToast('สร้างโฟลเดอร์ "' + name + '" แล้ว');
+    const tok = ++tr.tok; if (await trFetch(uid, tok)) renderTransfer();
+  } finally { btn.disabled = false; }
+}
+async function trMakeFolders(dirs) {                // โฟลเดอร์ย่อยว่างตอนอัปโหลดทั้งโฟลเดอร์
   const me = tr, uid = currentUserId;
-  const files = tr.files.filter(f => f.folder_path && trAlive(f) && trFolderKey(f) === fk && trCanDelete(f));
-  if (!files.length || me.busy['dir:' + fk]) return;
-  me.busy['dir:' + fk] = true;
+  const r = await db.rpc('transfer_folder_create_many', { p_paths: dirs });
+  if (tr !== me || uid !== currentUserId) return;
+  if (r.error) { showFatalError('สร้างโฟลเดอร์ว่างไม่สำเร็จ: ' + (trIsMissing(r.error) ? 'ยังไม่ได้รัน migration 052' : trErrText(r.error))); return; }
+  if (r.data) showToast('สร้างโฟลเดอร์ว่าง ' + r.data + ' โฟลเดอร์แล้ว');
+  const tok = ++tr.tok; if (await trFetch(uid, tok)) renderTransfer();
+}
+// ── ลบทั้งโฟลเดอร์ ──
+function trAskDeleteFolder(path) {
+  const d = trFolderDeletables(path);
+  if (!d.mine.length && !d.myMarks.length) return;
+  const perm = d.mine.filter(f => f.is_permanent), left = d.files.length - d.mine.length, keptMarks = d.marks.length - d.myMarks.length;
+  askConfirm('ลบทั้งโฟลเดอร์?', '<p><strong>' + escapeHtml(path) + '</strong> — ' + d.mine.length + ' ไฟล์' + (d.myMarks.length ? ' · โฟลเดอร์ที่สร้างไว้ ' + d.myMarks.length + ' โฟลเดอร์' : '') + ' (รวมโฟลเดอร์ย่อย)</p>' +
+    (perm.length ? '<p><strong>มีไฟล์ถาวร (Asset) ' + perm.length + ' ไฟล์ — ลบแล้วทีมงานทุกคนใช้ไม่ได้อีก</strong></p>' : '') +
+    (left || keptMarks ? '<p><strong>' + (left ? 'ไฟล์ ' + left + ' ไฟล์' : '') + (left && keptMarks ? ' และ ' : '') + (keptMarks ? 'โฟลเดอร์ที่คนอื่นสร้าง ' + keptMarks + ' โฟลเดอร์' : '') + 'ในโฟลเดอร์นี้ลบไม่ได้ (ไม่ใช่ของคุณ หรือเป็นไฟล์ถาวร) — จะไม่ถูกลบ</strong></p>' : '') +
+    '<p>ลบแล้วทุกคนเปิดไฟล์เหล่านี้ไม่ได้อีกและกู้คืนไม่ได้ — ประวัติการลบ (ใครลบ เมื่อไหร่) ของแต่ละไฟล์จะถูกบันทึกไว้</p>', 'ลบทั้งโฟลเดอร์', () => trDeleteFolder(path));
+}
+async function trDeleteFolder(path) {
+  const me = tr, uid = currentUserId, d = trFolderDeletables(path), files = d.mine;
+  if ((!files.length && !d.myMarks.length) || me.busy['dir:' + path]) return;
+  me.busy['dir:' + path] = true;
   let ok = 0, fail = 0, lastErr = '', paths = [], ids = [];
   const flush = async () => {                     // ล้างตัวไฟล์เป็นชุดเล็ก ๆ ระหว่างทาง (สิทธิ์ลบตัวไฟล์ที่ฐานออกให้มีอายุ 5 นาที)
     if (!paths.length) return;
@@ -13356,19 +13504,26 @@ async function trDeleteFolder(fk) {
       if (tr !== me || uid !== currentUserId) return;
       me.busy[f.id] = true;
       try {
-        const d = await db.rpc('transfer_delete', { p_id: f.id });
+        const r = await db.rpc('transfer_delete', { p_id: f.id });
         if (tr !== me || uid !== currentUserId) return;
-        if (d.error) { fail++; lastErr = trErrText(d.error); }
-        else { ok++; if (typeof d.data === 'string' && d.data) { paths.push(d.data); ids.push(f.id); } }
+        if (r.error) { fail++; lastErr = trErrText(r.error); }
+        else { ok++; if (typeof r.data === 'string' && r.data) { paths.push(r.data); ids.push(f.id); } }
       } finally { delete me.busy[f.id]; }
       if (paths.length >= 50) await flush();
     }
     await flush();
     if (tr !== me || uid !== currentUserId) return;
-    if (fail) showFatalError('ลบไฟล์ในโฟลเดอร์ไม่สำเร็จ ' + fail + ' จาก ' + files.length + ' ไฟล์: ' + lastErr);
-    if (ok) showToast('ลบแล้ว ' + ok + ' ไฟล์');
+    let marksGone = 0;
+    if (d.marks.length && !tr.nomk) {                // ตัวหมายโฟลเดอร์ (ลบเฉพาะของตัวเอง/เจ้าของ — ฐานตัดสินซ้ำ)
+      const r = await db.rpc('transfer_folder_delete', { p_path: path });
+      if (tr !== me || uid !== currentUserId) return;
+      if (r.error) { fail++; lastErr = trErrText(r.error); }
+      else { const row = Array.isArray(r.data) ? r.data[0] : r.data; marksGone = row ? Number(row.r_deleted) || 0 : 0; }
+    }
+    if (fail) showFatalError('ลบโฟลเดอร์ไม่สำเร็จบางส่วน (ล้มเหลว ' + fail + ' รายการ จากไฟล์ ' + files.length + ' ไฟล์): ' + lastErr);
+    if (ok || marksGone) showToast('ลบแล้ว ' + ok + ' ไฟล์' + (marksGone ? ' · ' + marksGone + ' โฟลเดอร์' : ''));
   } finally {
-    delete me.busy['dir:' + fk];
+    delete me.busy['dir:' + path];
     if (tr === me && uid === currentUserId) { const tok = ++tr.tok; if (await trFetch(uid, tok)) renderTransfer(); }
   }
 }
@@ -13381,27 +13536,29 @@ function trTagPickHtml(sel, exceptId) {
 function trRenderStage() {
   const box = trEl('trStage');
   const ok = tr.stage.filter(i => i.state === 'ok');
-  box.hidden = !tr.stage.length;
-  if (!tr.stage.length) { trEl('trStageList').innerHTML = ''; return; }
+  box.hidden = !tr.stage.length && !tr.stageDirs.length;
+  if (box.hidden) { trEl('trStageList').innerHTML = ''; return; }
   const keepOn = trCanKeep() && tr.stageKeep, over = keepOn ? ok.filter(i => i.file.size > TR_PERM_MAX) : [];
-  const tops = new Map();
-  for (const i of tr.stage) if (i.dir) { const t = i.dir.split('/')[0], o = tops.get(t) || { n: 0, bytes: 0 }; o.n++; o.bytes += i.file.size; tops.set(t, o); }
-  trEl('trStageHead').textContent = 'รอยืนยันอัปโหลด — ' + ok.length + ' ไฟล์ · ' + trSize(ok.reduce((n, i) => n + i.file.size, 0)) + (tops.size ? ' · จาก ' + tops.size + ' โฟลเดอร์' : '') + ' · ยังไม่ได้อัปโหลด';
+  const tops = new Map();                      // โฟลเดอร์ที่ลากมา/เลือกมา (ชั้นแรกของพาธที่ลากมา — ไม่รวมโฟลเดอร์ปลายทางที่เปิดอยู่)
+  const top = t => { let o = tops.get(t); if (!o) { o = { n: 0, bytes: 0, empty: 0 }; tops.set(t, o); } return o; };
+  for (const i of tr.stage) if (i.top) { const o = top(i.top); o.n++; o.bytes += i.file.size; }
+  for (const d of tr.stageDirs) top(d.top).empty++;
+  trEl('trStageHead').textContent = 'รอยืนยันอัปโหลด — ' + ok.length + ' ไฟล์ · ' + trSize(ok.reduce((n, i) => n + i.file.size, 0)) + (tops.size ? ' · จาก ' + tops.size + ' โฟลเดอร์' : '') + (tr.stageDirs.length ? ' · โฟลเดอร์ว่างที่จะสร้าง ' + tr.stageDirs.length : '') + ' · ยังไม่ได้อัปโหลด';
   const fb = trEl('trStageFolders');
   fb.hidden = !tops.size;
-  fb.innerHTML = [...tops].map(([t, o]) => '<span class="tr-fchip">' + TR_FOLDER_ICON.replace('<svg ', '<svg width="20" height="20" ') + '<span>' + escapeHtml(t) + ' · ' + o.n + ' ไฟล์ · ' + trSize(o.bytes) + '</span><button class="btn btn-sm tr-act" type="button" data-act="stage-rm-dir" data-dir="' + escapeHtml(t) + '" aria-label="เอาโฟลเดอร์ ' + escapeHtml(t) + ' ออกจากรายการ">✕ เอาออก</button></span>').join('');
+  fb.innerHTML = [...tops].map(([t, o]) => '<span class="tr-fchip">' + trFolderSvg(o.n > 0, 's') + '<span>' + escapeHtml(t) + ' · ' + o.n + ' ไฟล์ · ' + trSize(o.bytes) + (o.empty ? ' · โฟลเดอร์ว่าง ' + o.empty : '') + '</span><button class="btn btn-sm tr-act" type="button" data-act="stage-rm-dir" data-dir="' + escapeHtml(t) + '" aria-label="เอาโฟลเดอร์ ' + escapeHtml(t) + ' ออกจากรายการ">✕ เอาออก</button></span>').join('');
   const nt = trEl('trStageNote'); nt.hidden = !tr.stageNote; nt.textContent = tr.stageNote || '';
   trEl('trStageList').innerHTML = tr.stage.map(it => {
     const thumb = it.thumb && TR_THUMB_OK.test(it.thumb) ? '<img src="' + it.thumb + '" alt="" loading="lazy">' : '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">' + TR_ICON[it.guess || 'other'] + '</svg>';
-    return '<div class="tr-row" data-sid="' + it.id + '"><span class="tr-thumb" aria-hidden="true">' + thumb + '</span><div class="tr-main"><div class="tr-name">' + (it.dir ? '<span class="tr-sub">' + escapeHtml(it.dir) + '/</span>' : '') + escapeHtml(it.name) + '</div>' +
+    return '<div class="tr-row" data-sid="' + it.id + '"><span class="tr-thumb" aria-hidden="true">' + thumb + '</span><div class="tr-main"><div class="tr-name">' + trSubSpan(it.dir) + escapeHtml(it.name) + '</div>' +
       '<div class="tr-meta">' + trSize(it.file.size) + '</div>' +
       (it.state === 'bad' ? '<div class="tr-bad">' + escapeHtml(it.msg) + ' — ไฟล์นี้จะไม่ถูกอัปโหลด</div>' : '') +
       (over.indexOf(it) >= 0 ? '<div class="tr-bad">ใหญ่เกินเพดานไฟล์ถาวร ' + trSize(TR_PERM_MAX) + ' — เอาติ๊กถาวรออก หรือเอาไฟล์นี้ออก</div>' : '') + '</div>' +
       '<div class="tr-acts"><button class="btn btn-sm tr-act" type="button" data-act="stage-rm" data-sid="' + it.id + '" aria-label="เอา ' + escapeHtml((it.dir ? it.dir + '/' : '') + it.name) + ' ออกจากรายการ">✕ เอาออก</button></div></div>';
   }).join('');
   const go = trEl('trConfirm');
-  go.textContent = ok.length ? 'ยืนยันอัปโหลด ' + ok.length + ' ไฟล์' : 'ยืนยันอัปโหลด';
-  go.disabled = !ok.length || !!over.length || tr.missing;
+  go.textContent = ok.length ? 'ยืนยันอัปโหลด ' + ok.length + ' ไฟล์' + (tr.stageDirs.length ? ' + สร้างโฟลเดอร์ว่าง ' + tr.stageDirs.length : '') : tr.stageDirs.length ? 'สร้างโฟลเดอร์ว่าง ' + tr.stageDirs.length + ' โฟลเดอร์' : 'ยืนยันอัปโหลด';
+  go.disabled = (!ok.length && !tr.stageDirs.length) || !!over.length || tr.missing;
   trEl('trKeepField').hidden = !trCanKeep();
   trEl('trTagField').hidden = tr.v1;
 }
@@ -13425,7 +13582,7 @@ function trRenderQueue() {
   const cnt = k => tr.queue.filter(i => i.state === k).length;
   box.innerHTML = (tr.queue.length > 30 ? '<div class="tr-qsum" role="status">อัปโหลดแล้ว ' + cnt('ok') + ' จาก ' + tr.queue.length + ' ไฟล์' + (cnt('bad') ? ' · ไม่สำเร็จ ' + cnt('bad') : '') + (hidden ? ' · ซ่อนแถวที่เสร็จแล้ว ' + hidden + ' แถว' : '') + '</div>' : '') + rows.map(it => {
     const pct = it.total ? Math.min(100, Math.floor(it.sent * 100 / it.total)) : null;
-    return '<div class="tr-q"><span class="tr-name">' + (it.dir ? '<span class="tr-sub">' + escapeHtml(it.dir) + '/</span>' : '') + escapeHtml(it.name) + ' <span class="tr-meta">· ' + trSize(it.file.size) + '</span></span>' +
+    return '<div class="tr-q"><span class="tr-name">' + trSubSpan(it.dir) + escapeHtml(it.name) + ' <span class="tr-meta">· ' + trSize(it.file.size) + '</span></span>' +
       '<span class="st ' + ST[it.state][1] + '">' + ST[it.state][0] + (it.state === 'up' && pct !== null ? ' ' + pct + '%' : '') + '</span>' +
       (it.state === 'wait' || (it.state === 'up' && it.cancelTus) ? '<button class="btn btn-sm" type="button" data-act="q-cancel" data-qid="' + it.id + '">ยกเลิก</button>' : '') +
       (it.state === 'up' && pct !== null ? '<span class="tr-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + pct + '" aria-label="ความคืบหน้า ' + escapeHtml((it.dir ? it.dir + '/' : '') + it.name) + '"><i style="width:' + pct + '%"></i></span><span class="tr-meta" style="flex:1 1 100%;">' + trSize(it.sent) + ' จาก ' + trSize(it.total) + '</span>' : '') +
@@ -13487,12 +13644,13 @@ function trTab(name) {
 function trReset() {
   for (const it of tr.queue) if (it.cancelTus) it.cancelTus();       // ตัวอัปโหลดที่ค้างของคนเดิม — หยุด
   tr = trBlank();
-  ['trAlert', 'trList', 'trLog', 'trQueue', 'trChips', 'trEvFile', 'trStageList', 'trTagPick', 'trReqPending', 'trReqDone', 'trTagDlgPick'].forEach(id => { trEl(id).innerHTML = ''; });
+  ['trAlert', 'trList', 'trLog', 'trQueue', 'trChips', 'trCrumbs', 'trEvFile', 'trStageList', 'trStageFolders', 'trTagPick', 'trReqPending', 'trReqDone', 'trTagDlgPick'].forEach(id => { trEl(id).innerHTML = ''; });
   ['trFilesN', 'trLogCount', 'trReqN', 'trKeepText', 'trTagDlgFile'].forEach(id => { trEl(id).textContent = ''; });
-  ['trNote', 'trSearch', 'trEvSearch', 'trFile', 'trDir', 'trDecideNote'].forEach(id => { trEl(id).value = ''; });
+  ['trNote', 'trSearch', 'trEvSearch', 'trFile', 'trDir', 'trDecideNote', 'trNewName'].forEach(id => { trEl(id).value = ''; });
   trEl('trEvAct').value = ''; trEl('trMine').checked = false; trEl('trToMe').checked = false; trEl('trPerm').checked = false; trEl('trKeep').checked = false;
   trEl('trLogMore').hidden = true; trEl('trUpload').hidden = false; trEl('trStage').hidden = true; trEl('trReqTab').hidden = false;
-  ['trTagDlg', 'trDecideDlg'].forEach(id => { const d = trEl(id); if (d.open) d.close(); });
+  ['trTagDlg', 'trDecideDlg', 'trNewDlg'].forEach(id => { const d = trEl(id); if (d.open) d.close(); });
+  trEl('trNewDlgErr').hidden = true; trEl('trNewDlgErr').textContent = ''; trEl('trDest').hidden = true; trEl('trDest').textContent = '';
   trEl('trTagDlgErr').hidden = true; trEl('trTagDlgErr').textContent = ''; trEl('trDecideErr').hidden = true; trEl('trDecideErr').textContent = '';
   closeConfirm();                                   // หน้าต่างยืนยันลบเก็บชื่อไฟล์ไว้ใน DOM
   trTab('files');
@@ -13514,28 +13672,38 @@ function trPickEntries(list, info) {
   info = info || {};
   if (!currentUserId || tr.missing) return;
   let skipped = info.skipped || 0;
+  const baseSegs = trCanFolder() && tr.path ? tr.path.split('/') : [];                // ปลายทาง = โฟลเดอร์ที่เปิดอยู่ ณ ตอนวาง/เลือก
   const pickable = [];
   for (const e of list) {
-    const segs = trCleanDir(e.dir);
-    if (segs.length && TR_JUNK.test(trBase(e.file.name))) { skipped++; continue; }
-    pickable.push({ file: e.file, segs });
+    const rel = trCleanDir(e.dir);
+    if (rel.length && TR_JUNK.test(trBase(e.file.name))) { skipped++; continue; }
+    pickable.push({ file: e.file, rel, segs: baseSegs.concat(rel) });
   }
-  const dirs = pickable.filter(e => e.segs.length);
+  const dirs = pickable.filter(e => e.rel.length);
   let noFolder = false;
   if (dirs.length && !trCanFolder()) { noFolder = true; showFatalError('อัปโหลดโฟลเดอร์ไม่ได้: ยังไม่ได้รัน migration 051 ในฐานข้อมูล — อัปโหลดทีละไฟล์ได้ตามปกติ'); }
   else if (dirs.length > TR_DIR_MAX_FILES) { noFolder = true; showFatalError('โฟลเดอร์มี ' + dirs.length + ' ไฟล์ — เกิน ' + TR_DIR_MAX_FILES + ' ไฟล์ต่อครั้ง กรุณาแยกอัปโหลดทีละโฟลเดอร์ย่อย'); }
   if (info.errors) showFatalError('อ่านไฟล์ในโฟลเดอร์ไม่ได้ ' + info.errors + ' รายการ (อาจไม่มีสิทธิ์อ่านหรือไฟล์ถูกย้าย) — รายการเหล่านั้นไม่ถูกนำเข้า');
-  const use = pickable.filter(e => !(noFolder && e.segs.length));
-  if (!use.length) {
+  const use = pickable.filter(e => !(noFolder && e.rel.length));
+  // โฟลเดอร์ย่อยว่างที่ลากมา → สร้างเป็นตัวหมาย (052) · ยังไม่รัน 052 = ไม่สร้างและบอกในรอยืนยัน
+  const emptyRel = (info.emptyDirs || []).map(d => trCleanDir(d)).filter(a => a.length);
+  const newDirs = [];
+  if (!noFolder && emptyRel.length) {
+    if (!trCanMark()) tr.stageLost += emptyRel.length;
+    else for (const a of emptyRel) { const full = baseSegs.concat(a).join('/'); if (a.length + baseSegs.length <= TR_DIR_MAX_DEPTH && full.length <= TR_DIR_MAX_LEN && !tr.stageDirs.some(d => d.path === full) && !newDirs.some(d => d.path === full)) newDirs.push({ path: full, top: a[0] }); }
+    if (tr.stageDirs.length + newDirs.length > 200) { newDirs.length = 0; showFatalError('โฟลเดอร์ว่างเกิน 200 โฟลเดอร์ต่อครั้ง — กรุณาแยกอัปโหลด'); }
+  }
+  if (!use.length && !newDirs.length) {
     if (noFolder) return;                               // แจ้งเหตุไปแล้วข้างบน
     if (info.folders || skipped) showFatalError(skipped ? 'โฟลเดอร์นี้มีแต่ไฟล์ระบบ (' + skipped + ' ไฟล์ เช่น .DS_Store) — ไม่มีไฟล์ให้อัปโหลด' : 'โฟลเดอร์ว่าง — ไม่มีไฟล์ให้อัปโหลด');
     return;
   }
   tr.stageSkip += skipped;
+  for (const d of newDirs) tr.stageDirs.push(d);
   const me = tr, first = !tr.stage.length;
   for (const e of use) {
     const f = e.file;
-    const it = { id: ++tr.seq, file: f, name: trBase(f.name), dir: e.segs.join('/'), state: 'ok', msg: '', thumb: null, tp: null, guess: trThumbKind(f) === 'img' ? 'photo' : trThumbKind(f) === 'vid' ? 'video' : 'other' };
+    const it = { id: ++tr.seq, file: f, name: trBase(f.name), dir: e.segs.join('/'), top: e.rel[0] || '', state: 'ok', msg: '', thumb: null, tp: null, guess: trThumbKind(f) === 'img' ? 'photo' : trThumbKind(f) === 'vid' ? 'video' : 'other' };
     if (f.size === 0) { it.state = 'bad'; it.msg = 'ไฟล์ว่างเปล่า (0 ไบต์)'; }
     else if (f.size > TR_MAX) { it.state = 'bad'; it.msg = 'ไฟล์ใหญ่เกิน ' + trSize(TR_MAX) + ' (ไฟล์นี้ ' + trSize(f.size) + ')'; }
     else if (e.segs.length > TR_DIR_MAX_DEPTH) { it.state = 'bad'; it.msg = 'โฟลเดอร์ซ้อนลึกเกิน ' + TR_DIR_MAX_DEPTH + ' ชั้น'; }
@@ -13546,7 +13714,7 @@ function trPickEntries(list, info) {
     }
     tr.stage.push(it);
   }
-  if (tr.stageSkip) tr.stageNote = 'ข้ามไฟล์ระบบ ' + tr.stageSkip + ' ไฟล์ (.DS_Store, Thumbs.db ฯลฯ) — ไม่อัปโหลดให้';
+  tr.stageNote = [tr.stageSkip ? 'ข้ามไฟล์ระบบ ' + tr.stageSkip + ' ไฟล์ (.DS_Store, Thumbs.db ฯลฯ) — ไม่อัปโหลดให้' : '', tr.stageLost ? 'โฟลเดอร์ย่อยว่าง ' + tr.stageLost + ' โฟลเดอร์จะไม่ถูกสร้าง (ต้องรัน migration 052)' : ''].filter(Boolean).join(' · ');
   if (first) trRenderStageControls();
   trRenderStage();
   const box = trEl('trStage'); if (box && box.scrollIntoView && first) box.scrollIntoView({ block: 'nearest' });
@@ -13564,6 +13732,7 @@ async function trWalk(entry, base, out, st) {
     await new Promise(res => entry.file(f => { out.push({ file: f, dir: base }); if (base && ++st.n > TR_DIR_MAX_FILES) st.over = true; res(); }, () => { st.errors++; res(); }));
   } else if (entry.isDirectory) {
     const dir = base ? base + '/' + entry.name : entry.name, r = entry.createReader();
+    st.dirs.push(dir);
     for (;;) {
       let part = [];
       try { part = await trReadAll(r); } catch (x) { st.errors++; break; }
@@ -13576,16 +13745,19 @@ async function trDropped(dt) {
   const files = [...(dt.files || [])];
   const entries = [...(dt.items || [])].map(i => (i.kind === 'file' && i.webkitGetAsEntry) ? i.webkitGetAsEntry() : null);
   if (!entries.some(e => e && e.isDirectory)) { trPick(files); return; }              // ไม่มีโฟลเดอร์ = ทางเดิม
-  const me = tr, out = [], st = { skipped: 0, errors: 0, over: false, n: 0 };
+  const me = tr, out = [], st = { skipped: 0, errors: 0, over: false, n: 0, dirs: [] };
   for (const e of entries) { if (e) await trWalk(e, '', out, st); if (st.over) break; }
   if (tr !== me) return;
   if (st.over) { showFatalError('โฟลเดอร์มีไฟล์เกิน ' + TR_DIR_MAX_FILES + ' ไฟล์ต่อครั้ง กรุณาแยกอัปโหลดทีละโฟลเดอร์ย่อย'); return; }
-  trPickEntries(out, { skipped: st.skipped, errors: st.errors, folders: true });
+  const fileDirs = new Set(out.map(x => x.dir).filter(Boolean));                       // โฟลเดอร์ย่อยที่ไม่มีไฟล์เลย (รวมที่มีแต่ไฟล์ระบบ) → ส่งไปสร้างเป็นโฟลเดอร์ว่าง
+  const hasFile = d => { for (const fd of fileDirs) if (fd === d || fd.indexOf(d + '/') === 0) return true; return false; };
+  const empties = st.dirs.filter(d => !hasFile(d));
+  trPickEntries(out, { skipped: st.skipped, errors: st.errors, folders: true, emptyDirs: empties.filter(d => !empties.some(o => o !== d && o.indexOf(d + '/') === 0)) });
 }
-function trStageClear() { tr.stage = []; tr.stageSkip = 0; tr.stageNote = ''; tr.stageTags = []; tr.stageKeep = false; trEl('trNote').value = ''; trEl('trKeep').checked = false; trRenderStage(); }
+function trStageClear() { tr.stage = []; tr.stageDirs = []; tr.stageLost = 0; tr.stageSkip = 0; tr.stageNote = ''; tr.stageTags = []; tr.stageKeep = false; trEl('trNote').value = ''; trEl('trKeep').checked = false; trRenderStage(); }
 function trConfirm() {
-  const ok = tr.stage.filter(i => i.state === 'ok');
-  if (!ok.length || !currentUserId || tr.missing) return;
+  const ok = tr.stage.filter(i => i.state === 'ok'), dirs = tr.stageDirs.map(d => d.path);
+  if ((!ok.length && !dirs.length) || !currentUserId || tr.missing) return;
   const keep = trCanKeep() && tr.stageKeep;
   if (keep && ok.some(i => i.file.size > TR_PERM_MAX)) return;
   const note = trEl('trNote').value.trim().slice(0, 300), tags = tr.v1 ? [] : tr.stageTags.slice();
@@ -13595,6 +13767,7 @@ function trConfirm() {
   trStageClear();
   trRenderQueue();
   trUploadLoop();
+  if (dirs.length) trMakeFolders(dirs);
 }
 
 // ── อัปโหลด ──
@@ -13905,6 +14078,7 @@ trEl('sec-transfer').addEventListener('click', e => {
   const b = e.target.closest('[data-act]');
   if (!b) return;
   const act = b.dataset.act, id = b.dataset.id;
+  if (act === 'nav') { trClearFilters(); tr.path = b.dataset.path || ''; trRenderList(); return; }
   if (act === 'view' || act === 'download') trOpen(id, act);
   else if (act === 'delete') trAskDelete(id);
   else if (act === 'hist') trHistory(id);
@@ -13919,8 +14093,8 @@ trEl('sec-transfer').addEventListener('click', e => {
   else if (act === 'ev-all') { tr.evFile = null; tr.events = []; tr.evMore = false; trRenderLog(); trLoadEvents(false); }
   else if (act === 'q-clear') { tr.queue = tr.queue.filter(i => i.state === 'wait' || i.state === 'up'); trRenderQueue(); }
   else if (act === 'q-cancel') trCancel(Number(b.dataset.qid));
-  else if (act === 'dir-del') trAskDeleteFolder(b.dataset.fk);
-  else if (act === 'stage-rm-dir') { const t = b.dataset.dir; tr.stage = tr.stage.filter(i => !i.dir || (i.dir !== t && i.dir.indexOf(t + '/') !== 0)); trRenderStage(); }
+  else if (act === 'dir-del') trAskDeleteFolder(b.dataset.path);
+  else if (act === 'stage-rm-dir') { const t = b.dataset.dir; tr.stage = tr.stage.filter(i => i.top !== t); tr.stageDirs = tr.stageDirs.filter(d => d.top !== t); trRenderStage(); }
   else if (act === 'stage-rm') { tr.stage = tr.stage.filter(i => i.id !== Number(b.dataset.sid)); trRenderStage(); }
 });
 trEl('trTabs').addEventListener('click', e => { const b = e.target.closest('.mail-tab'); if (b && !b.hidden) trTab(b.dataset.tab); });
@@ -13936,10 +14110,15 @@ trEl('trDrop').addEventListener('click', () => { const i = trEl('trFile'); i.val
 trEl('trFile').addEventListener('change', e => trPick(e.target.files || []));
 trEl('trDirBtn').addEventListener('click', () => { const i = trEl('trDir'); i.value = ''; i.click(); });
 trEl('trDir').addEventListener('change', e => { const l = [...(e.target.files || [])]; if (!l.length) { showFatalError('โฟลเดอร์ว่าง — ไม่มีไฟล์ให้อัปโหลด'); return; } trPick(l); });
-trEl('trList').addEventListener('toggle', e => {            // จำโฟลเดอร์ที่กางไว้ข้ามการวาดใหม่ (toggle ไม่ bubble — ฟังตอน capture)
-  const d = e.target; if (!d || !d.matches || !d.matches('details.tr-folder')) return;
-  if (d.open) tr.openFolders.add(d.dataset.fk); else tr.openFolders.delete(d.dataset.fk);
-}, true);
+trEl('trViewSw').addEventListener('click', e => {           // สลับไอคอน/รายการ (จำต่อเครื่อง)
+  const b = e.target.closest('button[data-view]'); if (!b) return;
+  try { localStorage.setItem(TR_VIEW_KEY, b.dataset.view); } catch (x) { /* ไม่เป็นไร — ใช้ค่าเดิมในรอบนี้ */ }
+  trRenderList();
+});
+trEl('trNewFolder').addEventListener('click', () => trNewOpen());
+trEl('trNewDlgSave').addEventListener('click', () => trNewSave());
+trEl('trNewDlgCancel').addEventListener('click', () => trEl('trNewDlg').close());
+trEl('trNewName').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); trNewSave(); } });
 trEl('trConfirm').addEventListener('click', () => trConfirm());
 trEl('trStageClear').addEventListener('click', () => trStageClear());
 trEl('trKeep').addEventListener('change', e => { tr.stageKeep = e.target.checked; trRenderStage(); });

@@ -12,13 +12,13 @@
  *   · transfer_delete: ไฟล์ปกติ = ผู้อัปโหลดหรือเจ้าของ · ไฟล์ถาวร = เจ้าของเท่านั้น · transfer_sweep: ครบ 30 วัน → expired (ไฟล์ถาวรไม่) + คำขอที่ค้างของไฟล์ตายถูก void
  *   · transfer_set_permanent (เจ้าของ) · transfer_request_keep / request_delete (ผู้ดูแล) · transfer_request_decide (เจ้าของ · ปฏิเสธต้องมีเหตุผล · ไฟล์ตายแล้ว = void)
  *     transfer_request_withdraw (ผู้ยื่น) · transfer_set_tags (ผู้อัปโหลด/เจ้าของ) · transfer_unseen_count / transfer_pending_count (ตัวเลขข้างเมนู)
- * ตัวควบคุมจากเทสต์: window.TRN.seed() ใส่ข้อมูลตั้งต้น · TRN.fail = { select, rpc_<ชื่อ>, upload, remove, sign } · TRN.missing (ยังไม่รัน 049) · TRN.v1 (รัน 049 แล้วแต่ยังไม่รัน 050) · TRN.v2 (รัน 050 แล้วแต่ยังไม่รัน 051 — ไม่มี folder_path/p_folder) · TRN.noBucket
+ * ตัวควบคุมจากเทสต์: window.TRN.seed() ใส่ข้อมูลตั้งต้น · TRN.fail = { select, rpc_<ชื่อ>, upload, remove, sign } · TRN.missing (ยังไม่รัน 049) · TRN.v1 (รัน 049 แล้วแต่ยังไม่รัน 050) · TRN.v2 (รัน 050 แล้วแต่ยังไม่รัน 051 — ไม่มี folder_path/p_folder) · TRN.v3 (รัน 051 แล้วแต่ยังไม่รัน 052 — ไม่มีตาราง transfer_folders) · TRN.folders = ตัวหมายโฟลเดอร์ · TRN.noBucket
  *   TRN.gateSelect / TRN.gateUpload / TRN.gateTus = Promise ที่ค้างคำตอบ · TRN.tus = { mode: 'ok' | 'hang' | 'error:<สถานะ>', body } · TRN.tusCalls / tusHeaders / tusAborts = ร่องรอยของตัวอัปโหลดแบบต่อได้
  *   TRN.writes = ความพยายามเขียนตารางตรง ๆ · TRN.uploads / TRN.signed / TRN.removed = ร่องรอยฝั่ง Storage
  * ผู้ใช้ (ล็อกอินด้วยชื่อขึ้นต้น): tibass=เจ้าของ(u1) · zen/nutty=พนักงาน(u2/u3) · nui=ผู้ดูแล(u4) · evil=พนักงานชื่อมี HTML(u8) · ghost=พนักงานที่ถูกปิด(u7)
  */
 export const TRANSFER_MOCK = `<script>
-const TRN = { files: [], tags: [], reqs: [], events: [], grants: [], objects: new Map(), uploads: [], signed: [], removed: [], writes: [], fail: {}, missing: false, v1: false, v2: false, noBucket: false,
+const TRN = { files: [], tags: [], reqs: [], events: [], grants: [], objects: new Map(), uploads: [], signed: [], removed: [], writes: [], fail: {}, missing: false, v1: false, v2: false, v3: false, folders: [], noBucket: false,
   gateSelect: null, gateUpload: null, gateTus: null, tus: { mode: 'ok', body: '' }, tusCalls: [], tusHeaders: [], tusAborts: [], main: null, seq: 0, tick: 0 };
 (function () {
   FAKE.admins.push({ id: 'u4', full_name: 'Nui', role: 'admin', is_active: true }, { id: 'u7', full_name: 'Ghost', role: 'staff', is_active: false },
@@ -74,7 +74,7 @@ const TRN = { files: [], tags: [], reqs: [], events: [], grants: [], objects: ne
 
   TRN.seed = () => {
     TRN.files = []; TRN.tags = []; TRN.reqs = []; TRN.events = []; TRN.grants = []; TRN.objects = new Map(); TRN.uploads = []; TRN.signed = []; TRN.removed = []; TRN.writes = [];
-    TRN.fail = {}; TRN.missing = false; TRN.v1 = false; TRN.v2 = false; TRN.noBucket = false; TRN.gateSelect = null; TRN.gateUpload = null; TRN.gateTus = null; TRN.tus = { mode: 'ok', body: '' };
+    TRN.fail = {}; TRN.missing = false; TRN.v1 = false; TRN.v2 = false; TRN.v3 = false; TRN.folders = []; TRN.noBucket = false; TRN.gateSelect = null; TRN.gateUpload = null; TRN.gateTus = null; TRN.tus = { mode: 'ok', body: '' };
     TRN.tusCalls = []; TRN.tusHeaders = []; TRN.tusAborts = []; TRN.seq = 0; TRN.tick = 0;
     const add = (id, cat, name, by, daysLeft, extra) => {
       const f = Object.assign({ id, status: 'ready', category: cat, file_name: name, mime_type: null, size_bytes: 2 * MB, note: null, object_path: cat + '/' + id + '.bin', thumb: null, folder_path: null,
@@ -126,7 +126,8 @@ const TRN = { files: [], tags: [], reqs: [], events: [], grants: [], objects: ne
       if ((TRN.v1 || TRN.v2) && table === 'transfer_files' && /folder_path/.test(q._cols)) return E('column transfer_files.folder_path does not exist', '42703');      // ยังไม่รัน 051
       if (TRN.fail.select) return E(TRN.fail.select);
       if (!active(me)) return OK([]);
-      let rows = table === 'transfer_files' ? TRN.files.filter(f => VISIBLE.indexOf(f.status) >= 0) : table === 'transfer_requests' ? TRN.reqs.slice() : TRN.events.slice();
+      if (table === 'transfer_folders' && (TRN.v1 || TRN.v2 || TRN.v3)) return E('Could not find the table \\'public.transfer_folders\\' in the schema cache', 'PGRST205');      // ยังไม่รัน 052
+      let rows = table === 'transfer_files' ? TRN.files.filter(f => VISIBLE.indexOf(f.status) >= 0) : table === 'transfer_requests' ? TRN.reqs.slice() : table === 'transfer_folders' ? TRN.folders.filter(k => !k.deleted_at) : TRN.events.slice();
       q._eq.forEach(e => { rows = rows.filter(r => r[e[0]] === e[1]); });
       if (q._order) rows = rows.slice().sort((a, b) => (a[q._order[0]] < b[q._order[0]] ? -1 : a[q._order[0]] > b[q._order[0]] ? 1 : 0) * q._order[1]);
       rows = rows.slice(q._from, q._to + 1).map(r => {
@@ -136,6 +137,8 @@ const TRN = { files: [], tags: [], reqs: [], events: [], grants: [], objects: ne
           if (TRN.v1) ['thumb', 'is_permanent', 'permanent_at', 'permanent_by', 'keep_wanted'].forEach(k => { delete o[k]; });      // ฐานที่ยังไม่รัน 050 ไม่มีคอลัมน์เหล่านี้
           o.uploader = r.uploaded_by ? { full_name: nameOf(r.uploaded_by) } : null;
           if (/transfer_tags/.test(q._cols)) o.tags = TRN.tags.filter(t => t.file_id === r.id).map(t => ({ admin_id: t.admin_id, seen_at: t.seen_at, who: { full_name: nameOf(t.admin_id) } }));
+        } else if (table === 'transfer_folders') {
+          o.creator = r.created_by ? { full_name: nameOf(r.created_by) } : null;
         } else if (table === 'transfer_requests') {
           const f = find(r.file_id);
           o.file = f ? { file_name: f.file_name, category: f.category, size_bytes: f.size_bytes, status: f.status, is_permanent: f.is_permanent, expires_at: f.expires_at } : null;
@@ -160,7 +163,33 @@ const TRN = { files: [], tags: [], reqs: [], events: [], grants: [], objects: ne
     const j = segs.join('/');
     return j.length > 400 ? { err: 'ชื่อโฟลเดอร์ยาวเกิน 400 ตัวอักษร' } : { v: j };
   };
+  const lc = x => String(x || '').toLowerCase();
+  const markFolder = (me, path) => {                // สำเนา transfer_folder_mark ของ 052
+    const fl = cleanFolder(path); if (fl.err) return { err: fl.err };
+    if (fl.v == null) return { err: 'ชื่อโฟลเดอร์ไม่ถูกต้อง' };
+    if (TRN.folders.some(k => !k.deleted_at && lc(k.path) === lc(fl.v))) return { v: fl.v, created: false };
+    if (TRN.folders.filter(k => !k.deleted_at).length >= 2000) return { err: 'สร้างโฟลเดอร์ได้ไม่เกิน 2,000 โฟลเดอร์ — ลบโฟลเดอร์ที่ไม่ใช้ก่อน' };
+    TRN.folders.push({ id: 'k' + (++TRN.seq), path: fl.v, created_by: me, created_at: stamp(), deleted_at: null, deleted_by: null });
+    return { v: fl.v, created: true };
+  };
   const RPC = {
+    transfer_folder_create(me, a) {
+      if (!role(me)) return E(NOAUTH, '42501');
+      const r = markFolder(me, a.p_path); return r.err ? E(r.err) : OK(r.v);
+    },
+    transfer_folder_create_many(me, a) {
+      if (!role(me)) return E(NOAUTH, '42501');
+      const ps = a.p_paths || []; if (ps.length > 200) return E('สร้างโฟลเดอร์ได้ไม่เกิน 200 โฟลเดอร์ต่อครั้ง');
+      let n = 0; for (const p of ps) { const r = markFolder(me, p); if (r.err) return E(r.err); if (r.created) n++; }
+      return OK(n);
+    },
+    transfer_folder_delete(me, a) {
+      const rl = role(me); if (!rl) return E(NOAUTH, '42501');
+      const fl = cleanFolder(a.p_path); if (fl.err || fl.v == null) return E(fl.err || 'ชื่อโฟลเดอร์ไม่ถูกต้อง');
+      const hit = TRN.folders.filter(k => !k.deleted_at && (lc(k.path) === lc(fl.v) || lc(k.path).indexOf(lc(fl.v) + '/') === 0));
+      let del = 0; hit.forEach(k => { if (rl === 'owner' || k.created_by === me) { k.deleted_at = stamp(); k.deleted_by = me; del++; } });
+      return OK([{ r_deleted: del, r_kept: hit.length - del }]);
+    },
     transfer_begin(me, a) {
       const rl = role(me);
       if (!rl) return E(NOAUTH, '42501');
@@ -389,7 +418,7 @@ const TRN = { files: [], tags: [], reqs: [], events: [], grants: [], objects: ne
   window.supabase.createClient = (u, k, o) => {
     const c = create(u, k, o), from = c.from, rpc = c.rpc;
     if (c.isMain) TRN.main = c;
-    c.from = t => (t === 'transfer_files' || t === 'transfer_events' || t === 'transfer_requests') ? builder(c, t) : from(t);
+    c.from = t => (t === 'transfer_files' || t === 'transfer_events' || t === 'transfer_requests' || t === 'transfer_folders') ? builder(c, t) : from(t);
     c.rpc = async (fn, args) => {
       if (!RPC[fn]) return rpc(fn, args);
       const me = c.session && c.session.user.id;
@@ -400,6 +429,7 @@ const TRN = { files: [], tags: [], reqs: [], events: [], grants: [], objects: ne
       if (TRN.v1 && (V2_FN.indexOf(fn) >= 0 || (fn === 'transfer_begin' && ('p_tags' in a || 'p_keep' in a || 'p_folder' in a)) || (fn === 'transfer_commit' && 'p_thumb' in a))) {
         return E('Could not find the function public.' + fn + ' in the schema cache', 'PGRST202');
       }
+      if ((TRN.v1 || TRN.v2 || TRN.v3) && /^transfer_folder_(create|create_many|delete)$/.test(fn)) return E('Could not find the function public.' + fn + ' in the schema cache', 'PGRST202');
       if (TRN.v2 && fn === 'transfer_begin' && 'p_folder' in a) return E('Could not find the function public.transfer_begin in the schema cache', 'PGRST202');
       return RPC[fn](me, a);
     };
