@@ -194,6 +194,9 @@ async function runTests() {
   const sb = rpcs('transfer_begin').length, su = TRN.uploads.length;
   const sA = mkFile('stage-a.mp3', 'audio/mpeg'), sB = mkFile('stage-b.pdf', 'application/pdf'), sC = mkFile('stage-empty.txt', 'text/plain', '');
   ok('ก่อนวางไฟล์: ไม่มีกล่องรอยืนยัน', $('trStage').hidden);
+  await stage([mkFile('<img src=x onerror=window.XSS=5>.png', 'image/png', 'ไม่ใช่รูปจริง')]);
+  ok('ชื่อไฟล์ที่เป็น HTML ในรายการรอยืนยันแสดงเป็นข้อความ ไม่รันสคริปต์ ไม่สร้างแท็กจริง', window.XSS === undefined && txt('trStageList').indexOf('<img src=x onerror=window.XSS=5>.png') >= 0 && !document.querySelector('#trStageList .tr-name img'));
+  $('trStageClear').click(); await sleep(50);
   await stage([sA, sB, sC]);
   ok('วางไฟล์ → ขึ้นรายการ "รอยืนยัน" 3 ไฟล์ · ยังไม่เรียกฐาน · ยังไม่อัปโหลดอะไรเลย', !$('trStage').hidden && $('trStageList').querySelectorAll('.tr-row').length === 3 && rpcs('transfer_begin').length === sb && TRN.uploads.length === su && tr.queue.length === 0);
   ok('หัวรอยืนยันบอกจำนวนที่จะอัปโหลด (ไม่นับไฟล์ที่ไม่ผ่าน) และย้ำว่ายังไม่ได้อัปโหลด', /2 ไฟล์/.test(txt('trStageHead')) && /ยังไม่ได้อัปโหลด/.test(txt('trStageHead')), txt('trStageHead'));
@@ -481,6 +484,9 @@ async function runTests() {
   ok('เจ้าของติ๊กถาวร → transfer_begin ส่ง p_keep = true · ฐานตั้งเป็นไฟล์ถาวรทันที · คิวบอก "ตั้งเป็นไฟล์ถาวรแล้ว"', kcall.args.p_keep === true && /ตั้งเป็นไฟล์ถาวรแล้ว/.test(txt('trQueue')) && TRN.files.find(f => f.file_name === 'ok-asset.png').is_permanent === true, JSON.stringify(kcall.args));
   ok('แถวไฟล์ถาวรใหม่: ป้าย "ถาวร · Asset" ไม่มีนับถอยหลัง · ไม่มีคำขอ', /ถาวร · Asset/.test(fileRow('ok-asset.png').textContent) && !/เหลือ/.test(fileRow('ok-asset.png').textContent) && !TRN.reqs.some(q => q.file_id === fid('ok-asset.png')));
   clearQ();
+  TRN.fail.rpc_transfer_set_permanent = 'boom'; btn('f2', 'pin').click(); await sleep(400);
+  ok('ตั้งไฟล์ถาวรล้มเหลวที่ฐาน → แถบแดงบอกเหตุ ("ตั้งไฟล์ถาวรไม่สำเร็จ: boom") · ไฟล์ยังไม่ถาวร · ไม่ขึ้นว่าสำเร็จ', !!fatal() && /ตั้งไฟล์ถาวรไม่สำเร็จ: boom/.test(fatal().textContent) && !/ถาวร · Asset/.test(rowOf('f2').textContent) && !/ตั้งเป็นไฟล์ถาวรแล้ว/.test(txt('toast')));
+  clearFatal(); delete TRN.fail.rpc_transfer_set_permanent;
   btn('f2', 'pin').click(); await sleep(400);
   ok('ปุ่ม "ตั้งเป็นไฟล์ถาวร" → transfer_set_permanent(true) → ป้ายถาวร · แจ้งผล', lastRpc('transfer_set_permanent').args.p_on === true && /ถาวร · Asset/.test(rowOf('f2').textContent) && /ตั้งเป็นไฟล์ถาวรแล้ว/.test(txt('toast')) && !!btn('f2', 'unpin'));
   $('trPerm').checked = true; $('trPerm').dispatchEvent(new Event('change', { bubbles: true })); await sleep(50);
@@ -489,8 +495,9 @@ async function runTests() {
   TRN.files.find(f => f.file_name === 'ok-asset.png').expires_at = new Date(Date.now() - 86400000 * 3).toISOString();       // ไฟล์ถาวรเลยวันครบ 30 วันไปแล้ว — ต้องไม่หาย ไม่ถูกกวาด
   await reload();
   ok('ไฟล์ถาวรไม่หมดอายุ: แม้เลยวันครบ 30 วันก็ยังอยู่ในรายการ · เปิดดูได้ · ไม่ถูกกวาด', !!fileRow('ok-asset.png') && TRN.files.find(f => f.file_name === 'ok-asset.png').status === 'ready' && /ถาวร · Asset/.test(fileRow('ok-asset.png').textContent));
+  const spc = rpcs('transfer_set_permanent').length;
   btn('f2', 'unpin').click(); await sleep(100);
-  ok('ปุ่ม "ปลดถาวร" → ถามยืนยันก่อน บอกว่าเริ่มนับ 30 วันใหม่ · ยังไม่เรียกฐาน', $('confirmDialog').open && /เริ่มนับ 30 วันใหม่/.test(txt('confirmBody')) && rpcs('transfer_set_permanent').length === 1);
+  ok('ปุ่ม "ปลดถาวร" → ถามยืนยันก่อน บอกว่าเริ่มนับ 30 วันใหม่ · ยังไม่เรียกฐาน', $('confirmDialog').open && /เริ่มนับ 30 วันใหม่/.test(txt('confirmBody')) && rpcs('transfer_set_permanent').length === spc);
   $('confirmOkBtn').click(); await sleep(450);
   ok('ยืนยันปลดถาวร → ไฟล์กลับเป็นไฟล์ปกติ มีนับถอยหลัง 30 วัน · ประวัติ "ปลดไฟล์ถาวร"', lastRpc('transfer_set_permanent').args.p_on === false && !/ถาวร · Asset/.test(rowOf('f2').textContent) && /เหลือ 30 วัน/.test(rowOf('f2').textContent) && TRN.events.some(e => e.file_id === 'f2' && e.kind === 'unpin' && e.actor_id === 'u1'));
   await relogin('nui'); await openPage();
@@ -504,6 +511,9 @@ async function runTests() {
   await up([mkFile('promo-oct.pdf', 'application/pdf')]);
   const prid = fid('promo-oct.pdf');
   ok('ไฟล์ของผู้ดูแลที่ไม่ได้ขอถาวรตอนอัปโหลด → มีปุ่ม "ขอเก็บถาวร" ที่แถว', !!btn(prid, 'req-keep'));
+  TRN.fail.rpc_transfer_request_keep = 'boom'; btn(prid, 'req-keep').click(); await sleep(450);
+  ok('ขอเก็บถาวรล้มเหลวที่ฐาน → แถบแดง · แถวไม่ขึ้นป้ายรออนุมัติ · ปุ่มยังกดซ้ำได้', !!fatal() && /ขอเก็บถาวรไม่สำเร็จ: boom/.test(fatal().textContent) && !/รออนุมัติเก็บถาวร/.test(rowOf(prid).textContent) && !!btn(prid, 'req-keep'));
+  clearFatal(); delete TRN.fail.rpc_transfer_request_keep;
   btn(prid, 'req-keep').click(); await sleep(450);
   ok('กด "ขอเก็บถาวร" → transfer_request_keep → แจ้งว่าส่งถึงเจ้าของแล้ว + ต้องอนุมัติก่อนวันหมดอายุ · แถวขึ้น "รออนุมัติเก็บถาวร" · ปุ่มหาย', lastRpc('transfer_request_keep').args.p_id === prid && /ส่งคำขอเก็บถาวรถึงเจ้าของแล้ว/.test(txt('toast')) && /รออนุมัติเก็บถาวร/.test(rowOf(prid).textContent) && !btn(prid, 'req-keep'));
   ok('ผู้ดูแลลบไฟล์ปกติของตัวเองได้ (ยังมีปุ่ม "ลบ") แต่ไฟล์ถาวรของคนอื่นต้อง "ขอลบ"', !!btn(prid, 'delete') && !btn('f5', 'delete') && !!btn('f5', 'req-del'));
@@ -533,6 +543,10 @@ async function runTests() {
   $('trDecideNote').value = 'ยังไม่ใช่ไฟล์ที่ใช้ซ้ำ'; $('trDecideGo').click(); await sleep(450);
   const lr = lastRpc('transfer_request_decide');
   ok('กรอกเหตุผล → transfer_request_decide(approve = false, note) → หน้าต่างปิด · คำขอย้ายไปส่วน "ปิดแล้ว" แสดง "ปฏิเสธ" + เหตุผล + ผู้ตัดสิน', !dlgOpen('trDecideDlg') && lr.args.p_approve === false && lr.args.p_note === 'ยังไม่ใช่ไฟล์ที่ใช้ซ้ำ' && /ปฏิเสธ/.test(txt('trReqDone')) && /ยังไม่ใช่ไฟล์ที่ใช้ซ้ำ/.test(txt('trReqDone')) && /โดย TiBass/.test(txt('trReqDone')) && rq().length === 2, txt('trReqDone'));
+  TRN.reqs.find(q => q.status === 'rejected').decision_note = '<b>x</b><img src=x onerror=window.XSS=6>';
+  await reload();
+  ok('เหตุผลปฏิเสธที่เป็น HTML แสดงเป็นข้อความ ไม่รันสคริปต์ ไม่สร้างแท็กจริง', window.XSS === undefined && /<img src=x onerror=window\.XSS=6>/.test(txt('trReqDone')) && !document.querySelector('#trReqDone b, #trReqDone img'));
+  TRN.reqs.find(q => q.status === 'rejected').decision_note = 'ยังไม่ใช่ไฟล์ที่ใช้ซ้ำ';         // คืนเหตุผลจริงให้ข้อถัดไปตรวจ
   ok('ปฏิเสธแล้วไฟล์ยังไม่ถาวร (หมดอายุตามปกติ) · ตัวเลขข้างเมนูลดเป็น 2', TRN.files.find(f => f.id === prid).is_permanent === false && badge() === '2', badge());
   reqOf('endcredit.mp4').querySelector('[data-act="req-ok"]').click(); await sleep(450);
   ok('อนุมัติเก็บถาวร → ไม่ถามซ้ำ · transfer_request_decide(approve = true) · ไฟล์เป็นถาวร · ย้ายไปส่วนปิดแล้ว "อนุมัติแล้ว" · ตัวเลขข้างเมนู 1', lastRpc('transfer_request_decide').args.p_approve === true && TRN.files.find(f => f.file_name === 'endcredit.mp4').is_permanent === true && /อนุมัติแล้ว/.test(txt('trReqDone')) && /ตั้งเป็นไฟล์ถาวรแล้ว/.test(txt('toast')) && badge() === '1', badge());
