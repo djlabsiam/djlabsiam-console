@@ -606,7 +606,8 @@ async function runTests() {
   const openF = async p => { const b = [...document.querySelectorAll('#trList [data-act="nav"], #trCrumbs [data-act="nav"]')].find(x => x.dataset.path === p); if (!b) throw new Error('ไม่พบปุ่มเข้าโฟลเดอร์ ' + p); b.click(); await sleep(150); };
   const newFolder = async name => { $('trNewFolder').click(); await sleep(100); $('trNewName').value = name; $('trNewDlgSave').click(); await sleep(450); };
   const setView = async v => { document.querySelector('#trViewSw [data-view="' + v + '"]').click(); await sleep(120); };
-  const hasDisc = el => !!el.querySelector('.fi-disc');
+  const marks = el => el.querySelectorAll('.fi-mark').length;            // สถานะโฟลเดอร์ = จำนวนขีดขาวบนหน้าปก (มีไฟล์ 3 · ว่าง 1)
+  const isFull = el => marks(el) === 3, isEmptyIco = el => marks(el) === 1;
 
   await relogin('zen'); await openPage(); resetUpload();
   localStorage.removeItem('djlab.transfer.view.v1'); await reload();
@@ -627,11 +628,12 @@ async function runTests() {
   const fb = rpcs('transfer_begin').slice(-4).map(c => c.args.p_folder || '');
   ok('อัปโหลด: ส่ง p_folder เป็นพาธเต็มของแต่ละชั้น (End credit/2026/ep1 · End credit/2026/ep2 · End credit) · ไฟล์เดี่ยวไม่ส่ง', fb.slice().sort().join('|') === '|End credit|End credit/2026/ep1|End credit/2026/ep2', JSON.stringify(fb));
   ok('ที่ชั้นบนสุดตอนนี้: เห็นไอคอนโฟลเดอร์ "End credit" ใบเดียว (3 ไฟล์ รวมโฟลเดอร์ย่อย) · solo.pdf เป็นการ์ดปกติ · ไฟล์ในโฟลเดอร์ไม่โผล่เป็นการ์ดที่ชั้นนี้', tileNames() === 'End credit' && /3 ไฟล์/.test(tile('End credit').textContent) && !!tile('End credit').querySelector('.tr-fico') && cardNames().indexOf('solo.pdf') >= 0 && cardNames().indexOf('logo.png') < 0, tileNames() + ' / ' + cardNames());
-  ok('ไอคอนโฟลเดอร์ที่มีไฟล์ = ปกแผ่นเสียงมีแผ่นโผล่ (fi-disc) · ใช้สีแบรนด์ (หลังปกแดง หน้าปกดำ) — ตรวจสีจริงจาก computed style', hasDisc(tile('End credit')) && getComputedStyle(tile('End credit').querySelector('.fi-back')).fill === 'rgb(204, 0, 26)' && getComputedStyle(tile('End credit').querySelector('.fi-front')).fill === 'rgb(27, 27, 27)');
+  ok('ไอคอนโฟลเดอร์ที่มีไฟล์ = ขีดขาว 3 ขีดบนหน้าปก (ไม่มีแผ่นเสียง) · ใช้สีแบรนด์ (หลังปกแดง หน้าปกดำ) — ตรวจสีจริงจาก computed style', isFull(tile('End credit')) && getComputedStyle(tile('End credit').querySelector('.fi-back')).fill === 'rgb(204, 0, 26)' && getComputedStyle(tile('End credit').querySelector('.fi-front')).fill === 'rgb(27, 27, 27)');
   await openF('End credit');
+  ok('ไอคอนไม่มีแผ่นเสียง (ไม่มี fi-disc / วงกลมใด ๆ ในไอคอนโฟลเดอร์) · ขีดสถานะเป็นสีขาว', !document.querySelector('#trList .tr-fico .fi-disc, #trList .tr-fico circle') && getComputedStyle(document.querySelector('#trList .tr-tile .fi-mark')).stroke === 'rgb(255, 255, 255)');
   ok('เข้าโฟลเดอร์ End credit: เส้นทาง "คลังไฟล์ › End credit" · เห็นโฟลเดอร์ย่อย 2026 (2 ไฟล์) และไฟล์ logo.png เป็นการ์ด · ชื่อไฟล์ไม่มีพาธนำหน้า', crumbTxt() === 'คลังไฟล์›End credit' && tileNames() === '2026' && /2 ไฟล์/.test(tile('2026').textContent) && cardNames() === 'logo.png', crumbTxt() + ' / ' + tileNames() + ' / ' + cardNames());
   await openF('End credit/2026');
-  ok('เข้า 2026: โฟลเดอร์ย่อย ep1 · ep2 (ไอคอนมีแผ่นเสียงทั้งคู่) ไม่มีไฟล์ตรงชั้นนี้', tileNames() === 'ep1|ep2' && tiles().every(hasDisc) && cards().length === 0);
+  ok('เข้า 2026: โฟลเดอร์ย่อย ep1 · ep2 (ไอคอนมีขีดขาว 3 ขีดทั้งคู่) ไม่มีไฟล์ตรงชั้นนี้', tileNames() === 'ep1|ep2' && tiles().every(isFull) && cards().length === 0);
   await openF('End credit/2026/ep1');
   ok('เข้า ep1: เห็นคลิป.mp4 ชั้นลึกสุด · เส้นทาง 4 ชั้น · ไม่มีโฟลเดอร์ย่อย', cardNames() === 'คลิป.mp4' && tiles().length === 0 && crumbTxt() === 'คลังไฟล์›End credit›2026›ep1');
   await openF('End credit');
@@ -665,15 +667,20 @@ async function runTests() {
   $('trNewName').value = 'Logos'; $('trNewDlgSave').click(); await sleep(300); TRN.fail = {};
   ok('ฐานปฏิเสธ → ข้อความแดงในหน้าต่าง (หน้าต่างไม่ปิด · ไม่ขึ้นว่าสร้างแล้ว)', dlgOpen('trNewDlg') && /ระบบขัดข้อง/.test(txt('trNewDlgErr')) && !tile('Logos'));
   $('trNewDlgSave').click(); await sleep(500);
-  ok('สร้าง "Logos" สำเร็จ: เรียก transfer_folder_create พาธ "Logos" · หน้าต่างปิด · ไอคอนโฟลเดอร์ใหม่ขึ้น "โฟลเดอร์ว่าง" และเป็นปกเปล่า (ไม่มีแผ่นเสียง)', lastRpc('transfer_folder_create').args.p_path === 'Logos' && !dlgOpen('trNewDlg') && !!tile('Logos') && /โฟลเดอร์ว่าง/.test(tile('Logos').textContent) && !hasDisc(tile('Logos')) && !fatal());
-  await openF('Logos');
+  ok('สร้าง "Logos" สำเร็จ: เรียก transfer_folder_create พาธ "Logos" · หน้าต่างปิด · ไอคอนโฟลเดอร์ใหม่ขึ้น "โฟลเดอร์ว่าง" และมีขีดขาวสั้นขีดเดียว', lastRpc('transfer_folder_create').args.p_path === 'Logos' && !dlgOpen('trNewDlg') && !!tile('Logos') && /โฟลเดอร์ว่าง/.test(tile('Logos').textContent) && isEmptyIco(tile('Logos')) && !fatal());
+  { const deepM = Array.from({ length: 12 }, (_, i) => 'q' + i).join('/');
+    TRN.folders.push({ id: 'kdeep', path: deepM, created_by: 'u2', created_at: new Date().toISOString(), deleted_at: null }); await reload();
+    tr.path = deepM; trRenderList();
+    $('trNewFolder').click(); await sleep(100); $('trNewName').value = 'x'; const cr0 = rpcs('transfer_folder_create').length; $('trNewDlgSave').click(); await sleep(150);
+    ok('สร้างโฟลเดอร์ใต้ชั้นที่ 12 → ข้อความ "ซ้อนลึกเกิน 12 ชั้น" ในหน้าต่าง · ไม่เรียกฐาน', /ลึกเกิน 12/.test(txt('trNewDlgErr')) && rpcs('transfer_folder_create').length === cr0);
+    $('trNewDlgCancel').click(); await sleep(60); TRN.folders = TRN.folders.filter(k => k.id !== 'kdeep'); tr.path = ''; await reload(); await openF('Logos'); }
   ok('เปิดโฟลเดอร์ว่าง: ข้อความ "โฟลเดอร์นี้ยังว่าง" บอกวิธีอัปโหลดเข้าโฟลเดอร์นี้', /โฟลเดอร์นี้ยังว่าง/.test(txt('trList')));
   $('trNewFolder').click(); await sleep(100); $('trNewName').value = 'Dark'; $('trNewName').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await sleep(500);
   ok('สร้างโฟลเดอร์ซ้อนในโฟลเดอร์ที่เปิดอยู่ (กด Enter ในช่องชื่อก็บันทึก): พาธ "Logos/Dark" · ขึ้นเป็นโฟลเดอร์ย่อยของ Logos', lastRpc('transfer_folder_create').args.p_path === 'Logos/Dark' && tileNames() === 'Dark');
   await up([mkFile('mark.svg', 'image/svg+xml')]); clearQ(); await sleep(200);
   ok('อัปโหลดเข้าโฟลเดอร์ว่างที่เปิดอยู่ (Logos): begin ส่ง p_folder = Logos · ข้อความว่างหาย · ไฟล์ขึ้นเป็นการ์ด', lastRpc('transfer_begin').args.p_folder === 'Logos' && cardNames() === 'mark.svg' && !/ยังว่าง/.test(txt('trList')));
   await openF('');
-  ok('กลับชั้นบนสุด: ไอคอน Logos เปลี่ยนเป็นมีแผ่นเสียง (มีไฟล์แล้ว) · ตัวนับรวมโฟลเดอร์ย่อย', hasDisc(tile('Logos')) && /1 ไฟล์/.test(tile('Logos').textContent));
+  ok('กลับชั้นบนสุด: ไอคอน Logos เปลี่ยนเป็น 3 ขีดขาว (มีไฟล์แล้ว) · ตัวนับรวมโฟลเดอร์ย่อย', isFull(tile('Logos')) && /1 ไฟล์/.test(tile('Logos').textContent));
 
   // 5) ลากโฟลเดอร์มาวาง: โฟลเดอร์ย่อยว่างยังอยู่ด้วย
   resetUpload();
@@ -685,7 +692,7 @@ async function runTests() {
   ok('ยืนยัน: เรียก transfer_folder_create_many ครั้งเดียวด้วย 3 พาธ (ไม่ส่งชั้นที่มีลูก) · ไม่มีแถบแดง', rpcs('transfer_folder_create_many').length === 1 && mk.args.p_paths.slice().sort().join('|') === 'Assets/deep/deeper|Assets/empty|Assets/onlyjunk' && !fatal(), JSON.stringify(mk && mk.args));
   await openF('Assets');
   ok('Assets: โฟลเดอร์ย่อยครบทุกชั้นที่ลากมา (deep · deep2 อยู่ใน img · empty · img · onlyjunk) ทั้งที่ว่างและไม่ว่าง · a.png เป็นการ์ด', tileNames() === 'deep|empty|img|onlyjunk' && cardNames() === 'a.png', tileNames() + ' / ' + cardNames());
-  ok('...ว่าง = ปกเปล่า · มีไฟล์ = มีแผ่นเสียง ในหน้าเดียวกัน', !hasDisc(tile('empty')) && !hasDisc(tile('onlyjunk')) && hasDisc(tile('img')) && !hasDisc(tile('deep')));
+  ok('...ว่าง = ขีดเดียว · มีไฟล์ = 3 ขีด ในหน้าเดียวกัน', isEmptyIco(tile('empty')) && isEmptyIco(tile('onlyjunk')) && isFull(tile('img')) && isEmptyIco(tile('deep')));
   await openF('Assets/deep');
   ok('Assets/deep → เห็นโฟลเดอร์ว่าง deeper (สร้างจากตัวหมาย)', tileNames() === 'deeper' && /โฟลเดอร์ว่าง/.test(tile('deeper').textContent));
   resetUpload(); await openF('');

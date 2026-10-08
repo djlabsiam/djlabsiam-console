@@ -1261,11 +1261,7 @@
   .tr-fico .fi-back { fill: var(--red); }
   .tr-fico .fi-front { fill: #1B1B1B; }
   .tr-fico .fi-lip { fill: none; stroke: #fff; stroke-width: 1.6; }
-  .tr-fico .fi-bars { fill: #fff; }
-  .tr-fico .fi-disc > circle:first-child { fill: #0B0B0B; }
-  .tr-fico .fi-g { fill: none; stroke: #5A5A5A; stroke-width: 1; }
-  .tr-fico .fi-lbl { fill: var(--red); }
-  .tr-fico .fi-pin { fill: #fff; }
+  .tr-fico .fi-mark { fill: none; stroke: #fff; stroke-width: 3.4; stroke-linecap: butt; }
   .tr-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; padding: 12px; background: var(--surface); border: 1px solid var(--line); border-top: 0; }
   .tr-tile { display: flex; align-items: stretch; background: var(--surface2); border: 1px solid var(--line-strong); }
   .tr-tile:hover { border-color: var(--black); background: var(--sel); }
@@ -13400,11 +13396,11 @@ function trFolderMap() {
   return m;
 }
 const trChildren = (m, path) => [...m.values()].filter(e => trParent(e.path) === path).sort((a, b) => trLeaf(a.path).localeCompare(trLeaf(b.path), 'th'));
-// ไอคอนโฟลเดอร์ DJ LAB SIAM: ปกแผ่นเสียง (หลังแดง · หน้าดำ) — มีไฟล์ = แผ่นเสียงโผล่พ้นปก · ว่าง = ปกเปล่า · แถบสามแท่งมุมล่างขวาคือเครื่องวัดระดับของมิกเซอร์
+// ไอคอนโฟลเดอร์ DJ LAB SIAM: ปกแผ่นเสียง — หลังปกแดง · หน้าปกดำ · สถานะบอกด้วยขีดขาวบนหน้าปก: มีไฟล์ = 3 ขีด (เหมือนรายการไฟล์) · ว่าง = ขีดสั้นขีดเดียว
 function trFolderSvg(full, cls) {
   return '<svg class="tr-fico' + (cls ? ' ' + cls : '') + '" viewBox="2 4 92 72" aria-hidden="true" focusable="false"><path class="fi-back" d="M4 10h30l8 8h50v56H4z"/>' +
-    (full ? '<g class="fi-disc"><circle cx="62" cy="28" r="22"/><circle class="fi-g" cx="62" cy="28" r="17"/><circle class="fi-g" cx="62" cy="28" r="12.5"/><circle class="fi-lbl" cx="62" cy="28" r="7.5"/><circle class="fi-pin" cx="62" cy="28" r="1.9"/></g>' : '') +
-    '<path class="fi-front" d="M4 38h88v36H4z"/><path class="fi-lip" d="M4 38.8h88"/><path class="fi-bars" d="M68 62h4v6h-4zM75 56h4v12h-4zM82 59h4v9h-4z"/></svg>';
+    '<path class="fi-front" d="M4 38h88v36H4z"/><path class="fi-lip" d="M4 38.8h88"/>' +
+    (full ? '<path class="fi-mark" d="M14 48h66"/><path class="fi-mark" d="M14 56h66"/><path class="fi-mark" d="M14 64h38"/>' : '<path class="fi-mark" d="M14 56h26"/>') + '</svg>';
 }
 function trFolderDeletables(path) {
   const files = tr.files.filter(f => f.folder_path && trAlive(f) && trUnder(f.folder_path, path));
