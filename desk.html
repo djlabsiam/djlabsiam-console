@@ -1239,6 +1239,25 @@
   .tr-ev .tr-file { flex: 1 1 200px; min-width: 0; overflow-wrap: anywhere; }
   .tr-ev .tr-cat { font-size: 14px; color: var(--text2); }
   #trLog > .tr-ev:first-child { border-top: 1px solid var(--line); }
+  .tr-stage { margin: 10px 0 14px; padding: 12px 14px; }
+  .tr-stage h3 { font-size: 16px; margin-bottom: 10px; }
+  #trStageList > .tr-row:first-child { border-top: 1px solid var(--line); }
+  .tr-thumb { flex: 0 0 56px; width: 56px; height: 56px; display: flex; align-items: center; justify-content: center; padding: 0; overflow: hidden;
+    background: var(--surface2); border: 1px solid var(--line); border-radius: 0; font: inherit; }
+  button.tr-thumb { cursor: pointer; }
+  button.tr-thumb:hover { border-color: var(--black); }
+  .tr-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .tr-thumb svg { width: 28px; height: 28px; fill: none; stroke: var(--text2); stroke-width: 1.75; }
+  .tr-tagpick { display: flex; flex-wrap: wrap; gap: 8px; }
+  .tr-tagpick label { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 4px 12px; border: 1px solid var(--line-strong); background: var(--surface); cursor: pointer; font-size: 15px; }
+  .tr-tagpick label:hover { background: var(--sel); }
+  .tr-tagpick label:has(input:checked) { background: var(--black); border-color: var(--black); color: #fff; }
+  .tr-pills { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+  .tr-bar { flex: 1 1 140px; min-width: 100px; height: 10px; background: var(--surface2); border: 1px solid var(--line-strong); }
+  .tr-bar i { display: block; height: 100%; background: var(--black); }
+  .tr-keep { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 6px 12px; border: 1px solid var(--line-strong); background: var(--surface); cursor: pointer; font-size: 15px; }
+  .tr-keep:has(input:checked) { border-color: var(--black); background: var(--sel); font-weight: 600; }
+  .tr-tagline { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin-top: 4px; font-size: 14px; color: var(--text2); }
   .cat-json { width: 100%; min-height: 220px; font: 14px/1.6 ui-monospace, Menlo, Consolas, monospace; resize: vertical; }
   @media (max-width: 640px) {
     .deal { grid-template-columns: minmax(0, 1fr); }
@@ -1369,7 +1388,7 @@
     .ev-more { min-height: 44px; }
     table.data th .th { min-height: 44px; }
     table.data td { padding-top: 11px; padding-bottom: 11px; }
-    .tlist button, .mail-tab, .row-link, .gresult, .presult, .calc-h, .acct .pick, .swatch, .tr-chip { min-height: 44px; }
+    .tlist button, .mail-tab, .row-link, .gresult, .presult, .calc-h, .acct .pick, .swatch, .tr-chip, .tr-tagpick label { min-height: 44px; }
     .t-x, .stepbtn { width: 44px; height: 44px; }
     /* ปุ่มเลื่อนปีกกว้าง 44 ต้องไม่ทับตัวเลขคงเหลือที่ขอบปีก — ตอนปีกล้นจอ (มีปุ่ม) ผนังหดเข้ามาข้างละ 16px
        ให้ปุ่มอยู่ในขอบว่างทั้งปุ่ม (28 + 16) · ปีกพอดีจอ = ไม่มีปุ่ม ไม่ต้องหด */
@@ -2270,20 +2289,30 @@
             <div class="mail-tabs" id="trTabs" role="tablist" aria-label="ส่วนของหน้า" style="margin:0; flex:1;">
               <button class="mail-tab" type="button" role="tab" data-tab="files" aria-selected="true">ไฟล์ <span class="n" id="trFilesN"></span></button>
               <button class="mail-tab" type="button" role="tab" data-tab="log" aria-selected="false">ความเคลื่อนไหว</button>
+              <button class="mail-tab" type="button" role="tab" data-tab="req" id="trReqTab" aria-selected="false">คำขอ <span class="n" id="trReqN"></span></button>
             </div>
             <button class="btn" id="trReload" type="button">↻ รีเฟรช</button>
           </div>
           <div id="trFilesPane">
             <div class="alert alert-plain">ทีมงานทุกคนเห็นและเปิดไฟล์ในหน้านี้ได้ · เก็บ 30 วันนับจากวันอัปโหลด แล้วลบให้เอง · ลบได้เฉพาะคนที่อัปโหลดหรือเจ้าของร้าน · ทุกการอัปโหลด เปิดดู ดาวน์โหลด และลบมีประวัติ (แท็บ "ความเคลื่อนไหว")</div>
             <div id="trUpload">
-              <button class="drop" id="trDrop" type="button"><strong>ลากไฟล์มาวางที่นี่ หรือกดเพื่อเลือกไฟล์</strong><span class="hint">ได้ทุกประเภท · ไม่เกิน 500 MB ต่อไฟล์ · เลือกได้หลายไฟล์ · ระบบแยกไฟล์เข้ากลุ่ม (วิดีโอ เสียง รูปภาพ ดีไซน์ เอกสาร ไฟล์บีบอัด อื่น ๆ) ให้เอง</span></button>
+              <button class="drop" id="trDrop" type="button"><strong>ลากไฟล์มาวางที่นี่ หรือกดเพื่อเลือกไฟล์</strong><span class="hint">ได้ทุกประเภท · ไม่เกิน 1 GB ต่อไฟล์ · เลือกได้หลายไฟล์ · วางแล้วตรวจรายการ กด "ยืนยันอัปโหลด" ถึงจะอัปโหลดจริง · ระบบแยกไฟล์เข้ากลุ่ม (วิดีโอ เสียง รูปภาพ ดีไซน์ เอกสาร ไฟล์บีบอัด อื่น ๆ) ให้เอง</span></button>
               <input type="file" id="trFile" multiple hidden>
-              <div class="field" style="margin-top:10px;"><label class="lbl" for="trNote">หมายเหตุถึงทีม (ไม่บังคับ — ใช้กับไฟล์ที่เลือกในครั้งนี้)</label><input type="text" id="trNote" class="input" maxlength="300" placeholder="เช่น คลิปรีวิว DDJ-FLX4 รอบตัดต่อสุดท้าย" autocomplete="off"></div>
+              <div class="card tr-stage" id="trStage" hidden role="group" aria-label="รอยืนยันอัปโหลด">
+                <h3 id="trStageHead">รอยืนยันอัปโหลด</h3>
+                <div id="trStageList"></div>
+                <div class="field" style="margin-top:12px;"><label class="lbl" for="trNote">หมายเหตุถึงทีม (ไม่บังคับ — ใช้กับไฟล์ทั้งชุดที่กำลังจะอัปโหลด)</label><input type="text" id="trNote" class="input" maxlength="300" placeholder="เช่น คลิปรีวิว DDJ-FLX4 รอบตัดต่อสุดท้าย" autocomplete="off"></div>
+                <div class="field" id="trTagField"><span class="lbl" id="trTagLbl">Tag พนักงาน (ไม่บังคับ — ระบุว่าไฟล์นี้ถึงใคร ทุกคนยังเปิดไฟล์ได้เหมือนเดิม)</span><div class="tr-tagpick" id="trTagPick" role="group" aria-labelledby="trTagLbl"></div></div>
+                <div class="field" id="trKeepField" hidden><label class="tr-keep"><input type="checkbox" id="trKeep"> <span id="trKeepText"></span></label></div>
+                <div class="actions" style="margin-top:12px;"><button class="btn btn-primary" id="trConfirm" type="button">ยืนยันอัปโหลด</button><button class="btn" id="trStageClear" type="button">ยกเลิกทั้งหมด</button></div>
+              </div>
               <div class="tr-q-box" id="trQueue"></div>
             </div>
             <div class="toolbar">
               <input type="search" id="trSearch" class="input grow" placeholder="ค้นชื่อไฟล์ ผู้อัปโหลด หรือหมายเหตุ" aria-label="ค้นหาไฟล์" autocomplete="off">
               <label class="btn" style="gap:8px;"><input type="checkbox" id="trMine"> เฉพาะไฟล์ของฉัน</label>
+              <label class="btn" style="gap:8px;"><input type="checkbox" id="trToMe"> ถึงฉัน (Tag ฉัน)</label>
+              <label class="btn" style="gap:8px;"><input type="checkbox" id="trPerm"> เฉพาะไฟล์ถาวร (Asset)</label>
             </div>
             <div class="tr-chips" id="trChips" role="group" aria-label="กลุ่มไฟล์"></div>
             <div id="trList"></div>
@@ -2293,7 +2322,7 @@
             <div class="toolbar">
               <label class="hint" for="trEvAct" style="margin:0;">การกระทำ</label>
               <select id="trEvAct" class="input">
-                <option value="">ทั้งหมด</option><option value="upload">อัปโหลด</option><option value="view">เปิดดู</option><option value="download">ดาวน์โหลด</option><option value="delete">ลบ</option><option value="expire">ครบ 30 วัน</option>
+                <option value="">ทั้งหมด</option><option value="upload">อัปโหลด</option><option value="view">เปิดดู</option><option value="download">ดาวน์โหลด</option><option value="delete">ลบ</option><option value="expire">ครบ 30 วัน</option><option value="tag">แก้ Tag</option><option value="pin">ตั้งไฟล์ถาวร</option><option value="unpin">ปลดไฟล์ถาวร</option><option value="request_keep">ขอเก็บถาวร</option><option value="request_delete">ขอลบไฟล์ถาวร</option><option value="reject">ปฏิเสธคำขอ</option><option value="withdraw">ถอนคำขอ</option>
               </select>
               <input type="search" id="trEvSearch" class="input grow" placeholder="ค้นชื่อไฟล์หรือชื่อคน" aria-label="ค้นหาในประวัติ" autocomplete="off">
             </div>
@@ -2303,6 +2332,11 @@
               <span class="hint" id="trLogCount" style="margin:0;"></span>
               <button class="btn btn-sm" id="trLogMore" type="button" hidden>โหลดเพิ่มอีก 200 รายการ</button>
             </div>
+          </div>
+          <div id="trReqPane" hidden>
+            <div class="alert alert-plain">ไฟล์ถาวรคือคลัง Asset ของร้าน (รูปสินค้า โลโก้ วิดีโอ End credit PDF โปรโมชัน) ที่ไม่ถูกลบตอนครบ 30 วัน · เจ้าของตั้งถาวรและลบไฟล์ถาวรได้เอง · ผู้ดูแลกด "ขอเก็บถาวร" หรือ "ขอลบ" แล้วเจ้าของอนุมัติ (ขอเก็บถาวรต้องอนุมัติก่อนไฟล์ครบ 30 วัน ไม่ทันก็หมดอายุตามปกติ)</div>
+            <div id="trReqPending"></div>
+            <div id="trReqDone"></div>
           </div>
         </section>
 
@@ -2524,6 +2558,27 @@
     <p class="hint" style="margin-top:14px;">คีย์ลัดไม่ทำงานระหว่างพิมพ์ในช่องกรอก (ยกเว้น Esc, Ctrl+K, F9) และไม่รบกวนเครื่องยิงบาร์โค้ด</p>
   </div>
   <div class="dlg-foot"><button class="btn" type="button" onclick="document.getElementById('helpDialog').close()">ปิด (Esc)</button></div>
+</dialog>
+
+<dialog id="trDecideDlg" aria-labelledby="trDecideTitle">
+  <div class="dlg-head"><h2 id="trDecideTitle">ปฏิเสธคำขอ</h2></div>
+  <div class="dlg-body">
+    <p class="hint" id="trDecideFile" style="margin:0 0 10px;"></p>
+    <div class="field"><label class="lbl" for="trDecideNote">เหตุผลที่ปฏิเสธ (ต้องใส่ — ผู้ขอจะเห็น)</label><textarea id="trDecideNote" class="input" rows="3" maxlength="300"></textarea></div>
+    <div class="alert alert-red" id="trDecideErr" hidden role="alert"></div>
+  </div>
+  <div class="dlg-foot"><button class="btn" id="trDecideCancel" type="button">ยกเลิก</button><button class="btn btn-danger" id="trDecideGo" type="button">ปฏิเสธคำขอ</button></div>
+</dialog>
+
+<dialog id="trTagDlg" aria-labelledby="trTagDlgTitle">
+  <div class="dlg-head"><h2 id="trTagDlgTitle">แก้ Tag พนักงาน</h2></div>
+  <div class="dlg-body">
+    <p class="hint" id="trTagDlgFile" style="margin:0 0 10px;"></p>
+    <div class="tr-tagpick" id="trTagDlgPick" role="group" aria-label="Tag พนักงาน"></div>
+    <p class="hint">คนที่เปิดไฟล์แล้วคงสถานะ "เปิดแล้ว" · คนที่ Tag เพิ่มเริ่มที่ "ยังไม่เปิด" · Tag เป็นการระบุถึง ไม่ได้จำกัดว่าใครเปิดได้</p>
+    <div class="alert alert-red" id="trTagDlgErr" hidden role="alert"></div>
+  </div>
+  <div class="dlg-foot"><button class="btn" id="trTagDlgCancel" type="button">ยกเลิก</button><button class="btn btn-primary" id="trTagDlgSave" type="button">บันทึก Tag</button></div>
 </dialog>
 
 <dialog id="opsDialog" aria-labelledby="opsFormTitle">
@@ -3537,7 +3592,7 @@ async function resyncAll() {
   refreshBoard();
   loadHomeToday();
   if (current === 'calendar') loadCalendar();
-  if (current === 'transfer') loadTransfer();
+  if (current === 'transfer') loadTransfer(); else trLoadUnseen();
   loadWork();
 }
 document.addEventListener('visibilitychange', () => {
@@ -5638,7 +5693,7 @@ function renderNav() {
     }
     const key = sectionKey(s);
     // ตัวเลขแดงข้างเมนู = ข้อความที่ "ฉัน" ยังไม่ได้อ่าน (กระดาน · Discord) / อีเมลที่ยังไม่ได้เปิด (กล่องจดหมาย) / งานที่ต้องทำ+รอตรวจ+คำขอที่ส่งถึงฉัน (งานของฉัน)
-    const badge = s.id === 'board' || s.id === 'mail' || s.id === 'discord' || s.id === 'tasks' || s.id === 'booking' ? '<span class="nbadge" id="navBadge-' + s.id + '" hidden></span>' : '';
+    const badge = s.id === 'board' || s.id === 'mail' || s.id === 'discord' || s.id === 'tasks' || s.id === 'booking' || s.id === 'transfer' ? '<span class="nbadge" id="navBadge-' + s.id + '" hidden></span>' : '';
     html += '<button class="nav-item" type="button" data-s="' + s.id + '" onclick="showSection(\'' + s.id + '\')"' +
       ' title="' + escapeHtml(s.label) + (key ? ' (' + key + ')' : '') + '">' +
       '<span class="ico" aria-hidden="true">' + navIcon(s.icon) + '</span><span class="lbl">' + escapeHtml(s.short || s.label) + '</span>' +
@@ -9800,6 +9855,7 @@ async function loadStaffHome() {
   loadMailStatus();
   loadHomeToday();
   loadDisplaySettings();
+  trLoadUnseen();
 }
 
 async function loadStaff() {
@@ -9821,6 +9877,7 @@ function updateNavBadges() {
   set('discord', dc.unread);
   set('tasks', workBadgeCount(), 'ต้องทำ');
   set('booking', bkPendingCount(), 'รอยืนยัน');
+  set('transfer', trBadge(), 'ถึงคุณ/รอตัดสิน');
 }
 
 // ---------------------------------------------------------------------------
@@ -12906,21 +12963,29 @@ function toggleCalc(fromButton) {
 })();
 
 // ===========================================================================
-// โอนไฟล์ — ถังโอนถ่ายไฟล์ภายในร้าน (#transfer · Alt+U · migration 049)
+// โอนไฟล์ — ถังโอนถ่ายไฟล์ภายในร้าน + คลัง Asset (#transfer · Alt+U · migration 049 + 050)
 //
-// พนักงานทุกคนอัปโหลด/เปิด/โหลดได้ · เก็บ 30 วันนับจากวันอัปโหลด · ลบได้เฉพาะคนที่อัปโหลดหรือเจ้าของร้าน (role = owner) · มีประวัติใครลง/ดู/โหลด/ลบ
-// สิทธิ์ตัวจริงอยู่ที่ฐานข้อมูล: ตารางอ่านได้อย่างเดียว ทุกการเขียนผ่านฟังก์ชัน transfer_* — ปุ่มที่ซ่อนเป็นแค่ความสะดวก
-//   อัปโหลด: transfer_begin (ฐานตัดสินกลุ่มไฟล์ + ออกพาธ <กลุ่ม>/<uuid>.<นามสกุล>) → upload ลงถัง internal-transfer → transfer_commit (เริ่มนับ 30 วัน) · ล้มกลางทาง → transfer_abort
-//   เปิด/โหลด: transfer_open (บันทึกประวัติ + ให้สิทธิ์อ่าน 2 นาที) → createSignedUrl 60 วินาที · ขอลิงก์ตรงจากถังโดยไม่ผ่านขั้นนี้ไม่ได้
-//   ลบ: transfer_delete (ตรวจสิทธิ์ + บันทึกประวัติ) → ลบตัวไฟล์ในถัง → transfer_mark_purged
-//   เก็บกวาด: ตอนเปิดหน้านี้ transfer_sweep ตั้งไฟล์ครบ 30 วันเป็น expired แล้วคืนรายการที่ต้องลบตัวไฟล์ — ไม่มีงานตั้งเวลา (ไฟล์หมดอายุเปิดไม่ได้ทันทีที่ฐาน แม้ตัวไฟล์ยังค้างในถัง)
-// ⚠️ ชื่อไฟล์/หมายเหตุ/ชื่อคน มาจากผู้ใช้ — แสดงด้วย escapeHtml เสมอ · ปุ่มใช้ data-act/data-id ห้ามฝัง JSON ใน onclick
-// ⚠️ เปิดดูในเบราว์เซอร์ได้เฉพาะ รูป/วิดีโอ/เสียง/PDF และส่ง contentType ตามชนิดจริงเท่านั้น — ไฟล์อื่นบังคับ octet-stream (โหลดอย่างเดียว) · SVG โหลดอย่างเดียว
-// ⚠️ ออกจากระบบ/สลับบัญชี → trReset() ทิ้งรายการ ประวัติ และคิวอัปโหลด · ผลที่มาถึงทีหลัง (tr !== me / uid เปลี่ยน) ถูกทิ้ง
+// พนักงานทุกคนอัปโหลด/เปิด/โหลดได้ · เก็บ 30 วันนับจากอัปโหลด · มีประวัติใครลง/ดู/โหลด/ลบ
+// ลบ: ผู้อัปโหลดหรือเจ้าของร้าน (role = owner) · ไฟล์ถาวร = เจ้าของเท่านั้น (ผู้ดูแลกด "ขอลบ" ให้เจ้าของอนุมัติ)
+// เก็บถาวร (คลัง Asset — รูปสินค้า โลโก้ วิดีโอ End credit PDF โปรโมชัน): เจ้าของตั้งเอง · ผู้ดูแล "ขอ" แล้วเจ้าของอนุมัติก่อนไฟล์ครบ 30 วัน · พนักงานทั่วไปตั้งไม่ได้
+// สิทธิ์ตัวจริงอยู่ที่ฐานข้อมูล: ตารางอ่านได้อย่างเดียว ทุกการเขียนผ่านฟังก์ชัน transfer_* — ปุ่มที่ซ่อนเป็นแค่ความสะดวก (trCanDelete ฯลฯ คือสำเนาของกติกาฐาน)
+//   อัปโหลด: วาง/เลือกไฟล์ → "รอยืนยัน" (tr.stage — ยังไม่ส่งอะไรออกจนกด ยืนยันอัปโหลด) → transfer_begin (ฐานตัดสินกลุ่มไฟล์ + ออกพาธ + รับ Tag/เจตนาเก็บถาวร)
+//     → ส่งไฟล์ลงถัง internal-transfer (> 6 MB = tus แบบต่อได้ มีแถบความคืบหน้า · เล็กกว่านั้น/โหลด tus ไม่ได้ = อัปโหลดแบบธรรมดา) → transfer_commit (เริ่มนับ 30 วัน + รูปตัวอย่าง) · ล้มกลางทาง → transfer_abort
+//   เปิด/โหลด: transfer_open (บันทึกประวัติ + ทำเครื่องหมาย "เปิดแล้ว" ให้คนที่ถูก Tag + ออกสิทธิ์อ่าน 2 นาที) → createSignedUrl 60 วินาที · ขอลิงก์ตรงจากถังโดยไม่ผ่านขั้นนี้ไม่ได้
+//   ลบ: transfer_delete → ลบตัวไฟล์ในถัง → transfer_mark_purged · เก็บกวาด: ตอนเปิดหน้านี้ transfer_sweep (ไม่มีงานตั้งเวลา — ไฟล์ครบ 30 วันเปิดไม่ได้ทันทีที่ฐาน)
+//   รูปตัวอย่าง: สร้างในเบราว์เซอร์ (รูป · เฟรมแรกของวิดีโอ) ย่อ ≤ 192px JPEG เก็บในคอลัมน์ thumb — ไฟล์อื่นใช้ไอคอนตามกลุ่ม · สร้างไม่ได้ = ไอคอน ไม่ขวางการอัปโหลด
+//   ยังไม่รัน 050 → tr.v1 = true: ไม่มี Tag/รูปตัวอย่าง/ถาวร/คำขอ (แถบเหลืองบอก) อัปโหลด/เปิด/ลบใช้ได้ตามเดิม
+// ⚠️ ชื่อไฟล์/หมายเหตุ/ชื่อคน/เหตุผลปฏิเสธ มาจากผู้ใช้ — escapeHtml เสมอ · ปุ่มใช้ data-act/data-id ห้ามฝัง JSON ใน onclick · รูปตัวอย่างใส่ src ได้เฉพาะที่ผ่าน regex data:image/jpeg|png|webp;base64
+// ⚠️ เปิดดูในเบราว์เซอร์ได้เฉพาะ รูป/วิดีโอ/เสียง/PDF และส่ง contentType ตามชนิดจริงเท่านั้น — ไฟล์อื่น/SVG บังคับ octet-stream (โหลดอย่างเดียว)
+// ⚠️ ออกจากระบบ/สลับบัญชี → trReset() ทิ้งรายการ ประวัติ คิว รอยืนยัน และสั่งหยุด tus ที่ค้าง · ผลที่มาถึงทีหลัง (tr !== me / uid เปลี่ยน) ถูกทิ้ง
 // ===========================================================================
 const TR_BUCKET = 'internal-transfer';
-const TR_MAX = 500 * 1024 * 1024;        // ต้องตรงกับ file_size_limit ของถังใน 049 (ฐานตรวจซ้ำ — ถ้าแพ็กเกจ Supabase จำกัดต่ำกว่า ฐานใช้ค่าต่ำกว่า)
+const TR_MAX = 1024 * 1024 * 1024;        // 1 GB ต่อไฟล์ — ต้องตรงกับ file_size_limit ของถังใน 050 · Pro: ต้องตั้ง Global file size limit ใน Dashboard ≥ 1 GB ด้วย (ตั้งต้น 50 MB) ฐานใช้ค่าที่ต่ำกว่า
+const TR_PERM_MAX = 500 * 1024 * 1024;    // ไฟล์ถาวรต่อไฟล์ — ตรงกับ transfer_limits() ใน 050 (ฐานบังคับ · ที่นี่ไว้เตือนล่วงหน้า)
 const TR_EV_PAGE = 200;
+const TR_TUS_SRC = 'https://cdn.jsdelivr.net/npm/tus-js-client@4.3.1/dist/tus.min.js';
+const TR_TUS_MIN = 6 * 1024 * 1024;       // ไฟล์ใหญ่กว่านี้ใช้อัปโหลดแบบต่อได้ (Supabase แนะนำ — chunk 6 MB เป็นค่าที่ Supabase กำหนด)
+const TR_THUMB = 192;
 const TR_CATS = [
   { k: 'video',   t: 'วิดีโอ',     en: 'VDO' },
   { k: 'audio',   t: 'เสียง',      en: 'AUDIO' },
@@ -12931,13 +12996,30 @@ const TR_CATS = [
   { k: 'other',   t: 'อื่น ๆ',      en: 'OTHER' },
 ];
 const TR_CAT = Object.fromEntries(TR_CATS.map(c => [c.k, c]));
-const TR_KIND = { upload: ['อัปโหลด', 'st-ok'], view: ['เปิดดู', 'st-off'], download: ['ดาวน์โหลด', 'st-warn'], delete: ['ลบ', 'st-bad'], expire: ['ครบ 30 วัน (ระบบลบ)', 'st-off'] };
+const TR_ICON = {
+  video: '<rect x="3" y="5" width="13" height="14"/><path d="M16 10l5-3v10l-5-3"/>',
+  audio: '<path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/>',
+  photo: '<rect x="3" y="4" width="18" height="16"/><circle cx="9" cy="10" r="2"/><path d="M3 18l6-5 4 3 3-2 5 4"/>',
+  design: '<path d="M12 3l9 9-9 9-9-9z"/><path d="M12 8v8M8 12h8"/>',
+  doc: '<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/>',
+  archive: '<rect x="4" y="3" width="16" height="18"/><path d="M12 3v10M10 7h4M10 11h4"/><rect x="10" y="13" width="4" height="4"/>',
+  other: '<path d="M4 7l8-4 8 4v10l-8 4-8-4z"/><path d="M4 7l8 4 8-4M12 11v10"/>',
+};
+const TR_KIND = { upload: ['อัปโหลด', 'st-ok'], view: ['เปิดดู', 'st-off'], download: ['ดาวน์โหลด', 'st-warn'], delete: ['ลบ', 'st-bad'], expire: ['ครบ 30 วัน (ระบบลบ)', 'st-off'],
+  tag: ['แก้ Tag', 'st-off'], pin: ['ตั้งเป็นไฟล์ถาวร', 'st-ok'], unpin: ['ปลดไฟล์ถาวร', 'st-warn'], request_keep: ['ขอเก็บถาวร', 'st-warn'], request_delete: ['ขอลบไฟล์ถาวร', 'st-bad'],
+  reject: ['ปฏิเสธคำขอ', 'st-bad'], withdraw: ['ถอนคำขอ', 'st-off'] };
+const TR_REQ_KIND = { keep: 'ขอเก็บถาวร', delete: 'ขอลบไฟล์ถาวร' };
+const TR_REQ_ST = { pending: ['รอเจ้าของตัดสิน', 'st-warn'], approved: ['อนุมัติแล้ว', 'st-ok'], rejected: ['ปฏิเสธ', 'st-bad'], withdrawn: ['ผู้ขอถอนแล้ว', 'st-off'], void: ['ยกเลิก (ไฟล์ถูกลบ/หมดอายุ)', 'st-off'] };
 function trBlank() {
-  return { loaded: false, loading: false, missing: false, error: '', note: '', files: [], events: [], evMore: false, evFile: null, evTok: 0,
-    tok: 0, tab: 'files', cat: '', q: '', mine: false, evAct: '', evQ: '', queue: [], seq: 0, uploading: false, sweeping: false, busy: {} };
+  return { loaded: false, loading: false, missing: false, v1: false, error: '', note: '', files: [], events: [], reqs: [], evMore: false, evFile: null, evTok: 0,
+    tok: 0, tab: 'files', cat: '', q: '', mine: false, toMe: false, perm: false, evAct: '', evQ: '', stage: [], stageTags: [], stageKeep: false, queue: [], seq: 0,
+    uploading: false, sweeping: false, busy: {}, unseen: 0, pend: 0, tagFor: null, decide: null };
 }
 let tr = trBlank();
 const trEl = id => document.getElementById(id);
+const trRole = () => (currentAdmin ? currentAdmin.role : null);
+const trCanKeep = () => !tr.v1 && (trRole() === 'owner' || trRole() === 'admin');       // ติ๊กถาวรตอนอัปโหลด: เจ้าของ = ตั้งเอง · ผู้ดูแล = ขอ
+const trBadge = () => (tr.unseen || 0) + (tr.pend || 0);
 const trBase = n => String(n || 'ไฟล์').split(/[\\/]/).pop().replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, 200) || 'ไฟล์';
 function trSize(n) {
   n = Number(n) || 0;
@@ -12949,6 +13031,8 @@ const trWho = o => (o && o.full_name) ? o.full_name : 'ไม่ทราบผ�
 const trCatName = k => TR_CAT[k] ? TR_CAT[k].t : String(k || 'อื่น ๆ');
 // ยังไม่รัน 049 = ไม่มีตาราง/ฟังก์ชัน → แถบเหลืองบอกให้รัน ไม่ใช่ error แดง
 function trIsMissing(e) { return !!e && (e.code === '42P01' || e.code === 'PGRST205' || e.code === 'PGRST202' || /does not exist|schema cache|could not find the (table|function)/i.test(e.message || '')); }
+// ยังไม่รัน 050 = ตาราง 049 มีแต่ไม่มีคอลัมน์ thumb/is_permanent หรือตาราง transfer_tags/transfer_requests (ตรวจก่อน trIsMissing — ข้อความ error คล้ายกัน)
+const trIsV1 = e => !!e && (e.code === '42703' || e.code === 'PGRST200' || e.code === 'PGRST204' || /thumb|is_permanent|transfer_tags|transfer_requests|relationship/i.test(e.message || ''));
 function trErrText(e) {
   const m = String((e && (e.message || e.error_description || e.error)) || e || '');
   if (/[฀-๿]/.test(m)) return m;                                     // ข้อความไทยจาก transfer_* ของฐาน แสดงตามที่ฐานบอก
@@ -12960,6 +13044,7 @@ function trErrText(e) {
   return m || 'ไม่ทราบสาเหตุ';
 }
 function trLeft(f) {
+  if (f.is_permanent) return null;
   const ms = Date.parse(f.expires_at) - Date.now();
   if (!(ms > 0)) return null;
   const days = Math.ceil(ms / 86400000);
@@ -12968,7 +13053,11 @@ function trLeft(f) {
   if (days <= 7) return { t: 'เหลือ ' + days + ' วัน', cls: 'st-warn' };
   return { t: 'เหลือ ' + days + ' วัน', cls: 'st-off' };
 }
-const trCanDelete = f => !!f && !!currentUserId && (f.uploaded_by === currentUserId || isOwner());     // ฐานบังคับซ้ำ (transfer_delete) — ผู้ดูแลลบของคนอื่นไม่ได้
+const trAlive = f => !!f && (f.is_permanent || Date.parse(f.expires_at) > Date.now());
+// ลบ: ไฟล์ถาวร = เจ้าของเท่านั้น · ไฟล์ปกติ = ผู้อัปโหลดหรือเจ้าของ (ฐานบังคับซ้ำ — ผู้ดูแลลบของคนอื่น/ไฟล์ถาวรไม่ได้)
+const trCanDelete = f => !!f && !!currentUserId && (f.is_permanent ? isOwner() : (f.uploaded_by === currentUserId || isOwner()));
+const trCanTag = f => !!f && !tr.v1 && !!currentUserId && (f.uploaded_by === currentUserId || isOwner());
+const trPendingReq = (fileId, kind) => tr.reqs.find(r => r.file_id === fileId && r.kind === kind && r.status === 'pending');
 function trPreviewable(f) {
   const n = String(f.file_name || '').toLowerCase();
   if (/\.(svg|heic|heif|tif|tiff|raw|cr2|cr3|nef|arw|dng|orf|rw2)$/.test(n)) return false;
@@ -12984,24 +13073,85 @@ function trSafeType(cat, name, type) {
   return 'application/octet-stream';
 }
 
+// ── รูปตัวอย่าง (thumbnail) ──
+const TR_THUMB_OK = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+=*$/;
+function trThumbKind(f) {
+  const t = String(f.type || '').toLowerCase(), n = String(f.name || '').toLowerCase();
+  if (/\.(jpe?g|png|gif|webp|avif|bmp)$/.test(n) || /^image\/(jpeg|png|gif|webp|avif|bmp)$/.test(t)) return 'img';
+  if (/\.(mp4|m4v|mov|webm)$/.test(n) || /^video\/(mp4|quicktime|webm|x-m4v)$/.test(t)) return 'vid';
+  return null;
+}
+function trDrawThumb(src, w, h) {
+  if (!(w > 0 && h > 0)) return null;
+  const k = Math.min(1, TR_THUMB / Math.max(w, h)), cw = Math.max(1, Math.round(w * k)), ch = Math.max(1, Math.round(h * k));
+  const c = document.createElement('canvas'); c.width = cw; c.height = ch;
+  const g = c.getContext('2d');
+  if (!g) return null;
+  g.fillStyle = '#fff'; g.fillRect(0, 0, cw, ch); g.drawImage(src, 0, 0, cw, ch);
+  for (const q of [0.72, 0.55, 0.4]) { const u = c.toDataURL('image/jpeg', q); if (u.indexOf('data:image/jpeg;base64,') === 0 && u.length <= 38000) return u; }
+  return null;
+}
+async function trThumbWork(f, kind) {
+  if (kind === 'img') {
+    let bmp = null;
+    try { bmp = await createImageBitmap(f, { resizeWidth: TR_THUMB * 2, resizeQuality: 'medium' }); } catch (x) { bmp = null; }
+    if (!bmp) { try { bmp = await createImageBitmap(f); } catch (x) { bmp = null; } }
+    if (!bmp) return null;
+    const u = trDrawThumb(bmp, bmp.width, bmp.height);
+    if (bmp.close) bmp.close();
+    return u;
+  }
+  const url = URL.createObjectURL(f), v = document.createElement('video');
+  try {
+    v.muted = true; v.playsInline = true; v.preload = 'auto'; v.src = url;
+    await new Promise((res, rej) => { v.onloadeddata = res; v.onerror = () => rej(new Error('video')); });
+    const d = Number(v.duration);
+    if (d > 0 && isFinite(d)) await new Promise(res => { v.onseeked = res; v.currentTime = Math.min(1, d / 4); });
+    return trDrawThumb(v, v.videoWidth, v.videoHeight);
+  } finally { v.removeAttribute('src'); try { v.load(); } catch (x) { /* ไม่เป็นไร */ } URL.revokeObjectURL(url); }
+}
+// ไม่เคย reject · เกิน 12 วินาที = ไม่เอา (ใช้ไอคอน) — รูปตัวอย่างเสียไม่ขวางการอัปโหลด
+function trMakeThumb(f) {
+  const kind = trThumbKind(f);
+  if (!kind) return Promise.resolve(null);
+  return Promise.race([trThumbWork(f, kind).catch(() => null), new Promise(r => setTimeout(() => r(null), 12000))]);
+}
+function trThumbHtml(f) {
+  const id = escapeHtml(f.id);
+  const inner = f.thumb && TR_THUMB_OK.test(f.thumb) ? '<img src="' + f.thumb + '" alt="" loading="lazy">' : '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">' + (TR_ICON[f.category] || TR_ICON.other) + '</svg>';
+  return trPreviewable(f) ? '<button class="tr-thumb" type="button" data-act="view" data-id="' + id + '" aria-label="เปิดดู ' + escapeHtml(f.file_name) + '"' + (tr.busy[f.id] ? ' disabled' : '') + '>' + inner + '</button>'
+    : '<span class="tr-thumb" aria-hidden="true">' + inner + '</span>';
+}
+
 // ── โหลด ──
+const TR_FILE_COLS = 'id, category, file_name, mime_type, size_bytes, note, uploaded_by, uploaded_at, expires_at, status, uploader:admins!transfer_files_uploaded_by_fkey(full_name)';
+const TR_FILE_COLS2 = TR_FILE_COLS + ', thumb, is_permanent, tags:transfer_tags(admin_id, seen_at, who:admins(full_name))';
+const trFilesQuery = cols => db.from('transfer_files').select(cols).eq('status', 'ready').order('uploaded_at', { ascending: false }).limit(1000);
+const trReqQuery = () => db.from('transfer_requests').select('id, file_id, kind, status, created_at, decided_at, decision_note, requester_id, file:transfer_files(file_name, category, size_bytes, status, is_permanent, expires_at), requester:admins!transfer_requests_requester_id_fkey(full_name), decider:admins!transfer_requests_decided_by_fkey(full_name)')
+  .order('created_at', { ascending: false }).limit(100);
 function trEventsQuery(from) {
   let q = db.from('transfer_events').select('id, kind, created_at, actor_id, file_id, file:transfer_files(file_name, category, size_bytes), actor:admins(full_name)').order('created_at', { ascending: false });
   if (tr.evFile) q = q.eq('file_id', tr.evFile.id);
   if (tr.evAct) q = q.eq('kind', tr.evAct);
   return q.range(from, from + TR_EV_PAGE - 1);
 }
+function trCountUnseen() { return tr.files.filter(f => trAlive(f) && (f.tags || []).some(t => t.admin_id === currentUserId && !t.seen_at)).length; }
+function trCountPending() { return isOwner() ? tr.reqs.filter(r => r.status === 'pending' && r.file && r.file.status === 'ready').length : 0; }
 async function trFetch(uid, tok) {
-  const [fr, er] = await Promise.all([
-    db.from('transfer_files').select('id, category, file_name, mime_type, size_bytes, note, uploaded_by, uploaded_at, expires_at, status, uploader:admins!transfer_files_uploaded_by_fkey(full_name)')
-      .eq('status', 'ready').order('uploaded_at', { ascending: false }).limit(1000),
-    trEventsQuery(0),
-  ]);
+  let [fr, er, rq] = await Promise.all([trFilesQuery(TR_FILE_COLS2), trEventsQuery(0), trReqQuery()]);
   if (uid !== currentUserId || tok !== tr.tok) return false;            // ออกจากระบบ/สลับบัญชี/มีรอบโหลดใหม่ระหว่างรอ → ทิ้ง
-  if (trIsMissing(fr.error) || trIsMissing(er.error)) { tr.missing = true; tr.error = ''; tr.files = []; tr.events = []; tr.loaded = true; return true; }
+  let v1 = false;
+  if ((fr.error && trIsV1(fr.error)) || (rq.error && trIsV1(rq.error))) {  // ยังไม่รัน 050 → ใช้คอลัมน์ของ 049 ล้วน
+    v1 = true;
+    fr = await trFilesQuery(TR_FILE_COLS);
+    rq = { data: [], error: null };
+    if (uid !== currentUserId || tok !== tr.tok) return false;
+  }
+  if (trIsMissing(fr.error) || trIsMissing(er.error)) { tr.missing = true; tr.v1 = false; tr.error = ''; tr.files = []; tr.events = []; tr.reqs = []; tr.loaded = true; return true; }
   tr.missing = false;
-  if (fr.error || er.error) { tr.error = 'โหลดข้อมูลโอนไฟล์ไม่สำเร็จ: ' + trErrText(fr.error || er.error); return true; }     // ข้อมูลเดิมที่โหลดไว้ยังอยู่ (ไม่ล้างจอเปล่า)
-  tr.error = ''; tr.files = fr.data || []; tr.events = er.data || []; tr.evMore = (er.data || []).length >= TR_EV_PAGE; tr.loaded = true;
+  if (fr.error || er.error || rq.error) { tr.error = 'โหลดข้อมูลโอนไฟล์ไม่สำเร็จ: ' + trErrText(fr.error || er.error || rq.error); return true; }     // ข้อมูลเดิมที่โหลดไว้ยังอยู่ (ไม่ล้างจอเปล่า)
+  tr.v1 = v1; tr.error = ''; tr.files = fr.data || []; tr.events = er.data || []; tr.reqs = rq.data || []; tr.evMore = (er.data || []).length >= TR_EV_PAGE; tr.loaded = true;
+  tr.unseen = trCountUnseen(); tr.pend = trCountPending(); updateNavBadges();
   return true;
 }
 async function loadTransfer() {
@@ -13016,6 +13166,16 @@ async function loadTransfer() {
   renderTransfer();
   if (tr.error) showFatalError(tr.error);
   else if (!tr.missing) trSweep(uid, me);
+}
+// ตัวเลขแดงข้างเมนูตอนยังไม่ได้เปิดหน้านี้ (ตั้งตอนล็อกอิน/กลับมาที่แท็บ) — ยังไม่รัน 050 = 0 เงียบ ๆ (ตัวเลขนี้แสดงผลอย่างเดียว)
+async function trLoadUnseen() {
+  if (!currentUserId) return;
+  const uid = currentUserId, me = tr;
+  const [a, b] = await Promise.all([db.rpc('transfer_unseen_count'), db.rpc('transfer_pending_count')]);
+  if (tr !== me || uid !== currentUserId) return;
+  tr.unseen = a.error ? 0 : (Number(a.data) || 0);
+  tr.pend = b.error ? 0 : (Number(b.data) || 0);
+  updateNavBadges();
 }
 async function trLoadEvents(append) {
   const uid = currentUserId, me = tr, tok = ++tr.evTok;
@@ -13055,23 +13215,40 @@ async function trSweep(uid, me) {
 function trRenderAlert() {
   trEl('trAlert').innerHTML = tr.missing ? '<div class="alert alert-warn">ยังไม่ได้ติดตั้งระบบโอนไฟล์ในฐานข้อมูล — ต้องรัน migration 049 ก่อน</div>'
     : tr.error ? '<div class="alert alert-red"><strong>' + escapeHtml(tr.error) + '</strong></div>'
-    : tr.note ? '<div class="alert alert-warn">' + escapeHtml(tr.note) + '</div>' : '';
+    : (tr.v1 ? '<div class="alert alert-warn">ยังไม่ได้รัน migration 050 — ยังไม่มี Tag พนักงาน รูปตัวอย่าง เก็บถาวร และคำขอ (อัปโหลด เปิดดู ดาวน์โหลด ลบ ใช้ได้ตามปกติ · เพดานไฟล์ยังเป็นค่าเดิมของ 049)</div>' : '')
+      + (tr.note ? '<div class="alert alert-warn">' + escapeHtml(tr.note) + '</div>' : '');
 }
 function trRowHtml(f) {
-  const id = escapeHtml(f.id), life = trLeft(f), dis = tr.busy[f.id] ? ' disabled' : '';
+  const id = escapeHtml(f.id), life = trLeft(f), dis = tr.busy[f.id] ? ' disabled' : '', role = trRole();
+  const pk = trPendingReq(f.id, 'keep'), pd = trPendingReq(f.id, 'delete');
+  const btn = (act, label, cls) => '<button class="btn btn-sm' + (cls ? ' ' + cls : '') + ' tr-act" type="button" data-act="' + act + '" data-id="' + id + '"' + dis + '>' + label + '</button>';
   const acts = [];
-  if (trPreviewable(f)) acts.push('<button class="btn btn-sm tr-act" type="button" data-act="view" data-id="' + id + '"' + dis + '>เปิดดู</button>');
-  acts.push('<button class="btn btn-sm tr-act" type="button" data-act="download" data-id="' + id + '"' + dis + '>ดาวน์โหลด</button>');
+  if (trPreviewable(f)) acts.push(btn('view', 'เปิดดู'));
+  acts.push(btn('download', 'ดาวน์โหลด'));
   acts.push('<button class="btn btn-sm tr-act" type="button" data-act="hist" data-id="' + id + '">ประวัติ</button>');
-  if (trCanDelete(f)) acts.push('<button class="btn btn-sm btn-danger tr-act" type="button" data-act="delete" data-id="' + id + '"' + dis + '>ลบ</button>');
-  return '<div class="tr-row" data-id="' + id + '"><div class="tr-main"><div class="tr-name">' + escapeHtml(f.file_name) + '</div>' +
+  if (trCanTag(f)) acts.push(btn('tags', 'แก้ Tag'));
+  if (!tr.v1) {
+    if (role === 'owner') acts.push(f.is_permanent ? btn('unpin', 'ปลดถาวร') : btn('pin', 'ตั้งเป็นไฟล์ถาวร'));
+    else if (role === 'admin' && !f.is_permanent && f.uploaded_by === currentUserId && !pk) acts.push(btn('req-keep', 'ขอเก็บถาวร'));
+    else if (role === 'admin' && f.is_permanent && !pd) acts.push(btn('req-del', 'ขอลบ', 'btn-danger'));
+  }
+  if (trCanDelete(f)) acts.push(btn('delete', 'ลบ', 'btn-danger'));
+  const tags = (f.tags || []).slice().sort((a, b) => (b.admin_id === currentUserId) - (a.admin_id === currentUserId));
+  const tagLine = tags.length ? '<div class="tr-tagline"><span>ถึง:</span>' + tags.map(t => {
+    const me = t.admin_id === currentUserId;
+    return '<span class="st ' + (t.seen_at ? 'st-ok' : me ? 'st-bad' : 'st-warn') + '">' + escapeHtml(me ? 'คุณ' : trWho(t.who)) + ' · ' + (t.seen_at ? 'เปิดแล้ว' : 'ยังไม่เปิด') + '</span>';
+  }).join('') + '</div>' : '';
+  const pills = (f.is_permanent ? '<span class="st st-ok">ถาวร · Asset</span>' : '') + (life ? '<span class="st ' + life.cls + '">' + life.t + '</span>' : '')
+    + (pk ? '<span class="st st-warn">รออนุมัติเก็บถาวร</span>' : '') + (pd ? '<span class="st st-bad">รอเจ้าของอนุมัติการลบ</span>' : '');
+  return '<div class="tr-row" data-id="' + id + '">' + trThumbHtml(f) + '<div class="tr-main"><div class="tr-name">' + escapeHtml(f.file_name) + '</div>' +
     '<div class="tr-meta">' + trSize(f.size_bytes) + ' · ลงโดย ' + escapeHtml(trWho(f.uploader)) + ' · ' + formatDateTime(f.uploaded_at) + '</div>' +
-    (f.note ? '<div class="tr-note">หมายเหตุ: ' + escapeHtml(f.note) + '</div>' : '') + '</div>' +
-    (life ? '<span class="st ' + life.cls + '">' + life.t + '</span>' : '') + '<div class="tr-acts">' + acts.join('') + '</div></div>';
+    (f.note ? '<div class="tr-note">หมายเหตุ: ' + escapeHtml(f.note) + '</div>' : '') + tagLine + '</div>' +
+    (pills ? '<div class="tr-pills">' + pills + '</div>' : '') + '<div class="tr-acts">' + acts.join('') + '</div></div>';
 }
 function trVisibleFiles() {
-  const now = Date.now(), q = tr.q.trim().toLowerCase();
-  return tr.files.filter(f => Date.parse(f.expires_at) > now && (!tr.mine || f.uploaded_by === currentUserId)
+  const q = tr.q.trim().toLowerCase();
+  return tr.files.filter(f => trAlive(f) && (!tr.mine || f.uploaded_by === currentUserId) && (!tr.perm || f.is_permanent)
+    && (!tr.toMe || (f.tags || []).some(t => t.admin_id === currentUserId))
     && (!q || [f.file_name, f.note, trWho(f.uploader)].some(x => String(x || '').toLowerCase().includes(q))));
 }
 function trRenderList() {
@@ -13091,15 +13268,56 @@ function trRenderList() {
     return items.length ? '<section class="tr-group" aria-label="' + c.t + '"><h3 class="tr-group-h">' + c.t + ' <span class="en">· ' + c.en + '</span> <span class="n">' + items.length + '</span></h3>' + items.map(trRowHtml).join('') + '</section>' : '';
   }).join('');
 }
+function trTagPickHtml(sel, exceptId) {
+  const people = staff.filter(a => a.is_active && a.id !== exceptId);
+  return people.length ? people.map(a => '<label><input type="checkbox" value="' + escapeHtml(a.id) + '"' + (sel.indexOf(a.id) >= 0 ? ' checked' : '') + '> ' + escapeHtml(a.full_name) + '</label>').join('')
+    : '<span class="hint">ไม่มีพนักงานคนอื่นให้ Tag</span>';
+}
+// ── รอยืนยัน (วาง/เลือกไฟล์แล้วยังไม่อัปโหลด) ──
+function trRenderStage() {
+  const box = trEl('trStage');
+  const ok = tr.stage.filter(i => i.state === 'ok');
+  box.hidden = !tr.stage.length;
+  if (!tr.stage.length) { trEl('trStageList').innerHTML = ''; return; }
+  const keepOn = trCanKeep() && tr.stageKeep, over = keepOn ? ok.filter(i => i.file.size > TR_PERM_MAX) : [];
+  trEl('trStageHead').textContent = 'รอยืนยันอัปโหลด — ' + ok.length + ' ไฟล์ · ' + trSize(ok.reduce((n, i) => n + i.file.size, 0)) + ' · ยังไม่ได้อัปโหลด';
+  trEl('trStageList').innerHTML = tr.stage.map(it => {
+    const thumb = it.thumb && TR_THUMB_OK.test(it.thumb) ? '<img src="' + it.thumb + '" alt="" loading="lazy">' : '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">' + TR_ICON[it.guess || 'other'] + '</svg>';
+    return '<div class="tr-row" data-sid="' + it.id + '"><span class="tr-thumb" aria-hidden="true">' + thumb + '</span><div class="tr-main"><div class="tr-name">' + escapeHtml(it.name) + '</div>' +
+      '<div class="tr-meta">' + trSize(it.file.size) + '</div>' +
+      (it.state === 'bad' ? '<div class="tr-bad">' + escapeHtml(it.msg) + ' — ไฟล์นี้จะไม่ถูกอัปโหลด</div>' : '') +
+      (over.indexOf(it) >= 0 ? '<div class="tr-bad">ใหญ่เกินเพดานไฟล์ถาวร ' + trSize(TR_PERM_MAX) + ' — เอาติ๊กถาวรออก หรือเอาไฟล์นี้ออก</div>' : '') + '</div>' +
+      '<div class="tr-acts"><button class="btn btn-sm tr-act" type="button" data-act="stage-rm" data-sid="' + it.id + '" aria-label="เอา ' + escapeHtml(it.name) + ' ออกจากรายการ">✕ เอาออก</button></div></div>';
+  }).join('');
+  const go = trEl('trConfirm');
+  go.textContent = ok.length ? 'ยืนยันอัปโหลด ' + ok.length + ' ไฟล์' : 'ยืนยันอัปโหลด';
+  go.disabled = !ok.length || !!over.length || tr.missing;
+  trEl('trKeepField').hidden = !trCanKeep();
+  trEl('trTagField').hidden = tr.v1;
+}
+function trRenderStageControls() {          // ตัวเลือก Tag/ถาวรของรอยืนยัน — วาดใหม่เฉพาะตอนเริ่มมีไฟล์/ออกจากระบบ (ไม่ขโมยโฟกัสตอนรูปตัวอย่างทยอยเสร็จ)
+  trEl('trTagPick').innerHTML = trTagPickHtml(tr.stageTags, currentUserId);
+  const role = trRole();
+  trEl('trKeepText').textContent = role === 'owner' ? 'เก็บถาวร (คลัง Asset) — ไม่ถูกลบตอนครบ 30 วัน · ไฟล์ละไม่เกิน 500 MB'
+    : 'ขอเก็บถาวร (คลัง Asset) — เจ้าของต้องอนุมัติก่อนไฟล์ครบ 30 วัน ไม่ทันก็หมดอายุตามปกติ · ไฟล์ละไม่เกิน 500 MB';
+  trEl('trKeep').checked = tr.stageKeep;
+}
 function trRenderQueue() {
   const box = trEl('trQueue');
   if (!tr.queue.length) { box.innerHTML = ''; return; }
   const ST = { wait: ['รอคิว', 'st-off'], up: ['กำลังอัปโหลด…', 'st-warn'], ok: ['อัปโหลดแล้ว', 'st-ok'], bad: ['ไม่สำเร็จ', 'st-bad'] };
-  box.innerHTML = tr.queue.map(it => '<div class="tr-q"><span class="tr-name">' + escapeHtml(it.name) + ' <span class="tr-meta">· ' + trSize(it.file.size) + '</span></span>' +
-    '<span class="st ' + ST[it.state][1] + '">' + ST[it.state][0] + '</span>' +
-    (it.state === 'bad' ? '<span class="tr-bad">' + escapeHtml(it.msg) + '</span>' : it.state === 'ok' && it.msg ? '<span class="tr-meta" style="flex:1 1 100%;">' + escapeHtml(it.msg) + '</span>' : '') + '</div>').join('') +
+  box.innerHTML = tr.queue.map(it => {
+    const pct = it.total ? Math.min(100, Math.floor(it.sent * 100 / it.total)) : null;
+    return '<div class="tr-q"><span class="tr-name">' + escapeHtml(it.name) + ' <span class="tr-meta">· ' + trSize(it.file.size) + '</span></span>' +
+      '<span class="st ' + ST[it.state][1] + '">' + ST[it.state][0] + (it.state === 'up' && pct !== null ? ' ' + pct + '%' : '') + '</span>' +
+      (it.state === 'wait' || (it.state === 'up' && it.cancelTus) ? '<button class="btn btn-sm" type="button" data-act="q-cancel" data-qid="' + it.id + '">ยกเลิก</button>' : '') +
+      (it.state === 'up' && pct !== null ? '<span class="tr-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + pct + '" aria-label="ความคืบหน้า ' + escapeHtml(it.name) + '"><i style="width:' + pct + '%"></i></span><span class="tr-meta" style="flex:1 1 100%;">' + trSize(it.sent) + ' จาก ' + trSize(it.total) + '</span>' : '') +
+      (it.state === 'bad' ? '<span class="tr-bad">' + escapeHtml(it.msg) + '</span>' : it.state === 'ok' && it.msg ? '<span class="tr-meta" style="flex:1 1 100%;">' + escapeHtml(it.msg) + '</span>' : '') + '</div>';
+  }).join('') +
     (!tr.uploading && tr.queue.some(i => i.state === 'ok' || i.state === 'bad') ? '<div style="margin-top:8px;"><button class="btn btn-sm" type="button" data-act="q-clear">ล้างรายการที่เสร็จแล้ว</button></div>' : '');
 }
+let trBarRaf = 0;
+function trBarSoon() { if (!trBarRaf) trBarRaf = requestAnimationFrame(() => { trBarRaf = 0; trRenderQueue(); }); }     // ความคืบหน้ามาถี่ — วาดอย่างมากเฟรมละครั้ง
 function trRenderLog() {
   const q = tr.evQ.trim().toLowerCase();
   trEl('trEvFile').innerHTML = tr.evFile ? '<div class="alert alert-plain">ประวัติของไฟล์ <strong>' + escapeHtml(tr.evFile.name) + '</strong> <button class="btn btn-sm" type="button" data-act="ev-all" style="margin-left:8px;">ดูประวัติทั้งหมด</button></div>' : '';
@@ -13113,42 +13331,91 @@ function trRenderLog() {
   trEl('trLogCount').textContent = rows.length ? 'แสดง ' + rows.length + ' รายการ' + (q ? ' (ค้นเฉพาะที่โหลดมาแล้ว — กดโหลดเพิ่มถ้าต้องการย้อนไกลกว่านี้)' : '') : '';
   trEl('trLogMore').hidden = !tr.evMore;
 }
+// ── คำขอ (ผู้ดูแล → เจ้าของ) ──
+function trReqRowHtml(r) {
+  const id = escapeHtml(r.id), st = TR_REQ_ST[r.status] || [r.status, 'st-off'], f = r.file;
+  const mine = r.requester_id === currentUserId, pending = r.status === 'pending';
+  const acts = [];
+  if (pending && isOwner()) acts.push('<button class="btn btn-sm btn-primary tr-act" type="button" data-act="req-ok" data-rid="' + id + '">อนุมัติ</button>', '<button class="btn btn-sm btn-danger tr-act" type="button" data-act="req-no" data-rid="' + id + '">ปฏิเสธ</button>');
+  if (pending && mine) acts.push('<button class="btn btn-sm tr-act" type="button" data-act="req-wd" data-rid="' + id + '">ถอนคำขอ</button>');
+  const due = pending && r.kind === 'keep' && f && f.expires_at ? '<div class="tr-meta">ต้องตัดสินก่อนไฟล์หมดอายุ: ' + formatDateTime(f.expires_at) + '</div>' : '';
+  return '<div class="tr-row" data-rid="' + id + '"><div class="tr-main"><div class="tr-name">' + escapeHtml(TR_REQ_KIND[r.kind] || r.kind) + ' · ' + escapeHtml(f ? f.file_name : 'ไฟล์ที่ไม่พบ') + '</div>' +
+    '<div class="tr-meta">' + (f ? escapeHtml(trCatName(f.category)) + ' · ' + trSize(f.size_bytes) + ' · ' : '') + 'ผู้ขอ ' + escapeHtml(trWho(r.requester)) + ' · ' + formatDateTime(r.created_at) + '</div>' + due +
+    (!pending && (r.decider || r.decided_at) ? '<div class="tr-meta">' + (r.decider ? 'โดย ' + escapeHtml(trWho(r.decider)) + ' · ' : '') + (r.decided_at ? formatDateTime(r.decided_at) : '') + '</div>' : '') +
+    (r.decision_note ? '<div class="tr-note">เหตุผล/หมายเหตุ: ' + escapeHtml(r.decision_note) + '</div>' : '') + '</div>' +
+    '<div class="tr-pills"><span class="st ' + st[1] + '">' + escapeHtml(st[0]) + '</span></div>' + (acts.length ? '<div class="tr-acts">' + acts.join('') + '</div>' : '') + '</div>';
+}
+function trRenderReqs() {
+  const pend = tr.reqs.filter(r => r.status === 'pending' && r.file && r.file.status === 'ready'), done = tr.reqs.filter(r => pend.indexOf(r) < 0);
+  trEl('trReqN').textContent = pend.length ? String(pend.length) : '';
+  trEl('trReqTab').hidden = tr.v1 || tr.missing;
+  trEl('trReqPending').innerHTML = pend.length ? '<section class="tr-group" aria-label="รอเจ้าของตัดสิน"><h3 class="tr-group-h">รอเจ้าของตัดสิน <span class="n">' + pend.length + '</span></h3>' + pend.map(trReqRowHtml).join('') + '</section>'
+    : '<div class="empty">ไม่มีคำขอที่รอตัดสิน</div>';
+  trEl('trReqDone').innerHTML = done.length ? '<section class="tr-group" aria-label="คำขอที่ปิดแล้ว"><h3 class="tr-group-h">ปิดแล้ว <span class="n">' + done.length + '</span></h3>' + done.slice(0, 50).map(trReqRowHtml).join('') + '</section>' : '';
+}
 function renderTransfer() {
   trRenderAlert();
   trEl('trUpload').hidden = tr.missing;
-  trRenderQueue(); trRenderList(); trRenderLog();
+  trRenderStage(); trRenderQueue(); trRenderList(); trRenderLog(); trRenderReqs();
+  if (tr.tab === 'req' && (tr.v1 || tr.missing)) trTab('files');
 }
 function trTab(name) {
   tr.tab = name;
   document.querySelectorAll('#trTabs .mail-tab').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === name)));
   trEl('trFilesPane').hidden = name !== 'files';
   trEl('trLogPane').hidden = name !== 'log';
+  trEl('trReqPane').hidden = name !== 'req';
 }
 function trReset() {
+  for (const it of tr.queue) if (it.cancelTus) it.cancelTus();       // ตัวอัปโหลดที่ค้างของคนเดิม — หยุด
   tr = trBlank();
-  ['trAlert', 'trList', 'trLog', 'trQueue', 'trChips', 'trEvFile'].forEach(id => { trEl(id).innerHTML = ''; });
-  ['trFilesN', 'trLogCount'].forEach(id => { trEl(id).textContent = ''; });
-  ['trNote', 'trSearch', 'trEvSearch', 'trFile'].forEach(id => { trEl(id).value = ''; });
-  trEl('trEvAct').value = ''; trEl('trMine').checked = false; trEl('trLogMore').hidden = true; trEl('trUpload').hidden = false;
+  ['trAlert', 'trList', 'trLog', 'trQueue', 'trChips', 'trEvFile', 'trStageList', 'trTagPick', 'trReqPending', 'trReqDone', 'trTagDlgPick'].forEach(id => { trEl(id).innerHTML = ''; });
+  ['trFilesN', 'trLogCount', 'trReqN', 'trKeepText', 'trTagDlgFile'].forEach(id => { trEl(id).textContent = ''; });
+  ['trNote', 'trSearch', 'trEvSearch', 'trFile', 'trDecideNote'].forEach(id => { trEl(id).value = ''; });
+  trEl('trEvAct').value = ''; trEl('trMine').checked = false; trEl('trToMe').checked = false; trEl('trPerm').checked = false; trEl('trKeep').checked = false;
+  trEl('trLogMore').hidden = true; trEl('trUpload').hidden = false; trEl('trStage').hidden = true; trEl('trReqTab').hidden = false;
+  ['trTagDlg', 'trDecideDlg'].forEach(id => { const d = trEl(id); if (d.open) d.close(); });
+  trEl('trTagDlgErr').hidden = true; trEl('trTagDlgErr').textContent = ''; trEl('trDecideErr').hidden = true; trEl('trDecideErr').textContent = '';
   closeConfirm();                                   // หน้าต่างยืนยันลบเก็บชื่อไฟล์ไว้ใน DOM
   trTab('files');
+  updateNavBadges();
 }
 
-// ── อัปโหลด ──
+// ── วาง/เลือกไฟล์ → รอยืนยัน ──
 function trPick(fileList) {
   const list = [...(fileList || [])];
   if (!list.length || !currentUserId || tr.missing) return;
-  const note = trEl('trNote').value.trim().slice(0, 300);
+  const me = tr, first = !tr.stage.length;
   for (const f of list) {
-    const it = { id: ++tr.seq, file: f, name: trBase(f.name), note, state: 'wait', msg: '' };
+    const it = { id: ++tr.seq, file: f, name: trBase(f.name), state: 'ok', msg: '', thumb: null, tp: null, guess: trThumbKind(f) === 'img' ? 'photo' : trThumbKind(f) === 'vid' ? 'video' : 'other' };
     if (f.size === 0) { it.state = 'bad'; it.msg = 'ไฟล์ว่างเปล่า (0 ไบต์) — ถ้าเป็นโฟลเดอร์ ให้บีบอัดเป็น .zip ก่อน'; }
     else if (f.size > TR_MAX) { it.state = 'bad'; it.msg = 'ไฟล์ใหญ่เกิน ' + trSize(TR_MAX) + ' (ไฟล์นี้ ' + trSize(f.size) + ')'; }
-    tr.queue.push(it);
+    else {
+      it.tp = trMakeThumb(f);                       // สร้างรูปตัวอย่างระหว่างที่ผู้ใช้ตรวจรายการ (ไม่ขวาง — เสร็จแล้ววาดใหม่)
+      it.tp.then(t => { it.thumb = t; if (tr === me && tr.stage.indexOf(it) >= 0) trRenderStage(); });
+    }
+    tr.stage.push(it);
   }
-  trEl('trNote').value = '';                         // หมายเหตุใช้กับชุดที่เลือกครั้งนี้ — ชุดถัดไปไม่เผลอใช้ซ้ำ
+  if (first) trRenderStageControls();
+  trRenderStage();
+  const box = trEl('trStage'); if (box && box.scrollIntoView && first) box.scrollIntoView({ block: 'nearest' });
+}
+function trStageClear() { tr.stage = []; tr.stageTags = []; tr.stageKeep = false; trEl('trNote').value = ''; trEl('trKeep').checked = false; trRenderStage(); }
+function trConfirm() {
+  const ok = tr.stage.filter(i => i.state === 'ok');
+  if (!ok.length || !currentUserId || tr.missing) return;
+  const keep = trCanKeep() && tr.stageKeep;
+  if (keep && ok.some(i => i.file.size > TR_PERM_MAX)) return;
+  const note = trEl('trNote').value.trim().slice(0, 300), tags = tr.v1 ? [] : tr.stageTags.slice();
+  for (const it of tr.stage) {
+    tr.queue.push({ id: it.id, file: it.file, name: it.name, note, tags, keep: it.state === 'ok' && keep, tp: it.tp, state: it.state === 'ok' ? 'wait' : 'bad', msg: it.msg, sent: 0, total: 0, tus: null, cancelTus: null, cancelled: false });
+  }
+  trStageClear();
   trRenderQueue();
   trUploadLoop();
 }
+
+// ── อัปโหลด ──
 async function trUploadLoop() {
   if (tr.uploading) return;
   const me = tr;
@@ -13170,31 +13437,100 @@ async function trUploadLoop() {
     if (await trFetch(uid, tok)) renderTransfer();
   }
 }
+let trTusP = null;
+function loadTus() {                                          // tus โหลดตอนอัปโหลดไฟล์ใหญ่ครั้งแรกเท่านั้น (เหมือน ZXing)
+  if (window.tus) return Promise.resolve();
+  if (!trTusP) trTusP = new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = TR_TUS_SRC;
+    s.onload = res;
+    s.onerror = () => { trTusP = null; rej(new Error('โหลดตัวอัปโหลดไฟล์ใหญ่ไม่สำเร็จ')); };
+    document.head.appendChild(s);
+  });
+  return trTusP;
+}
+function trTusError(err) {
+  const r = err && err.originalResponse, st = r ? r.getStatus() : 0, body = r ? String(r.getBody() || '') : '';
+  return new Error(st === 413 || /exceed|too large|maximum allowed/i.test(body) ? 'ไฟล์ใหญ่เกินที่ระบบเก็บไฟล์รับได้ (ตรวจ Global file size limit ใน Supabase → Storage → Settings)'
+    : st === 401 || st === 403 || /row-level security|not authorized/i.test(body) ? 'ไม่มีสิทธิ์อัปโหลดไฟล์นี้ (หรือเซสชันหมดอายุ — เข้าสู่ระบบใหม่แล้วลองอีกครั้ง)'
+    : st === 409 || /already exists|duplicate/i.test(body) ? 'มีไฟล์พาธนี้อยู่แล้ว — ลองอัปโหลดใหม่อีกครั้ง'
+    : 'อัปโหลดไม่สำเร็จ' + (st ? ' (รหัส ' + st + ')' : '') + ': ' + String((err && err.message) || err));
+}
+// ส่งไฟล์ขึ้นถังด้วย tus (chunk 6 MB · ลองใหม่เองเมื่อเน็ตสะดุด · แถบความคืบหน้า) — พาธใหม่ทุกครั้งที่ begin จึงไม่ต่อจากการอัปโหลดเก่า (ไม่เรียก resumeFromPreviousUpload)
+function trSendTus(me, it, path, contentType) {
+  return new Promise(resolve => {
+    const up = new window.tus.Upload(it.file, {
+      endpoint: SUPABASE_URL + '/storage/v1/upload/resumable',
+      retryDelays: [0, 3000, 5000, 10000, 20000],
+      headers: { apikey: SUPABASE_ANON_KEY, 'x-upsert': 'false' },
+      uploadDataDuringCreation: true,
+      removeFingerprintOnSuccess: true,
+      chunkSize: 6 * 1024 * 1024,
+      metadata: { bucketName: TR_BUCKET, objectName: path, contentType: contentType, cacheControl: '3600' },
+      onBeforeRequest: req => db.auth.getSession().then(r => { const t = r && r.data && r.data.session && r.data.session.access_token; if (t) req.setHeader('Authorization', 'Bearer ' + t); }),   // โทเคนหมุนระหว่างอัปโหลดนาน ๆ
+      onProgress: (sent, total) => { it.sent = sent; it.total = total; if (tr === me) trBarSoon(); },
+      onError: err => resolve({ error: trTusError(err) }),
+      onSuccess: () => resolve({ error: null }),
+    });
+    it.tus = up;
+    it.cancelTus = () => {                                   // abort(true) = ลบส่วนที่ขึ้นไปแล้ว · ไม่เรียก onError → ปิดงานเอง (ไม่งั้นลูปค้าง)
+      try { const p = up.abort(true); if (p && p.catch) p.catch(() => {}); } catch (x) { /* ไม่เป็นไร */ }
+      resolve({ error: new Error('ยกเลิกโดยผู้ใช้') });
+    };
+    up.start();
+    if (tr === me) trRenderQueue();                          // ปุ่ม "ยกเลิก" ต้องขึ้นทันที ไม่รอไบต์แรก (เน็ตช้า/ค้างก่อนส่ง ผู้ใช้ต้องยกเลิกได้)
+  });
+}
 async function trUploadOne(me, it) {
   it.state = 'up'; trRenderQueue();
   let begun = null;
   try {
-    const b = await db.rpc('transfer_begin', { p_file_name: it.name, p_mime: it.file.type || '', p_size: it.file.size, p_note: it.note || null });
+    const args = { p_file_name: it.name, p_mime: it.file.type || '', p_size: it.file.size, p_note: it.note || null };
+    if (it.tags && it.tags.length) args.p_tags = it.tags;
+    if (it.keep) args.p_keep = true;
+    const b = await db.rpc('transfer_begin', args);
     if (tr !== me) return;
     if (b.error) throw b.error;
     begun = Array.isArray(b.data) ? b.data[0] : b.data;
     if (!begun || !begun.r_path) throw new Error('ระบบไม่ได้ออกพื้นที่อัปโหลดให้');
-    const up = await db.storage.from(TR_BUCKET).upload(begun.r_path, it.file, { contentType: trSafeType(begun.r_category, it.name, it.file.type), upsert: false, cacheControl: '3600' });
+    const ctype = trSafeType(begun.r_category, it.name, it.file.type);
+    if (it.cancelled) throw new Error('ยกเลิกโดยผู้ใช้');
+    let up = null;
+    if (it.file.size > TR_TUS_MIN) { try { await loadTus(); } catch (x) { /* โหลด tus ไม่ได้ → อัปโหลดแบบธรรมดา */ } }
+    if (tr !== me) return;
+    if (it.file.size > TR_TUS_MIN && window.tus) up = await trSendTus(me, it, begun.r_path, ctype);
+    else up = await db.storage.from(TR_BUCKET).upload(begun.r_path, it.file, { contentType: ctype, upsert: false, cacheControl: '3600' });
+    it.tus = null; it.cancelTus = null;
     if (tr !== me) return;
     if (up.error) throw up.error;
-    const cm = await db.rpc('transfer_commit', { p_id: begun.r_id });
+    let thumb = null;
+    try { thumb = it.tp ? await it.tp : null; } catch (x) { thumb = null; }
+    if (tr !== me) return;
+    const cargs = { p_id: begun.r_id };
+    if (thumb && !tr.v1) cargs.p_thumb = thumb;
+    const cm = await db.rpc('transfer_commit', cargs);
     if (tr !== me) return;
     if (cm.error) throw cm.error;
-    it.state = 'ok'; it.msg = 'เก็บในกลุ่ม ' + trCatName(begun.r_category);
+    it.state = 'ok';
+    it.msg = 'เก็บในกลุ่ม ' + trCatName(begun.r_category)
+      + (it.keep ? (cm.data ? '' : trRole() === 'owner' ? ' · ตั้งเป็นไฟล์ถาวรแล้ว' : ' · ส่งคำขอเก็บถาวรถึงเจ้าของแล้ว — รออนุมัติก่อนครบ 30 วัน') : '')
+      + (it.tags && it.tags.length ? ' · Tag ' + it.tags.length + ' คน' : '') + (cm.data ? ' · ' + cm.data : '');
   } catch (e) {
     if (tr !== me) return;
     if (begun) { try { await db.rpc('transfer_abort', { p_id: begun.r_id }); } catch (x) { /* รายการค้างถูกกวาดเองภายใน 6 ชั่วโมง */ } }
-    it.state = 'bad'; it.msg = trErrText(e);
-    showFatalError('อัปโหลด "' + it.name + '" ไม่สำเร็จ: ' + it.msg);
+    it.tus = null; it.cancelTus = null; it.state = 'bad';
+    it.msg = trIsMissing(e) && (it.tags.length || it.keep) ? 'ต้องรัน migration 050 ก่อนจึงจะ Tag พนักงานหรือเก็บถาวรได้ — อัปโหลดโดยไม่ Tag/ไม่ถาวรได้ตามปกติ' : trErrText(e);
+    if (it.cancelled) it.msg = 'ยกเลิกโดยผู้ใช้'; else showFatalError('อัปโหลด "' + it.name + '" ไม่สำเร็จ: ' + it.msg);
   }
   if (tr === me) trRenderQueue();
 }
-window.addEventListener('beforeunload', e => { if (tr.uploading) { e.preventDefault(); e.returnValue = ''; } });     // กำลังอัปโหลดอยู่ ปิดแท็บ = ไฟล์ขาดกลางคัน
+function trCancel(qid) {
+  const it = tr.queue.find(x => x.id === qid);
+  if (!it) return;
+  if (it.state === 'wait') { tr.queue = tr.queue.filter(x => x !== it); trRenderQueue(); return; }
+  if (it.state === 'up' && it.cancelTus) { it.cancelled = true; it.cancelTus(); }
+}
+window.addEventListener('beforeunload', e => { if (tr.uploading || tr.stage.length) { e.preventDefault(); e.returnValue = ''; } });     // กำลังอัปโหลด/มีไฟล์รอยืนยัน ปิดแท็บ = ไฟล์หาย
 
 // ── เปิดดู / ดาวน์โหลด / ประวัติ / ลบ ──
 async function trOpen(id, purpose) {
@@ -13220,6 +13556,8 @@ async function trOpen(id, purpose) {
       a.href = s.data.signedUrl; a.rel = 'noopener'; a.style.display = 'none';
       document.body.appendChild(a); a.click(); a.remove();
     }
+    const mine = (f.tags || []).find(t => t.admin_id === uid && !t.seen_at);      // ฐานทำเครื่องหมาย "เปิดแล้ว" ให้คนที่ถูก Tag — ทำสำเนาในหน้าด้วย ตัวเลขข้างเมนูลดทันที
+    if (mine) { mine.seen_at = new Date().toISOString(); tr.unseen = trCountUnseen(); updateNavBadges(); }
     trLoadEvents(false);                                // ประวัติ "เปิดดู/ดาวน์โหลด" ของเราขึ้นทันที
   } catch (e) {
     if (w) w.close();
@@ -13240,7 +13578,19 @@ function trHistory(id) {
 function trAskDelete(id) {
   const f = tr.files.find(x => x.id === id);
   if (!f || !trCanDelete(f)) return;
-  askConfirm('ลบไฟล์นี้?', '<p><strong>' + escapeHtml(f.file_name) + '</strong></p><p>ลบแล้วทุกคนเปิดไฟล์นี้ไม่ได้อีกและกู้คืนไม่ได้ — ประวัติการลบ (ใครลบ เมื่อไหร่) จะถูกบันทึกไว้</p>', 'ลบไฟล์', () => trDelete(id));
+  askConfirm(f.is_permanent ? 'ลบไฟล์ถาวร (Asset)?' : 'ลบไฟล์นี้?', '<p><strong>' + escapeHtml(f.file_name) + '</strong></p>' +
+    (f.is_permanent ? '<p><strong>ไฟล์นี้เป็นไฟล์ถาวรในคลัง Asset — ลบแล้วทีมงานทุกคนใช้ไม่ได้อีก</strong></p>' : '') +
+    '<p>ลบแล้วทุกคนเปิดไฟล์นี้ไม่ได้อีกและกู้คืนไม่ได้ — ประวัติการลบ (ใครลบ เมื่อไหร่) จะถูกบันทึกไว้</p>', 'ลบไฟล์', () => trDelete(id));
+}
+// ลบตัวไฟล์ในถังตามพาธ แล้วให้ฐานบันทึกว่าลบสะอาด — ล้มก็ไม่เป็นไร (รายการตายที่ฐานแล้ว ทุกคนเปิดไม่ได้ · เก็บกวาดรอบหน้าลบให้) คืน true = สะอาด
+async function trRemoveObject(path, fileId) {
+  if (!path) return false;
+  try {
+    const rm = await db.storage.from(TR_BUCKET).remove([path]);
+    if (rm.error) return false;
+    const pg = await db.rpc('transfer_mark_purged', { p_ids: [fileId] });
+    return !pg.error;
+  } catch (x) { return false; }
 }
 async function trDelete(id) {
   const f = tr.files.find(x => x.id === id), me = tr, uid = currentUserId;
@@ -13251,21 +13601,117 @@ async function trDelete(id) {
     if (tr !== me || uid !== currentUserId) return;
     closeConfirm();
     if (d.error) { showFatalError('ลบไฟล์ "' + f.file_name + '" ไม่สำเร็จ: ' + trErrText(d.error)); return; }
-    // รายการถูกตั้งเป็น "ลบแล้ว" ที่ฐาน (ทุกคนเปิดไม่ได้ทันที) → ลบตัวไฟล์ในถัง; ล้มก็ไม่เป็นไร เก็บกวาดรอบหน้าลบให้
-    const path = typeof d.data === 'string' ? d.data : '';
-    let cleaned = false;
-    if (path) {
-      try {
-        const rm = await db.storage.from(TR_BUCKET).remove([path]);
-        if (!rm.error) { const pg = await db.rpc('transfer_mark_purged', { p_ids: [id] }); cleaned = !pg.error; }
-      } catch (x) { cleaned = false; }
-    }
+    const cleaned = await trRemoveObject(typeof d.data === 'string' ? d.data : '', id);
     if (tr !== me) return;
     showToast('ลบไฟล์แล้ว' + (cleaned ? '' : ' — ตัวไฟล์ในที่เก็บจะถูกเก็บกวาดเมื่อเปิดหน้านี้ครั้งหน้า'));
   } finally {
     delete me.busy[id];
     if (tr === me && uid === currentUserId) { const tok = ++tr.tok; if (await trFetch(uid, tok)) renderTransfer(); }
   }
+}
+// เรียกฟังก์ชันฐานแล้วรีเฟรช: ok = ข้อความแจ้งผล · พลาด = แถบแดง (กฎข้อ 8)
+async function trCall(fn, args, okMsg, failTitle) {
+  const me = tr, uid = currentUserId;
+  const r = await db.rpc(fn, args);
+  if (tr !== me || uid !== currentUserId) return null;
+  if (r.error) { showFatalError(failTitle + ': ' + (trIsMissing(r.error) ? 'ยังไม่ได้รัน migration 050' : trErrText(r.error))); return null; }
+  if (okMsg) showToast(okMsg);
+  const tok = ++tr.tok;
+  if (await trFetch(uid, tok)) renderTransfer();
+  return r;
+}
+// ── Tag ──
+function trTagOpen(id) {
+  const f = tr.files.find(x => x.id === id);
+  if (!f || !trCanTag(f)) return;
+  tr.tagFor = id;
+  trEl('trTagDlgFile').textContent = f.file_name;
+  trEl('trTagDlgPick').innerHTML = trTagPickHtml((f.tags || []).map(t => t.admin_id), f.uploaded_by);
+  trEl('trTagDlgErr').hidden = true; trEl('trTagDlgErr').textContent = '';
+  trEl('trTagDlg').showModal();
+}
+async function trTagSave() {
+  const id = tr.tagFor, me = tr;
+  if (!id) return;
+  const ids = [...trEl('trTagDlgPick').querySelectorAll('input:checked')].map(i => i.value);
+  const go = trEl('trTagDlgSave'); go.disabled = true;
+  try {
+    const r = await db.rpc('transfer_set_tags', { p_id: id, p_tags: ids });
+    if (tr !== me) return;
+    if (r.error) { trEl('trTagDlgErr').textContent = trErrText(r.error); trEl('trTagDlgErr').hidden = false; return; }
+    trEl('trTagDlg').close(); showToast('บันทึก Tag แล้ว');
+    const uid = currentUserId, tok = ++tr.tok;
+    if (await trFetch(uid, tok)) renderTransfer();
+    trLoadEvents(false);
+  } finally { go.disabled = false; }
+}
+// ── เก็บถาวร / คำขอ ──
+const trSetPerm = (id, on) => trCall('transfer_set_permanent', { p_id: id, p_on: on }, on ? 'ตั้งเป็นไฟล์ถาวรแล้ว' : 'ปลดถาวรแล้ว — เริ่มนับ 30 วันใหม่จากวันนี้', on ? 'ตั้งไฟล์ถาวรไม่สำเร็จ' : 'ปลดไฟล์ถาวรไม่สำเร็จ');
+function trAskUnpin(id) {
+  const f = tr.files.find(x => x.id === id);
+  if (!f || !isOwner()) return;
+  askConfirm('ปลดไฟล์ถาวร?', '<p><strong>' + escapeHtml(f.file_name) + '</strong></p><p>ปลดแล้วไฟล์นี้กลับเป็นไฟล์ปกติ — เริ่มนับ 30 วันใหม่จากวันนี้ แล้วหมดอายุตามปกติ</p>', 'ปลดถาวร', async () => { closeConfirm(); await trSetPerm(id, false); });
+}
+async function trRequestKeep(id) {
+  const f = tr.files.find(x => x.id === id);
+  if (!f) return;
+  const r = await trCall('transfer_request_keep', { p_id: id }, null, 'ขอเก็บถาวรไม่สำเร็จ');
+  if (r) showToast('ส่งคำขอเก็บถาวรถึงเจ้าของแล้ว — ต้องได้รับอนุมัติก่อน ' + formatDateTime(f.expires_at));
+}
+function trAskRequestDelete(id) {
+  const f = tr.files.find(x => x.id === id);
+  if (!f || !f.is_permanent) return;
+  askConfirm('ขอลบไฟล์ถาวร?', '<p><strong>' + escapeHtml(f.file_name) + '</strong></p><p>ไฟล์ถาวรลบได้เฉพาะเจ้าของร้าน — ระบบจะส่งคำขอถึงเจ้าของให้อนุมัติ ไฟล์ยังอยู่จนกว่าเจ้าของจะอนุมัติ</p>', 'ส่งคำขอลบ',
+    async () => { closeConfirm(); const r = await trCall('transfer_request_delete', { p_id: id }, null, 'ขอลบไฟล์ถาวรไม่สำเร็จ'); if (r) showToast('ส่งคำขอลบถึงเจ้าของแล้ว'); });
+}
+async function trDecide(rid, approve, note) {
+  const me = tr, uid = currentUserId, q = tr.reqs.find(x => x.id === rid);
+  const r = await db.rpc('transfer_request_decide', { p_request: rid, p_approve: approve, p_note: note || null });
+  if (tr !== me || uid !== currentUserId) return false;
+  if (r.error) return trErrText(r.error);
+  const row = Array.isArray(r.data) ? r.data[0] : r.data;
+  if (row && row.r_kind === 'void') showToast('ไฟล์นี้ถูกลบหรือหมดอายุไปแล้ว — คำขอถูกยกเลิก');
+  else if (!approve) showToast('ปฏิเสธคำขอแล้ว');
+  else if (row && row.r_kind === 'delete') {
+    const cleaned = await trRemoveObject(row.r_path, q ? q.file_id : '');
+    showToast('อนุมัติแล้ว — ลบไฟล์ถาวรแล้ว' + (cleaned ? '' : ' (ตัวไฟล์ในที่เก็บจะถูกเก็บกวาดรอบหน้า)'));
+  } else showToast('อนุมัติแล้ว — ตั้งเป็นไฟล์ถาวรแล้ว');
+  const tok = ++tr.tok;
+  if (await trFetch(uid, tok)) renderTransfer();
+  return '';
+}
+function trAskDecide(rid, approve) {
+  const q = tr.reqs.find(x => x.id === rid);
+  if (!q || !isOwner() || q.status !== 'pending') return;
+  if (!approve) {                                       // ปฏิเสธต้องใส่เหตุผล → หน้าต่างกรอกเหตุผล
+    tr.decide = rid;
+    trEl('trDecideFile').textContent = (TR_REQ_KIND[q.kind] || '') + ' · ' + (q.file ? q.file.file_name : '');
+    trEl('trDecideNote').value = ''; trEl('trDecideErr').hidden = true; trEl('trDecideErr').textContent = '';
+    trEl('trDecideDlg').showModal();
+    return;
+  }
+  if (q.kind === 'delete') {                            // อนุมัติการลบ = ลบจริง ย้อนกลับไม่ได้ → ถามยืนยัน
+    askConfirm('อนุมัติลบไฟล์ถาวร?', '<p><strong>' + escapeHtml(q.file ? q.file.file_name : '') + '</strong></p><p>ขอโดย ' + escapeHtml(trWho(q.requester)) + ' — อนุมัติแล้วไฟล์ถูกลบทันทีและกู้คืนไม่ได้ ทีมงานทุกคนใช้ไม่ได้อีก</p>', 'อนุมัติและลบ',
+      async () => { const e = await trDecide(rid, true); closeConfirm(); if (e) showFatalError('อนุมัติคำขอไม่สำเร็จ: ' + e); });
+    return;
+  }
+  trDecide(rid, true).then(e => { if (e) showFatalError('อนุมัติคำขอไม่สำเร็จ: ' + e); });
+}
+async function trDecideSave() {
+  const rid = tr.decide, note = trEl('trDecideNote').value.trim();
+  if (!rid) return;
+  if (!note) { trEl('trDecideErr').textContent = 'ปฏิเสธต้องใส่เหตุผล'; trEl('trDecideErr').hidden = false; return; }
+  const go = trEl('trDecideGo'); go.disabled = true;
+  try {
+    const e = await trDecide(rid, false, note);
+    if (e === false) return;
+    if (e) { trEl('trDecideErr').textContent = e; trEl('trDecideErr').hidden = false; return; }
+    trEl('trDecideDlg').close();
+  } finally { go.disabled = false; }
+}
+async function trWithdraw(rid) {
+  const r = await trCall('transfer_request_withdraw', { p_request: rid }, 'ถอนคำขอแล้ว', 'ถอนคำขอไม่สำเร็จ');
+  return r;
 }
 
 // ── ผูกปุ่ม ──
@@ -13278,18 +13724,38 @@ trEl('sec-transfer').addEventListener('click', e => {
   if (act === 'view' || act === 'download') trOpen(id, act);
   else if (act === 'delete') trAskDelete(id);
   else if (act === 'hist') trHistory(id);
+  else if (act === 'tags') trTagOpen(id);
+  else if (act === 'pin') trSetPerm(id, true);
+  else if (act === 'unpin') trAskUnpin(id);
+  else if (act === 'req-keep') trRequestKeep(id);
+  else if (act === 'req-del') trAskRequestDelete(id);
+  else if (act === 'req-ok') trAskDecide(b.dataset.rid, true);
+  else if (act === 'req-no') trAskDecide(b.dataset.rid, false);
+  else if (act === 'req-wd') trWithdraw(b.dataset.rid);
   else if (act === 'ev-all') { tr.evFile = null; tr.events = []; tr.evMore = false; trRenderLog(); trLoadEvents(false); }
   else if (act === 'q-clear') { tr.queue = tr.queue.filter(i => i.state === 'wait' || i.state === 'up'); trRenderQueue(); }
+  else if (act === 'q-cancel') trCancel(Number(b.dataset.qid));
+  else if (act === 'stage-rm') { tr.stage = tr.stage.filter(i => i.id !== Number(b.dataset.sid)); trRenderStage(); }
 });
-trEl('trTabs').addEventListener('click', e => { const b = e.target.closest('.mail-tab'); if (b) trTab(b.dataset.tab); });
+trEl('trTabs').addEventListener('click', e => { const b = e.target.closest('.mail-tab'); if (b && !b.hidden) trTab(b.dataset.tab); });
 trEl('trReload').addEventListener('click', () => loadTransfer());
 trEl('trSearch').addEventListener('input', e => { tr.q = e.target.value; trRenderList(); });
 trEl('trMine').addEventListener('change', e => { tr.mine = e.target.checked; trRenderList(); });
+trEl('trToMe').addEventListener('change', e => { tr.toMe = e.target.checked; trRenderList(); });
+trEl('trPerm').addEventListener('change', e => { tr.perm = e.target.checked; trRenderList(); });
 trEl('trEvSearch').addEventListener('input', e => { tr.evQ = e.target.value; trRenderLog(); });
 trEl('trEvAct').addEventListener('change', e => { tr.evAct = e.target.value; trLoadEvents(false); });
 trEl('trLogMore').addEventListener('click', () => trLoadEvents(true));
 trEl('trDrop').addEventListener('click', () => { const i = trEl('trFile'); i.value = ''; i.click(); });
 trEl('trFile').addEventListener('change', e => trPick(e.target.files || []));
+trEl('trConfirm').addEventListener('click', () => trConfirm());
+trEl('trStageClear').addEventListener('click', () => trStageClear());
+trEl('trKeep').addEventListener('change', e => { tr.stageKeep = e.target.checked; trRenderStage(); });
+trEl('trTagPick').addEventListener('change', e => { if (e.target.matches('input[type="checkbox"]')) tr.stageTags = [...trEl('trTagPick').querySelectorAll('input:checked')].map(i => i.value); });
+trEl('trTagDlgSave').addEventListener('click', () => trTagSave());
+trEl('trTagDlgCancel').addEventListener('click', () => trEl('trTagDlg').close());
+trEl('trDecideGo').addEventListener('click', () => trDecideSave());
+trEl('trDecideCancel').addEventListener('click', () => trEl('trDecideDlg').close());
 (function () {                                           // ลากไฟล์มาวางตรงไหนของหน้านี้ก็ได้ (กันเบราว์เซอร์เปิดไฟล์ทับหน้าแอป)
   const sec = trEl('sec-transfer'), drop = trEl('trDrop');
   const hasFiles = e => !!e.dataTransfer && Array.from(e.dataTransfer.types || []).indexOf('Files') >= 0;
