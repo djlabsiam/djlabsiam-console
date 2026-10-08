@@ -486,6 +486,9 @@ async function runTests() {
   $('trPerm').checked = true; $('trPerm').dispatchEvent(new Event('change', { bubbles: true })); await sleep(50);
   ok('ตัวกรอง "เฉพาะไฟล์ถาวร (Asset)" → memo.pdf · mix-oct.wav · ok-asset.png', ids().length === 3 && !!rowOf('f5') && !!rowOf('f2') && !!fileRow('ok-asset.png'), ids().join());
   $('trPerm').checked = false; $('trPerm').dispatchEvent(new Event('change', { bubbles: true })); await sleep(50);
+  TRN.files.find(f => f.file_name === 'ok-asset.png').expires_at = new Date(Date.now() - 86400000 * 3).toISOString();       // ไฟล์ถาวรเลยวันครบ 30 วันไปแล้ว — ต้องไม่หาย ไม่ถูกกวาด
+  await reload();
+  ok('ไฟล์ถาวรไม่หมดอายุ: แม้เลยวันครบ 30 วันก็ยังอยู่ในรายการ · เปิดดูได้ · ไม่ถูกกวาด', !!fileRow('ok-asset.png') && TRN.files.find(f => f.file_name === 'ok-asset.png').status === 'ready' && /ถาวร · Asset/.test(fileRow('ok-asset.png').textContent));
   btn('f2', 'unpin').click(); await sleep(100);
   ok('ปุ่ม "ปลดถาวร" → ถามยืนยันก่อน บอกว่าเริ่มนับ 30 วันใหม่ · ยังไม่เรียกฐาน', $('confirmDialog').open && /เริ่มนับ 30 วันใหม่/.test(txt('confirmBody')) && rpcs('transfer_set_permanent').length === 1);
   $('confirmOkBtn').click(); await sleep(450);
