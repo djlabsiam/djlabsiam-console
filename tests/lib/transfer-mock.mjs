@@ -12,13 +12,13 @@
  *   · transfer_delete: ไฟล์ปกติ = ผู้อัปโหลดหรือเจ้าของ · ไฟล์ถาวร = เจ้าของเท่านั้น · transfer_sweep: ครบ 30 วัน → expired (ไฟล์ถาวรไม่) + คำขอที่ค้างของไฟล์ตายถูก void
  *   · transfer_set_permanent (เจ้าของ) · transfer_request_keep / request_delete (ผู้ดูแล) · transfer_request_decide (เจ้าของ · ปฏิเสธต้องมีเหตุผล · ไฟล์ตายแล้ว = void)
  *     transfer_request_withdraw (ผู้ยื่น) · transfer_set_tags (ผู้อัปโหลด/เจ้าของ) · transfer_unseen_count / transfer_pending_count (ตัวเลขข้างเมนู)
- * ตัวควบคุมจากเทสต์: window.TRN.seed() ใส่ข้อมูลตั้งต้น · TRN.fail = { select, rpc_<ชื่อ>, upload, remove, sign } · TRN.missing (ยังไม่รัน 049) · TRN.v1 (รัน 049 แล้วแต่ยังไม่รัน 050) · TRN.noBucket
+ * ตัวควบคุมจากเทสต์: window.TRN.seed() ใส่ข้อมูลตั้งต้น · TRN.fail = { select, rpc_<ชื่อ>, upload, remove, sign } · TRN.missing (ยังไม่รัน 049) · TRN.v1 (รัน 049 แล้วแต่ยังไม่รัน 050) · TRN.v2 (รัน 050 แล้วแต่ยังไม่รัน 051 — ไม่มี folder_path/p_folder) · TRN.noBucket
  *   TRN.gateSelect / TRN.gateUpload / TRN.gateTus = Promise ที่ค้างคำตอบ · TRN.tus = { mode: 'ok' | 'hang' | 'error:<สถานะ>', body } · TRN.tusCalls / tusHeaders / tusAborts = ร่องรอยของตัวอัปโหลดแบบต่อได้
  *   TRN.writes = ความพยายามเขียนตารางตรง ๆ · TRN.uploads / TRN.signed / TRN.removed = ร่องรอยฝั่ง Storage
  * ผู้ใช้ (ล็อกอินด้วยชื่อขึ้นต้น): tibass=เจ้าของ(u1) · zen/nutty=พนักงาน(u2/u3) · nui=ผู้ดูแล(u4) · evil=พนักงานชื่อมี HTML(u8) · ghost=พนักงานที่ถูกปิด(u7)
  */
 export const TRANSFER_MOCK = `<script>
-const TRN = { files: [], tags: [], reqs: [], events: [], grants: [], objects: new Map(), uploads: [], signed: [], removed: [], writes: [], fail: {}, missing: false, v1: false, noBucket: false,
+const TRN = { files: [], tags: [], reqs: [], events: [], grants: [], objects: new Map(), uploads: [], signed: [], removed: [], writes: [], fail: {}, missing: false, v1: false, v2: false, noBucket: false,
   gateSelect: null, gateUpload: null, gateTus: null, tus: { mode: 'ok', body: '' }, tusCalls: [], tusHeaders: [], tusAborts: [], main: null, seq: 0, tick: 0 };
 (function () {
   FAKE.admins.push({ id: 'u4', full_name: 'Nui', role: 'admin', is_active: true }, { id: 'u7', full_name: 'Ghost', role: 'staff', is_active: false },
@@ -74,15 +74,16 @@ const TRN = { files: [], tags: [], reqs: [], events: [], grants: [], objects: ne
 
   TRN.seed = () => {
     TRN.files = []; TRN.tags = []; TRN.reqs = []; TRN.events = []; TRN.grants = []; TRN.objects = new Map(); TRN.uploads = []; TRN.signed = []; TRN.removed = []; TRN.writes = [];
-    TRN.fail = {}; TRN.missing = false; TRN.v1 = false; TRN.noBucket = false; TRN.gateSelect = null; TRN.gateUpload = null; TRN.gateTus = null; TRN.tus = { mode: 'ok', body: '' };
+    TRN.fail = {}; TRN.missing = false; TRN.v1 = false; TRN.v2 = false; TRN.noBucket = false; TRN.gateSelect = null; TRN.gateUpload = null; TRN.gateTus = null; TRN.tus = { mode: 'ok', body: '' };
     TRN.tusCalls = []; TRN.tusHeaders = []; TRN.tusAborts = []; TRN.seq = 0; TRN.tick = 0;
     const add = (id, cat, name, by, daysLeft, extra) => {
-      const f = Object.assign({ id, status: 'ready', category: cat, file_name: name, mime_type: null, size_bytes: 2 * MB, note: null, object_path: cat + '/' + id + '.bin', thumb: null,
+      const f = Object.assign({ id, status: 'ready', category: cat, file_name: name, mime_type: null, size_bytes: 2 * MB, note: null, object_path: cat + '/' + id + '.bin', thumb: null, folder_path: null,
         is_permanent: false, permanent_at: null, permanent_by: null, keep_wanted: false,
         uploaded_by: by, created_at: iso(Date.now() - 5 * DAY), uploaded_at: iso(Date.now() - (30 - daysLeft) * DAY), expires_at: iso(Date.now() + daysLeft * DAY),
         deleted_at: null, deleted_by: null, purged_at: null }, extra || {});
       TRN.files.push(f); TRN.objects.set(f.object_path, { size: f.size_bytes }); ev(f, 'upload', by); return f;
     };
+    TRN.add = add;                                   // เทสต์เติมไฟล์เองหลัง seed (เช่นไฟล์ในโฟลเดอร์ — extra.folder_path)
     add('f1', 'video', 'คลิปรีวิว FLX4.mp4', 'u2', 10, { size_bytes: 120 * MB, note: 'ตัดต่อรอบสุดท้าย' });
     add('f2', 'audio', 'mix-oct.wav', 'u3', 25);
     add('f3', 'photo', 'poster.png', 'u2', 2);
@@ -122,6 +123,7 @@ const TRN = { files: [], tags: [], reqs: [], events: [], grants: [], objects: ne
       if (TRN.missing) return E('relation "public.' + table + '" does not exist', '42P01');
       if (TRN.v1 && table === 'transfer_requests') return E('relation "public.transfer_requests" does not exist', '42P01');
       if (TRN.v1 && table === 'transfer_files' && /thumb|is_permanent|transfer_tags/.test(q._cols)) return E('column transfer_files.thumb does not exist', '42703');
+      if ((TRN.v1 || TRN.v2) && table === 'transfer_files' && /folder_path/.test(q._cols)) return E('column transfer_files.folder_path does not exist', '42703');      // ยังไม่รัน 051
       if (TRN.fail.select) return E(TRN.fail.select);
       if (!active(me)) return OK([]);
       let rows = table === 'transfer_files' ? TRN.files.filter(f => VISIBLE.indexOf(f.status) >= 0) : table === 'transfer_requests' ? TRN.reqs.slice() : TRN.events.slice();
@@ -130,6 +132,7 @@ const TRN = { files: [], tags: [], reqs: [], events: [], grants: [], objects: ne
       rows = rows.slice(q._from, q._to + 1).map(r => {
         const o = clone(r);
         if (table === 'transfer_files') {
+          if (TRN.v1 || TRN.v2) delete o.folder_path;
           if (TRN.v1) ['thumb', 'is_permanent', 'permanent_at', 'permanent_by', 'keep_wanted'].forEach(k => { delete o[k]; });      // ฐานที่ยังไม่รัน 050 ไม่มีคอลัมน์เหล่านี้
           o.uploader = r.uploaded_by ? { full_name: nameOf(r.uploaded_by) } : null;
           if (/transfer_tags/.test(q._cols)) o.tags = TRN.tags.filter(t => t.file_id === r.id).map(t => ({ admin_id: t.admin_id, seen_at: t.seen_at, who: { full_name: nameOf(t.admin_id) } }));
@@ -149,6 +152,14 @@ const TRN = { files: [], tags: [], reqs: [], events: [], grants: [], objects: ne
   }
 
   // ── ฟังก์ชัน (สำเนาพฤติกรรมของ 049 + 050) ──
+  const cleanFolder = p => {                          // สำเนา transfer_clean_folder ของ 051
+    if (p == null) return { v: null };
+    const segs = String(p).replace(/\\\\/g, '/').split('/').map(x => x.replace(/[\\u0000-\\u001f\\u007f]+/g, ' ').trim()).filter(x => x && x !== '.' && x !== '..').map(x => x.slice(0, 120));
+    if (!segs.length) return { v: null };
+    if (segs.length > 12) return { err: 'โฟลเดอร์ซ้อนลึกเกิน 12 ชั้น' };
+    const j = segs.join('/');
+    return j.length > 400 ? { err: 'ชื่อโฟลเดอร์ยาวเกิน 400 ตัวอักษร' } : { v: j };
+  };
   const RPC = {
     transfer_begin(me, a) {
       const rl = role(me);
@@ -162,9 +173,10 @@ const TRN = { files: [], tags: [], reqs: [], events: [], grants: [], objects: ne
         if (rl !== 'owner' && rl !== 'admin') return E('เก็บถาวรได้เฉพาะเจ้าของร้าน (ผู้ดูแลขออนุมัติได้) — พนักงานทั่วไปตั้งไม่ได้', '42501');
         const pe = permCheck(a.p_size); if (pe) return E(pe);
       }
+      const fl = cleanFolder(a.p_folder); if (fl.err) return E(fl.err);
       const tg = cleanTags(a.p_tags, me); if (tg.err) return E(tg.err);
       const cat = classify(nm, a.p_mime), m = /\\.([A-Za-z0-9]{1,10})$/.exec(nm), id = 'n' + (++TRN.seq);
-      const f = { id, status: 'pending', category: cat, file_name: nm, mime_type: a.p_mime || null, size_bytes: a.p_size, note: a.p_note ? String(a.p_note).trim().slice(0, 300) || null : null, thumb: null,
+      const f = { id, status: 'pending', category: cat, file_name: nm, mime_type: a.p_mime || null, size_bytes: a.p_size, note: a.p_note ? String(a.p_note).trim().slice(0, 300) || null : null, thumb: null, folder_path: fl.v,
         is_permanent: false, permanent_at: null, permanent_by: null, keep_wanted: !!a.p_keep,
         object_path: cat + '/' + id + (m ? '.' + m[1].toLowerCase() : ''), uploaded_by: me, created_at: stamp(), uploaded_at: null, expires_at: null, deleted_at: null, deleted_by: null, purged_at: null };
       TRN.files.push(f);
@@ -385,9 +397,10 @@ const TRN = { files: [], tags: [], reqs: [], events: [], grants: [], objects: ne
       if (TRN.fail['rpc_' + fn]) return E(TRN.fail['rpc_' + fn]);
       if (TRN.missing) return E('Could not find the function public.' + fn + ' in the schema cache', 'PGRST202');
       const a = args || {};
-      if (TRN.v1 && (V2_FN.indexOf(fn) >= 0 || (fn === 'transfer_begin' && ('p_tags' in a || 'p_keep' in a)) || (fn === 'transfer_commit' && 'p_thumb' in a))) {
+      if (TRN.v1 && (V2_FN.indexOf(fn) >= 0 || (fn === 'transfer_begin' && ('p_tags' in a || 'p_keep' in a || 'p_folder' in a)) || (fn === 'transfer_commit' && 'p_thumb' in a))) {
         return E('Could not find the function public.' + fn + ' in the schema cache', 'PGRST202');
       }
+      if (TRN.v2 && fn === 'transfer_begin' && 'p_folder' in a) return E('Could not find the function public.transfer_begin in the schema cache', 'PGRST202');
       return RPC[fn](me, a);
     };
     c.storage = { from: bucket => bucket === 'internal-transfer' ? {
