@@ -49,6 +49,7 @@ function builder(table) {
     _rows: (FAKE[table] || []).slice(),
     select() { return q; },
     eq(col, val) { q._rows = q._rows.filter(r => r[col] === val); return q; },
+    in(col, vals) { q._rows = q._rows.filter(r => vals.includes(r[col])); return q; },
     order() { return q; }, gte() { return q; }, limit() { return q; },
     async maybeSingle() { return { data: q._rows[0] || null, error: null }; },
     async single() { return { data: q._rows[0] || null, error: null }; },

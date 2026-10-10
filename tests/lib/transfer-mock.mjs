@@ -433,7 +433,8 @@ const TRN = { files: [], tags: [], reqs: [], events: [], grants: [], objects: ne
       if (TRN.v2 && fn === 'transfer_begin' && 'p_folder' in a) return E('Could not find the function public.transfer_begin in the schema cache', 'PGRST202');
       return RPC[fn](me, a);
     };
-    c.storage = { from: bucket => bucket === 'internal-transfer' ? {
+    const st0 = c.storage;          // ชุดเทสต์ที่ซ้อนหลายฐานปลอม (เช่น แนบไฟล์จากคลัง) — ถังของชั้นอื่นส่งต่อให้ชั้นนั้น
+    c.storage = { from: bucket => (st0 && bucket !== 'internal-transfer') ? st0.from(bucket) : bucket === 'internal-transfer' ? {
       upload: (p, f, o) => BUCKET.upload(c, p, f, o),
       remove: ps => BUCKET.remove(c, ps),
       createSignedUrl: (p, s, o) => BUCKET.createSignedUrl(c, p, s, o),

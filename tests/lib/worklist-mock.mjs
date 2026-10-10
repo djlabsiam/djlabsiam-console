@@ -299,7 +299,8 @@ const WORK = { tasks: [], events: [], reqs: [], files: new Map(), uploads: [], s
       if (WORK.missing) return E('Could not find the function public.' + fn + ' in the schema cache');
       return RPC[fn](me, args || {});
     };
-    c.storage = { from: bucket => ({
+    const st0 = c.storage;          // ชุดเทสต์ที่ซ้อนหลายฐานปลอม (เช่น แนบไฟล์จากคลัง) — ถังของชั้นอื่นส่งต่อให้ชั้นนั้น
+    c.storage = { from: bucket => (st0 && bucket !== 'work-evidence') ? st0.from(bucket) : ({
       upload: (p, f, o) => bucket === 'work-evidence' ? BUCKET.upload(c, p, f, o) : Promise.resolve(E('Bucket not found')),
       remove: ps => BUCKET.remove(c, ps),
       createSignedUrl: (p, s) => BUCKET.createSignedUrl(c, p, s),

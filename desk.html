@@ -1295,6 +1295,28 @@
   .tr-pills { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
   .tr-bar { flex: 1 1 140px; min-width: 100px; height: 10px; background: var(--surface2); border: 1px solid var(--line-strong); }
   .tr-bar i { display: block; height: 100%; background: var(--black); }
+  /* แนบไฟล์จากคลังไฟล์ (053): ชิปไฟล์ที่แนบ · ช่องแนบในฟอร์ม · หน้าต่างเลือกไฟล์ */
+  .att-list { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 8px; }
+  .att-chip { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 8px 12px; background: var(--surface); border: 1px solid var(--line-strong); }
+  .att-chip.staged { border-style: dashed; border-color: var(--black); }
+  .att-chip.dead { background: var(--surface2); }
+  .att-chip.removed .att-name { text-decoration: line-through; }
+  .att-ico { width: 28px; height: 28px; flex: 0 0 auto; fill: none; stroke: var(--text2); stroke-width: 1.75; }
+  .att-meta { flex: 1 1 200px; min-width: 0; display: block; }
+  .att-name { display: block; font-weight: 600; overflow-wrap: anywhere; }
+  .att-sub { display: block; font-size: 14px; color: var(--text2); overflow-wrap: anywhere; }
+  .att-acts { display: flex; flex-wrap: wrap; gap: 8px; }
+  .att-addrow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 6px 0 10px; }
+  .att-addrow .hint { margin: 0; }
+  #attDlg { max-width: 720px; }
+  .att-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-bottom: 10px; }
+  .att-bar .input { flex: 1 1 240px; }
+  .att-plist { max-height: min(50vh, 440px); overflow-y: auto; border-top: 1px solid var(--line); margin: 6px 0 10px; }
+  .att-prow { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 52px; padding: 8px 12px; background: var(--surface); border: 1px solid var(--line); border-top: 0; font: inherit; color: var(--text); text-align: left; cursor: pointer; }
+  .att-prow:hover { background: var(--sel); }
+  .att-prow.used { background: var(--surface2); cursor: default; }
+  .att-prow input[type="checkbox"] { width: 22px; height: 22px; flex: 0 0 auto; accent-color: var(--black); }
+  .att-prow:focus-within, .att-prow:focus-visible { outline: 2px solid var(--black); outline-offset: -2px; }
   .tr-keep { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 6px 12px; border: 1px solid var(--line-strong); background: var(--surface); cursor: pointer; font-size: 15px; }
   .tr-keep:has(input:checked) { border-color: var(--black); background: var(--sel); font-weight: 600; }
   .tr-tagline { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin-top: 4px; font-size: 14px; color: var(--text2); }
@@ -2644,6 +2666,21 @@
   <div class="dlg-foot"><button class="btn" id="trNewDlgCancel" type="button">ยกเลิก</button><button class="btn btn-primary" id="trNewDlgSave" type="button">สร้างโฟลเดอร์</button></div>
 </dialog>
 
+<dialog id="attDlg" aria-labelledby="attDlgTitle">
+  <div class="dlg-head"><h2 id="attDlgTitle">แนบจากคลังไฟล์</h2></div>
+  <div class="dlg-body">
+    <div class="att-bar">
+      <input type="search" id="attQ" class="input" autocomplete="off" placeholder="ค้นหาชื่อไฟล์ หมายเหตุ หรือโฟลเดอร์" aria-label="ค้นหาไฟล์ในคลังไฟล์">
+      <label class="chk" id="attPermWrap"><input type="checkbox" id="attPerm"> เฉพาะไฟล์ถาวร (Asset)</label>
+    </div>
+    <div class="tr-crumbs" id="attCrumbs" role="navigation" aria-label="โฟลเดอร์"></div>
+    <div class="att-plist" id="attList" role="group" aria-label="ไฟล์ในคลังไฟล์"></div>
+    <p class="hint">ไฟล์ยังอยู่ที่เดิมในคลังไฟล์ ไม่ก๊อปซ้ำ · <strong>ไฟล์ปกติหมดอายุ 30 วัน</strong> ที่แนบไว้จะเปิดไม่ได้เมื่อครบกำหนด — ถ้าต้องการให้อยู่นาน ให้เจ้าของตั้งเป็นไฟล์ถาวร (Asset) ที่เมนู "โอนไฟล์" ก่อน</p>
+    <div class="alert alert-red" id="attDlgErr" hidden role="alert"></div>
+  </div>
+  <div class="dlg-foot"><span class="hint" id="attPickN" style="margin:0 auto 0 0;"></span><button class="btn" id="attDlgCancel" type="button">ยกเลิก</button><button class="btn btn-primary" id="attDlgOk" type="button" disabled>แนบไฟล์</button></div>
+</dialog>
+
 <dialog id="opsDialog" aria-labelledby="opsFormTitle">
   <div class="dlg-head"><h2 id="opsFormTitle">เพิ่มงานใหม่</h2></div>
   <form class="dlg-body" id="opsForm" novalidate>
@@ -2814,6 +2851,7 @@
       <button type="button" class="btn" id="workSubPick">แตะเพื่อถ่ายรูปหรือเลือกรูป</button>
       <input type="file" id="workSubFile" accept="image/*" multiple hidden>
       <div class="hint">ระบบย่อรูปให้ก่อนส่ง · เก็บไว้เป็นหลักฐานในระบบร้าน</div></div>
+    <div class="field att-field" hidden><span class="lbl">ไฟล์จากคลังไฟล์ <span class="hint" style="margin:0;">แนบเสริม — ไม่นับเป็นหลักฐาน ยังต้องมีลิงก์หรือรูปตามเงื่อนไขของงาน</span></span><div class="att-host" id="workSubAtt"></div></div>
     <div class="field"><label class="lbl" for="workSubNote">ข้อความถึงผู้ตรวจ <span class="hint" style="margin:0;">ไม่บังคับ</span></label>
       <textarea class="input" id="workSubNote" rows="3" maxlength="1000"></textarea></div>
     <div class="alert alert-plain"><strong class="wk-red">ส่งแล้วแก้เองไม่ได้</strong> — ถ้าส่งผิด ผู้ตรวจจะส่งกลับให้แก้ · งานที่ส่งหลังกำหนดจะติดป้าย <strong class="wk-red">"ส่งช้า"</strong> ให้เห็น ไม่ใช่การปิดกั้น</div>
@@ -2850,6 +2888,7 @@
         </div>
         <div class="wk-chips wk-quick" role="group" aria-label="ตั้งกำหนดส่งเร็ว"><span class="hint" style="margin:0;">ตั้งเร็ว:</span><button type="button" class="wk-quickbtn" data-quick="today">วันนี้ 18:00</button><button type="button" class="wk-quickbtn" data-quick="tomorrow">พรุ่งนี้ 12:00</button><button type="button" class="wk-quickbtn" data-quick="none">ไม่มีกำหนด</button></div>
         <div class="field"><label class="lbl" for="workfRefs">ลิงก์ตัวอย่าง / ไฟล์อ้างอิง <span class="hint" style="margin:0;">ไม่บังคับ · บรรทัดละลิงก์ · สูงสุด 5</span></label><textarea class="input" id="workfRefs" rows="2" placeholder="วางลิงก์ Drive หรือภาพตัวอย่างงานที่อยากได้"></textarea></div>
+        <div class="field att-field" hidden><span class="lbl">ไฟล์ตัวอย่างจากคลังไฟล์</span><div class="att-host" id="workfAtt"></div></div>
       </div>
       <div>
         <div class="field"><span class="lbl" id="workfPeopleLabel">มอบให้</span><div id="workfPeople"></div></div>
@@ -2883,6 +2922,7 @@
     <div class="field" id="workrUserField" hidden><label class="lbl" for="workrUser">ผู้รับ</label><select class="input" id="workrUser"></select></div>
     <div class="field"><label class="lbl" for="workrTask">ใบงานที่เกี่ยวข้อง <span class="hint" style="margin:0;">ไม่บังคับ</span></label><select class="input" id="workrTask"></select></div>
     <div class="field"><label class="lbl" for="workrBody">ข้อความคำขอ</label><textarea class="input" id="workrBody" rows="4" maxlength="1000" placeholder="เช่น ช่วยย้ายงานนี้ไปให้แพรได้มั้ยครับ ตอนนี้ติดงานอื่นอยู่"></textarea><div class="hint" id="workrCount" style="text-align:right;">0 / 1000</div></div>
+    <div class="field att-field" hidden><span class="lbl">ไฟล์แนบจากคลังไฟล์</span><div class="att-host" id="workrAtt"></div></div>
     <div class="alert alert-plain"><strong class="wk-red">อนุมัติ = ผู้รับรับเรื่อง</strong> — <strong class="wk-red">ระบบไม่ย้ายงานหรือเลื่อนกำหนดให้เอง</strong> ผู้อนุมัติจะไปทำที่หน้าใบงาน · ถ้าถูกปฏิเสธจะเห็นเหตุผล · ถอนคำขอได้ตอนที่ยังไม่มีคนตอบ</div>
     <div id="workrErr" class="alert alert-red" role="alert" hidden></div>
     <div class="dlg-foot" style="padding:0;">
@@ -3091,6 +3131,7 @@
     </div>
     <div class="field"><label class="lbl" for="bfTitle">หัวข้อ *</label><input type="text" id="bfTitle" class="input" maxlength="200" placeholder="เช่น ของเข้าพรุ่งนี้ช่วงบ่าย"></div>
     <div class="field"><label class="lbl" for="bfBody">ข้อความ</label><textarea id="bfBody" class="input" rows="6" placeholder="รายละเอียดที่ต้องการฝากไว้"></textarea></div>
+    <div class="field att-field" hidden><span class="lbl">ไฟล์แนบจากคลังไฟล์</span><div class="att-host" id="bfAtt"></div></div>
     <label class="chk" style="margin-bottom:16px;"><input type="checkbox" id="bfPinned"> ปักหมุดไว้บนสุด</label>
     <div class="dlg-foot" style="padding:0;">
       <button class="btn" type="button" onclick="document.getElementById('boardDialog').close()">ปิด (Esc)</button>
@@ -3510,6 +3551,7 @@ async function handleAuthState(session) {
     wbReset();                      // และล้างแผง "จองออนไลน์" (ค่าตั้งการจองเว็บ/สถานะซิงก์ที่โหลดไว้)
     workReset();                    // และล้างงานของฉัน/คำขอ (ใบงาน ประวัติ รูปหลักฐาน ฟอร์มที่พิมพ์ค้าง)
     trReset();                      // และล้างโอนไฟล์ (รายการไฟล์ ประวัติ คิวอัปโหลดที่ค้าง)
+    attReset();                     // และล้างไฟล์แนบจากคลังไฟล์ (รายการที่แนบ ช่องแนบในฟอร์ม หน้าต่างเลือกไฟล์)
     notifReset();                   // และล้างหน้าต่างแจ้งเตือน (รายการเครื่อง/ข้อความของคนก่อน)
     dcStop();                       // ออกจากระบบ = หยุดดึงข้อความ Discord และล้างที่ค้างในหน่วยความจำ
     closeCam();                     // ออกจากระบบ = ปิดกล้อง (iPad) ด้วย
@@ -10963,6 +11005,7 @@ function onAccountSwitched() {
   wbReset();                     // แผง "จองออนไลน์": ฟอร์มตั้งค่าของคนเดิม (เจ้าของ/ผู้ดูแล) ต้องไม่ค้างให้พนักงานเห็น
   workReset();                   // งานของฉัน/คำขอ: ใบงาน คำขอ รูปหลักฐานของคนเดิมต้องไม่ค้าง (คอมหน้าร้านใช้ร่วมกันหลายคน)
   trReset();                     // โอนไฟล์: รายการ ประวัติ และคิวอัปโหลดของคนเดิมต้องไม่ค้าง (อัปโหลดที่ยังไม่จบถูกทิ้ง)
+  attReset();                    // ไฟล์แนบจากคลังไฟล์: รายการที่แนบ ช่องแนบในฟอร์ม และหน้าต่างเลือกไฟล์ของคนเดิมต้องไม่ค้าง
   notifReset();                  // หน้าต่างแจ้งเตือน: รายการเครื่อง/ข้อความของคนเดิมต้องไม่ค้าง
   coSellers = [];
   launchDraft = null;
@@ -10994,11 +11037,14 @@ async function loadHomeToday() {
 // กระดานข้อความ — อ่านแล้ว/ยังไม่อ่านแยกต่อคน (board_reads)
 // ---------------------------------------------------------------------------
 async function loadBoard() {
+  const uid = currentUserId;
   const { data, error } = await db.from('board_messages')
     .select('id, author_id, refers_to, title, body, pinned, target_admin_id, created_at, updated_at')
     .order('created_at', { ascending: false }).limit(200);
   if (error) { console.error('[Load board]', error); showFatalError('โหลดกระดานข้อความไม่สำเร็จ: ' + error.message); return; }
   boardMsgs = data || [];
+  const ar = await attFetch(['board']);                    // ไฟล์แนบจากคลังไฟล์ (053) — ตารางยังไม่มี = เงียบ
+  if (uid === currentUserId) attApplyLoad(['board'], ar);
   if (!boardMsgs.length) { boardReads = []; return; }
   const r = await db.from('board_reads').select('message_id, admin_id, read_at').in('message_id', boardMsgs.map(m => m.id));
   if (r.error) { console.error('[Load board reads]', r.error); showFatalError('โหลดสถานะการอ่านไม่สำเร็จ: ' + r.error.message); return; }
@@ -11054,7 +11100,8 @@ function renderBoard() {
     return '<td>' + boardStatusHtml(m) + '</td>' +
       '<td class="nowrap col-ph">' + fmtDate(m.refers_to) + '</td>' +
       '<td>' + (m.pinned ? '<span class="st st-off">📌 ปักหมุด</span> ' : '') + '<strong>' + escapeHtml(m.title) + '</strong>' +
-        (m.target_admin_id ? '<div class="sub">ถึง ' + escapeHtml(staffName(m.target_admin_id)) + ' เท่านั้น</div>' : '') + '</td>' +
+        (m.target_admin_id ? '<div class="sub">ถึง ' + escapeHtml(staffName(m.target_admin_id)) + ' เท่านั้น</div>' : '') +
+        (attOf('board', m.id, '').length ? '<div class="sub">แนบไฟล์ ' + attOf('board', m.id, '').length + ' ไฟล์</div>' : '') + '</td>' +
       '<td class="col-opt">' + escapeHtml(staffName(m.author_id)) + '</td>' +
       '<td class="num nowrap col-ph" title="อ่านแล้ว ' + n + ' จาก ' + rec.length + ' คน">อ่านแล้ว ' + n + '/' + rec.length + '</td>';
   }, boardMsgs.length ? 'ไม่พบข้อความที่ตรงกับตัวกรอง' : 'ยังไม่มีข้อความบนกระดาน — กด “+ เขียนข้อความ” เพื่อฝากข้อความถึงทีม');
@@ -11095,6 +11142,7 @@ function renderBoardDetail(m) {
       (m.pinned ? '<dt>ปักหมุด</dt><dd>📌 อยู่บนสุดของกระดาน</dd>' : '') +
     '</dl>' +
     '<div class="card pre" style="box-shadow:none;">' + (escapeHtml(m.body) || '<span class="hint">(ไม่มีรายละเอียดเพิ่มเติม)</span>') + '</div>' +
+    attSectionHtml('board', m.id, '', 'ไฟล์แนบจากคลังไฟล์', 'sec-title') +
     '<div class="sec-title">อ่านแล้ว ' + read.length + '/' + rec.length + ' คน</div>' +
     (read.length ? read.map(a => '<div class="list-row"><div>✓ ' + escapeHtml(a.full_name) + '</div><div class="sub">' + readAt(a) + '</div></div>').join('')
                  : '<p class="hint">ยังไม่มีใครอ่าน</p>') +
@@ -11135,6 +11183,7 @@ function openBoardForm(id) {
   document.getElementById('bfBody').value = m ? m.body : '';
   document.getElementById('bfTarget').value = m && m.target_admin_id ? m.target_admin_id : '';
   document.getElementById('bfPinned').checked = !!(m && m.pinned);
+  attHostInit('bfAtt', 'board', '', m ? m.id : null);
   document.getElementById('boardDialog').showModal();
   document.getElementById('bfTitle').focus();
 }
@@ -11152,17 +11201,21 @@ async function saveBoard() {
     pinned: document.getElementById('bfPinned').checked,
     target_admin_id: document.getElementById('bfTarget').value || null,
   };
-  const btn = document.getElementById('bfSaveBtn');
+  const btn = document.getElementById('bfSaveBtn'), uid = currentUserId;
   btn.disabled = true;
   const res = m
     ? await db.from('board_messages').update(Object.assign(payload, { updated_at: new Date().toISOString() })).eq('id', m.id).select('id')
     : await db.from('board_messages').insert(Object.assign(payload, { author_id: currentUserId })).select('id');
   btn.disabled = false;
+  if (uid !== currentUserId) return;
   if (res.error) { console.error('[Save board]', res.error); showFatalError('บันทึกข้อความไม่สำเร็จ: ' + res.error.message); return; }
   // RLS ที่ไม่ให้แก้ จะไม่ตอบ error แต่แก้ได้ 0 แถว — ต้องบอกตรง ๆ ไม่ใช่ขึ้นว่าสำเร็จ
   if (!res.data || !res.data.length) { showFatalError('บันทึกข้อความไม่สำเร็จ — ไม่มีสิทธิ์แก้ข้อความนี้ หรือข้อความถูกลบไปแล้ว'); return; }
+  const ac = await attHostCommit('bfAtt', res.data[0].id);       // แนบไฟล์จากคลัง (ข้อความบันทึกแล้ว — แนบไม่ผ่านก็ไม่ย้อนข้อความ)
+  attHostClear('bfAtt');
   document.getElementById('boardDialog').close();
   showToast('✅ บันทึกข้อความแล้ว');
+  if (!ac.ok) showFatalError('บันทึกข้อความแล้ว แต่แนบไฟล์จากคลังไฟล์ไม่สำเร็จ: ' + ac.err + ' — เปิดข้อความแล้วกด "แนบไฟล์จากคลังไฟล์" ได้อีกครั้ง');
   refreshBoard();
 }
 
@@ -14132,6 +14185,331 @@ trEl('trDecideCancel').addEventListener('click', () => trEl('trDecideDlg').close
 })();
 
 // ===========================================================================
+// แนบไฟล์จากคลังไฟล์ (migration 053 · ต่อจากโอนไฟล์) — ใบงาน (ตอนสั่ง/ตอนส่งงาน) · คำขอ · ข้อความบนกระดาน — 9 ต.ค. 69 (เจ้าของสั่ง)
+// ไฟล์ยังอยู่ที่เดิมในคลัง (ไม่ก๊อปซ้ำ) ตาราง transfer_attachments เก็บแค่ว่าไฟล์ไหนแนบกับอะไร · ทีมงานทุกคนเปิดไฟล์ในคลังได้อยู่แล้ว การแนบไม่เปิดสิทธิ์ใหม่
+// เปิด/ดาวน์โหลดผ่าน transfer_open เหมือนหน้าโอนไฟล์ (ลงประวัติ "เปิดดู/ดาวน์โหลด") · เขียนฐานผ่าน transfer_attach / transfer_detach เท่านั้น (ฐานตัดสินสิทธิ์ — ที่นี่แค่ซ่อน/โชว์ปุ่ม)
+// ⚠️ ไฟล์ปกติหมดอายุ 30 วันตามคลัง → ที่แนบขึ้น "หมดอายุแล้ว" เปิดไม่ได้ · อยากให้อยู่นานให้เจ้าของตั้งเป็นไฟล์ถาวร (Asset)
+// ⚠️ ไฟล์จากคลังเป็น "ไฟล์แนบเสริม" ของใบงาน — ไม่นับเป็นหลักฐานส่งงาน (work_submit ยังต้องมีลิงก์/รูปตามเดิม)
+// ยังไม่รัน 053 → อ่านตารางไม่ได้ → ซ่อนปุ่มแนบทั้งหมดเงียบ ๆ (att.off) ส่วนอื่นใช้ได้ตามปกติ
+// ===========================================================================
+const ATT_MAX = 20;                                           // ต้องตรง transfer_attach ใน 053
+const ATT_SHOW = 200;                                         // รายการในหน้าต่างเลือกที่วาดสูงสุด (เกินให้ค้นหาให้แคบลง)
+const ATT_COLS = 'id, file_id, target_kind, target_id, ctx, attached_by, attached_at, file:transfer_files(id, category, file_name, size_bytes, status, is_permanent, expires_at)';
+const ATT_PICK_BASE = 'id, category, file_name, size_bytes, note, uploaded_by, uploaded_at, expires_at, uploader:admins!transfer_files_uploaded_by_fkey(full_name)';
+const ATT_HOSTS = ['workfAtt', 'workSubAtt', 'workrAtt', 'bfAtt'];
+function attBlank() { return { off: false, list: [], pick: null, busy: {}, seq: 0 }; }
+let att = attBlank();
+let attHosts = {};
+const attEl = id => document.getElementById(id);
+const attAlive = f => !!f && f.status === 'ready' && (f.is_permanent || Date.parse(f.expires_at) > Date.now());
+const attOf = (kind, target, ctx) => att.list.filter(a => a.target_kind === kind && a.target_id === String(target) && a.ctx === (ctx || ''));
+const attFetch = async kinds => { try { return await db.from('transfer_attachments').select(ATT_COLS).in('target_kind', kinds).order('attached_at', { ascending: true }).limit(3000); } catch (e) { return { error: e }; } };      // โหลดไฟล์แนบล้ม (เครือข่าย) ต้องไม่ล้มการโหลดใบงาน/กระดานทั้งก้อน
+// ผลโหลดของ kind ชุดหนึ่ง: ตารางยังไม่มี = ซ่อนฟีเจอร์เงียบ ๆ · error อื่น = บอกผู้ใช้ (กฎข้อ 8) · แถวที่รูปร่างไม่ใช่ไฟล์แนบถูกทิ้ง
+function attApplyLoad(kinds, res) {
+  const keep = att.list.filter(a => !kinds.includes(a.target_kind));
+  if (res.error) {
+    if (trIsMissing(res.error) || trIsV1(res.error)) { att.off = true; att.list = keep; return; }
+    console.error('[Att load]', res.error);
+    showFatalError('โหลดไฟล์แนบไม่สำเร็จ: ' + trErrText(res.error));
+    return;
+  }
+  att.off = false;
+  att.list = keep.concat((res.data || []).filter(a => a && kinds.includes(a.target_kind) && a.file_id && a.target_id != null).map(a => Object.assign({}, a, { target_id: String(a.target_id), ctx: a.ctx || '' })));
+}
+const attRpc = async (fn, args) => { try { return await db.rpc(fn, args); } catch (e) { return { error: { message: e.message } }; } };
+// สิทธิ์แนบ/ถอด (สำเนาของ transfer_attach_ok — ซ่อน/โชว์ปุ่มเท่านั้น)
+function attCanManage(kind, target, ctx) {
+  const me = workMyRole();
+  if (!currentUserId || !me) return false;
+  if (kind === 'board') { const m = boardMsgs.find(x => x.id === target); return !!m && (m.author_id === currentUserId || me === 'owner' || me === 'admin'); }
+  if (kind === 'request') { const r = work.reqs.find(x => x.id === target); return !!r && (r.requester_id === currentUserId || me === 'owner'); }
+  if (kind === 'task') {
+    const t = workTask(target);
+    if (!t || t.status === 'cancelled') return false;
+    if (ctx === 'brief') return t.created_by === currentUserId || me === 'owner' || (me === 'admin' && workActiveRole(t.assignee_id) === 'staff');
+    return t.assignee_id === currentUserId || me === 'owner';
+  }
+  return false;
+}
+const attCanDetach = a => a.attached_by === currentUserId || attCanManage(a.target_kind, a.target_id, a.ctx);
+
+// ── ชิปไฟล์แนบ ──
+function attIconSvg(cat) { return '<svg class="att-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' + (TR_ICON[cat] || TR_ICON.other) + '</svg>'; }
+const attGone = f => !f || f.status === 'deleted' || f.status === 'aborted';
+function attPillHtml(f) {
+  if (attGone(f)) return '<span class="st st-bad">ไฟล์ถูกลบแล้ว</span>';
+  if (!attAlive(f)) return '<span class="st st-bad">หมดอายุแล้ว</span>';
+  if (f.is_permanent) return '<span class="st st-ok">ถาวร · Asset</span>';
+  const life = trLeft(f);
+  return life ? '<span class="st ' + life.cls + '">' + life.t + '</span>' : '';
+}
+// ชิปของที่แนบแล้ว: opt.host = อยู่ในฟอร์ม (ปุ่ม "ถอดออก" ทำตอนกดบันทึก) · ไม่ใส่ = ถอดทันทีหลังยืนยัน
+function attChipHtml(a, opt) {
+  opt = opt || {};
+  const f = a.file, alive = attAlive(f), name = f ? f.file_name : 'ไฟล์ที่ถูกลบแล้ว', fid = escapeHtml(a.file_id), aid = escapeHtml(a.id);
+  const acts = [];
+  if (alive && trPreviewable(f)) acts.push('<button class="btn btn-sm" type="button" data-att-act="view" data-file="' + fid + '">เปิดดู</button>');
+  if (alive) acts.push('<button class="btn btn-sm" type="button" data-att-act="download" data-file="' + fid + '">ดาวน์โหลด</button>');
+  if (opt.host) acts.push(opt.removed ? '<button class="btn btn-sm" type="button" data-att-act="h-undo" data-host="' + escapeHtml(opt.host) + '" data-att="' + aid + '">ไม่ถอดแล้ว</button>'
+    : '<button class="btn btn-sm" type="button" data-att-act="h-rmx" data-host="' + escapeHtml(opt.host) + '" data-att="' + aid + '">ถอดออก</button>');
+  else if (attCanDetach(a)) acts.push('<button class="btn btn-sm btn-danger" type="button" data-att-act="detach" data-att="' + aid + '">ถอด</button>');
+  return '<div class="att-chip' + (alive ? '' : ' dead') + (opt.removed ? ' removed' : '') + '" data-att="' + aid + '">' + attIconSvg(f && f.category) +
+    '<div class="att-meta"><div class="att-name">' + escapeHtml(name) + '</div><div class="att-sub">' + (f ? escapeHtml(trCatName(f.category)) + ' · ' + trSize(f.size_bytes) : 'ไม่มีไฟล์นี้ในคลังแล้ว') +
+    (a.attached_by ? ' · แนบโดย ' + escapeHtml(staffName(a.attached_by)) : '') + ' ' + attPillHtml(f) + (opt.removed ? ' <span class="st st-warn">จะถอดเมื่อกดบันทึก</span>' : '') + '</div></div>' +
+    (acts.length ? '<div class="att-acts">' + acts.join('') + '</div>' : '') + '</div>';
+}
+function attStagedHtml(f, i, host) {
+  return '<div class="att-chip staged">' + attIconSvg(f.category) + '<div class="att-meta"><div class="att-name">' + escapeHtml(f.file_name) + '</div><div class="att-sub">' + escapeHtml(trCatName(f.category)) + ' · ' + trSize(f.size_bytes) + ' ' + attPillHtml(Object.assign({ status: 'ready' }, f)) +
+    ' <span class="st st-warn">จะแนบเมื่อกดบันทึก</span></div></div><div class="att-acts"><button class="btn btn-sm" type="button" data-att-act="h-rm" data-host="' + escapeHtml(host) + '" data-i="' + i + '">เอาออก</button></div></div>';
+}
+// ส่วน "ไฟล์แนบ" ในหน้ารายละเอียด (ใบงาน/คำขอ/กระดาน): ไม่มีไฟล์และแนบเพิ่มไม่ได้ = ไม่แสดงอะไร
+function attSectionHtml(kind, target, ctx, title, cls) {
+  if (att.off) return '';
+  const items = attOf(kind, target, ctx), can = attCanManage(kind, target, ctx) && items.length < ATT_MAX;
+  if (!items.length && !can) return '';
+  return '<h4 class="' + (cls || 'wk-sec-h') + '">' + escapeHtml(title) + (items.length ? ' (' + items.length + ')' : '') + '</h4>' +
+    (items.length ? '<div class="att-list">' + items.map(a => attChipHtml(a)).join('') + '</div>' : '<p class="hint">ยังไม่มีไฟล์แนบ</p>') +
+    (can ? '<div class="att-addrow"><button class="btn btn-sm" type="button" data-att-act="add" data-kind="' + escapeHtml(kind) + '" data-target="' + escapeHtml(target) + '" data-ctx="' + escapeHtml(ctx || '') + '">+ แนบไฟล์จากคลังไฟล์</button></div>' : '');
+}
+
+// ── เปิด/ดาวน์โหลดไฟล์ที่แนบ (transfer_open ตัวเดียวกับหน้าโอนไฟล์ → ลงประวัติ) ──
+async function attOpen(fileId, purpose) {
+  const a = att.list.find(x => x.file_id === fileId && x.file), f = a && a.file;
+  if (!f || att.busy[fileId] || (purpose !== 'view' && purpose !== 'download')) return;
+  const me = att, uid = currentUserId;
+  att.busy[fileId] = true;
+  const w = purpose === 'view' ? window.open('', '_blank') : null;       // เปิดแท็บเปล่าในจังหวะที่กด กันเบราว์เซอร์บล็อกป๊อปอัป
+  try {
+    const o = await db.rpc('transfer_open', { p_id: fileId, p_purpose: purpose });
+    if (o.error) throw o.error;
+    const row = Array.isArray(o.data) ? o.data[0] : o.data;
+    if (!row || !row.r_path) throw new Error('ไม่ได้รับสิทธิ์เปิดไฟล์');
+    const s = await db.storage.from(TR_BUCKET).createSignedUrl(row.r_path, 60, purpose === 'download' ? { download: row.r_name || f.file_name } : undefined);
+    if (s.error || !s.data || !s.data.signedUrl) throw s.error || new Error('ไม่ได้ลิงก์จากระบบเก็บไฟล์ (ไฟล์อาจถูกลบไปแล้ว)');
+    if (att !== me || uid !== currentUserId) { if (w) w.close(); return; }
+    if (purpose === 'view') {
+      if (w) { w.opener = null; w.location.href = s.data.signedUrl; }
+      else showToast('⚠️ เบราว์เซอร์บล็อกหน้าต่างใหม่ — อนุญาตป๊อปอัปของเว็บนี้แล้วกดอีกครั้ง');
+    } else {
+      const el = document.createElement('a');
+      el.href = s.data.signedUrl; el.rel = 'noopener'; el.style.display = 'none';
+      document.body.appendChild(el); el.click(); el.remove();
+    }
+    trLoadUnseen();                                        // ถ้าไฟล์นี้ Tag ถึงฉันและเพิ่งเปิดเป็นครั้งแรก ตัวเลขข้างเมนูโอนไฟล์ต้องลด
+  } catch (e) {
+    if (w) w.close();
+    if (att === me) {
+      showFatalError((purpose === 'view' ? 'เปิดไฟล์' : 'ดาวน์โหลดไฟล์') + ' "' + f.file_name + '" ไม่สำเร็จ: ' + trErrText(e));
+      attRefresh();                                        // ไฟล์อาจหมดอายุ/ถูกลบไปแล้ว — ดึงสถานะใหม่
+    }
+  } finally { delete me.busy[fileId]; }
+}
+// วาดหน้าที่มีไฟล์แนบใหม่จากฐาน (ใบงาน/คำขอ = loadWork · กระดาน = refreshBoard)
+function attRefresh(kind) {
+  if (kind === 'board') return refreshBoard();
+  if (kind) return loadWork();
+  return Promise.all([work.loaded ? loadWork() : null, boardMsgs.length ? refreshBoard() : null]);
+}
+
+// ── แนบ/ถอดทันทีจากหน้ารายละเอียด ──
+function attDirectAdd(kind, target, ctx) {
+  if (!attCanManage(kind, target, ctx)) { showToast('⚠️ แนบไฟล์กับรายการนี้ไม่ได้แล้ว — สถานะเปลี่ยนไปหรือไม่มีสิทธิ์'); return; }
+  const have = new Set(attOf(kind, target, ctx).map(a => a.file_id));
+  attPickOpen({ exclude: have, max: ATT_MAX - have.size, onPick: async files => {
+    const uid = currentUserId;
+    const r = await attRpc('transfer_attach', { p_kind: kind, p_target: String(target), p_ctx: ctx || '', p_files: files.map(f => f.id) });
+    if (uid !== currentUserId) return;
+    if (r.error) { console.error('[Att attach]', r.error); showFatalError('แนบไฟล์ไม่สำเร็จ: ' + trErrText(r.error)); }
+    else showToast('✅ แนบไฟล์แล้ว ' + files.length + ' ไฟล์');
+    await attRefresh(kind === 'board' ? 'board' : 'work');
+  } });
+}
+function attAskDetach(aid) {
+  const a = att.list.find(x => x.id === aid);
+  if (!a) return;
+  askConfirm('ถอดไฟล์แนบนี้?', '<p><strong>' + escapeHtml(a.file ? a.file.file_name : 'ไฟล์ที่ถูกลบแล้ว') + '</strong></p><p class="hint">ถอดแค่การแนบ — ไฟล์ยังอยู่ในคลังไฟล์ตามเดิม</p>', 'ถอดไฟล์แนบ', async () => {
+    const uid = currentUserId;
+    const r = await attRpc('transfer_detach', { p_id: aid });
+    if (uid !== currentUserId) return;
+    closeConfirm();
+    if (r.error) { console.error('[Att detach]', r.error); showFatalError('ถอดไฟล์แนบไม่สำเร็จ: ' + trErrText(r.error)); }
+    else showToast('✅ ถอดไฟล์แนบแล้ว');
+    await attRefresh(a.target_kind === 'board' ? 'board' : 'work');
+  });
+}
+
+// ── หน้าต่างเลือกไฟล์จากคลัง ──
+async function attPickOpen(cfg) {
+  if (att.pick) return;
+  const p = att.pick = { exclude: cfg.exclude || new Set(), max: Math.max(0, cfg.max == null ? ATT_MAX : cfg.max), onPick: cfg.onPick, files: [], loading: true, error: '', path: '', q: '', perm: false, nofolder: false, noperm: false, sel: new Map() };
+  attEl('attQ').value = ''; attEl('attPerm').checked = false;
+  attEl('attDlgErr').hidden = true;
+  attPickRender();
+  const d = attEl('attDlg');
+  if (!d.open) d.showModal();
+  const q = cols => db.from('transfer_files').select(cols).eq('status', 'ready').order('uploaded_at', { ascending: false }).limit(1000);
+  let r;
+  try {
+    r = await q(ATT_PICK_BASE + ', is_permanent, folder_path');
+    if (r.error && trIsV1(r.error)) { p.nofolder = true; r = await q(ATT_PICK_BASE + ', is_permanent'); }        // ยังไม่รัน 051
+    if (r.error && trIsV1(r.error)) { p.noperm = true; r = await q(ATT_PICK_BASE); }                              // ยังไม่รัน 050
+  } catch (x) { r = { error: x }; }
+  if (att.pick !== p) return;                              // ปิดหน้าต่าง/ออกจากระบบระหว่างรอ
+  p.loading = false;
+  if (r.error) p.error = trIsMissing(r.error) ? 'ยังไม่ได้ติดตั้งคลังไฟล์ในฐานข้อมูล — ต้องรัน migration 049 ก่อน' : 'โหลดคลังไฟล์ไม่สำเร็จ: ' + trErrText(r.error);
+  else p.files = (r.data || []).filter(trAlive);
+  attPickRender();
+}
+function attFolderMap(files) {
+  const m = new Map();
+  for (const f of files) if (f.folder_path) for (const x of trPrefixes(f.folder_path)) {
+    let e = m.get(x);
+    if (!e) { e = { path: x, files: 0, bytes: 0 }; m.set(x, e); }
+    e.files++; e.bytes += Number(f.size_bytes) || 0;
+  }
+  return m;
+}
+function attPickRow(f, p, showPath) {
+  const used = p.exclude.has(f.id), on = p.sel.has(f.id), full = !on && p.sel.size >= p.max;
+  return '<label class="att-prow' + (used ? ' used' : '') + '">' + '<input type="checkbox" data-id="' + escapeHtml(f.id) + '"' + (used ? ' data-used="1"' : '') + (on ? ' checked' : '') + (used || full ? ' disabled' : '') + '>' + attIconSvg(f.category) +
+    '<span class="att-meta"><span class="att-name">' + (showPath && f.folder_path ? '<span class="tr-sub">' + escapeHtml(f.folder_path) + '/</span>' : '') + escapeHtml(f.file_name) + '</span>' +
+    '<span class="att-sub">' + escapeHtml(trCatName(f.category)) + ' · ' + trSize(f.size_bytes) + ' · ' + escapeHtml(trWho(f.uploader)) + ' ' + attPillHtml(Object.assign({ status: 'ready' }, f)) + (used ? ' <span class="st st-off">แนบแล้ว</span>' : '') + '</span></span></label>';
+}
+function attPickRender() {
+  const p = att.pick;
+  if (!p) return;
+  const list = attEl('attList'), crumbs = attEl('attCrumbs'), q = p.q.trim().toLowerCase(), flat = !!(q || p.perm) || p.nofolder;
+  attEl('attPermWrap').hidden = p.noperm;
+  attEl('attDlgErr').hidden = !p.error; attEl('attDlgErr').textContent = p.error;
+  if (p.loading) { list.innerHTML = '<div class="empty">กำลังโหลดคลังไฟล์…</div>'; crumbs.innerHTML = ''; attPickFoot(); return; }
+  if (p.error) { list.innerHTML = ''; crumbs.innerHTML = ''; attPickFoot(); return; }
+  let rows = [], total = 0, html = '';
+  if (flat) {
+    const found = p.files.filter(f => (!p.perm || f.is_permanent) && (!q || [f.file_name, f.note, f.folder_path, trWho(f.uploader)].some(x => String(x || '').toLowerCase().includes(q))));
+    total = found.length; rows = found.slice(0, ATT_SHOW);
+    crumbs.innerHTML = p.nofolder ? '' : '<span class="tr-flatnote">ผลลัพธ์จากทุกโฟลเดอร์ — ล้างช่องค้นหา/ตัวกรองเพื่อกลับไปเรียกดูตามโฟลเดอร์</span>';
+    html = rows.map(f => attPickRow(f, p, true)).join('');
+  } else {
+    const m = attFolderMap(p.files), dirs = trChildren(m, p.path), here = p.files.filter(f => (f.folder_path || '') === p.path);
+    total = here.length; rows = here.slice(0, ATT_SHOW);
+    const segs = p.path ? p.path.split('/') : [];
+    let acc = '';
+    crumbs.innerHTML = '<button class="tr-crumb" type="button" data-att-act="p-nav" data-path=""' + (segs.length ? '' : ' aria-current="page"') + '>' + trFolderSvg(false, 's') + '&nbsp;คลังไฟล์</button>' +
+      segs.map((sg, i) => { acc = trJoin(acc, sg); return '<span class="tr-sep" aria-hidden="true">›</span><button class="tr-crumb" type="button" data-att-act="p-nav" data-path="' + escapeHtml(acc) + '"' + (i === segs.length - 1 ? ' aria-current="page"' : '') + '>' + escapeHtml(sg) + '</button>'; }).join('');
+    html = dirs.map(e => '<button class="att-prow att-dir" type="button" data-att-act="p-nav" data-path="' + escapeHtml(e.path) + '">' + trFolderSvg(true, 's') + '<span class="att-meta"><span class="att-name">' + escapeHtml(trLeaf(e.path)) + '</span>' +
+      '<span class="att-sub">' + e.files + ' ไฟล์ · ' + trSize(e.bytes) + '</span></span></button>').join('') + rows.map(f => attPickRow(f, p, false)).join('');
+  }
+  list.innerHTML = html || '<div class="empty">' + (p.files.length ? 'ไม่พบไฟล์ที่ตรงกับการค้นหา' : 'คลังไฟล์ยังไม่มีไฟล์ — อัปโหลดที่เมนู "โอนไฟล์" ก่อน') + '</div>';
+  if (total > ATT_SHOW) list.insertAdjacentHTML('beforeend', '<p class="hint">แสดง ' + ATT_SHOW + ' จาก ' + total + ' ไฟล์ — พิมพ์ค้นหาให้แคบลง</p>');
+  attPickFoot();
+}
+function attPickFoot() {
+  const p = att.pick;
+  if (!p) return;
+  const n = p.sel.size;
+  attEl('attPickN').textContent = p.max <= 0 ? 'แนบครบ ' + ATT_MAX + ' ไฟล์แล้ว' : 'เลือกแล้ว ' + n + ' ไฟล์ · แนบเพิ่มได้อีก ' + (p.max - n) + ' ไฟล์';
+  const ok = attEl('attDlgOk');
+  ok.disabled = !n; ok.textContent = n ? 'แนบ ' + n + ' ไฟล์' : 'แนบไฟล์';
+}
+function attPickClose() {
+  const d = attEl('attDlg');
+  att.pick = null;
+  if (d.open) d.close();
+}
+function attPickOk() {
+  const p = att.pick;
+  if (!p || !p.sel.size) return;
+  const files = [...p.sel.values()], fn = p.onPick;
+  attPickClose();
+  fn(files);
+}
+
+// ── ช่องแนบในฟอร์ม (เลือกไว้ก่อน → แนบจริงตอนกดบันทึกของฟอร์ม · ที่แนบไว้แล้วตอนแก้ ถอดตอนกดบันทึกเช่นกัน) ──
+function attHostInit(id, kind, ctx, target) {
+  attHosts[id] = { kind, ctx: ctx || '', target: target ? String(target) : null, add: [], rm: new Set() };
+  attHostRender(id);
+}
+function attHostChanged(id) { const h = attHosts[id]; return !!h && (h.add.length > 0 || h.rm.size > 0); }
+function attHostRender(id) {
+  const h = attHosts[id], el = attEl(id);
+  if (!el) return;
+  const wrap = el.closest('.att-field');
+  if (wrap) wrap.hidden = !h || att.off;
+  if (!h || att.off) { el.innerHTML = ''; return; }
+  const exist = h.target ? attOf(h.kind, h.target, h.ctx) : [], total = exist.filter(a => !h.rm.has(a.id)).length + h.add.length;
+  const chips = exist.map(a => attChipHtml(a, { host: id, removed: h.rm.has(a.id) })).join('') + h.add.map((f, i) => attStagedHtml(f, i, id)).join('');
+  el.innerHTML = (chips ? '<div class="att-list">' + chips + '</div>' : '') +
+    '<div class="att-addrow"><button class="btn btn-sm" type="button" data-att-act="h-add" data-host="' + escapeHtml(id) + '"' + (total >= ATT_MAX ? ' disabled' : '') + '>+ แนบจากคลังไฟล์</button>' +
+    '<span class="hint">ไม่บังคับ · สูงสุด ' + ATT_MAX + ' ไฟล์' + (total ? ' · แนบอยู่ ' + total + ' ไฟล์' : '') + '</span></div>';
+}
+function attHostAdd(id) {
+  const h = attHosts[id];
+  if (!h) return;
+  const have = new Set((h.target ? attOf(h.kind, h.target, h.ctx).filter(a => !h.rm.has(a.id)).map(a => a.file_id) : []).concat(h.add.map(f => f.id)));
+  attPickOpen({ exclude: have, max: ATT_MAX - have.size, onPick: files => {
+    if (attHosts[id] !== h) return;                        // ฟอร์มปิด/เปลี่ยนไปแล้ว
+    h.add.push(...files.filter(f => !have.has(f.id)));
+    attHostRender(id);
+  } });
+}
+// แนบจริงตอนฟอร์มบันทึกสำเร็จ: ถอดที่ติ๊กไว้ก่อน แล้วแนบที่เลือกไว้กับทุกเป้าหมาย (สั่งงานหลายคน = หลายใบ) · คืน { ok, err } — ล้มไม่ย้อนการบันทึกของฟอร์ม
+async function attHostCommit(id, targets, ctx) {
+  const h = attHosts[id];
+  if (!h || att.off || !attHostChanged(id)) return { ok: true };
+  try {
+    for (const aid of h.rm) { const r = await db.rpc('transfer_detach', { p_id: aid }); if (r.error) throw r.error; }
+    if (h.add.length) for (const t of [].concat(targets)) {
+      const r = await db.rpc('transfer_attach', { p_kind: h.kind, p_target: String(t), p_ctx: ctx == null ? h.ctx : ctx, p_files: h.add.map(f => f.id) });
+      if (r.error) throw r.error;
+    }
+    return { ok: true };
+  } catch (e) { console.error('[Att commit]', e); return { ok: false, err: trErrText(e) }; }
+}
+function attHostClear(id) { delete attHosts[id]; attHostRender(id); }
+// รหัสที่ฟังก์ชัน work_* ตอบกลับ: อาจเป็นข้อความ / อ็อบเจ็กต์ / อาร์เรย์ของสองแบบนั้น
+function attIdsFrom(data) {
+  return [].concat(data == null ? [] : data).map(x => (x && typeof x === 'object') ? (x.id || x.task_id || x.request_id || x.work_create || x.work_request_create) : x).filter(x => typeof x === 'string' && x);
+}
+function attReset() {
+  att = attBlank(); attHosts = {};
+  const d = attEl('attDlg');
+  if (d.open) d.close();
+  ATT_HOSTS.forEach(id => { attEl(id).innerHTML = ''; const w = attEl(id).closest('.att-field'); if (w) w.hidden = true; });
+  attEl('attList').innerHTML = ''; attEl('attCrumbs').innerHTML = ''; attEl('attQ').value = ''; attEl('attPerm').checked = false;
+  attEl('attDlgErr').hidden = true; attEl('attDlgErr').textContent = '';
+}
+
+// ── ผูกปุ่ม (ปุ่มทุกตัวใช้ data-att-act — ไม่ฝังข้อมูลของผู้ใช้ลงใน onclick) ──
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-att-act]');
+  if (!b || b.disabled) return;
+  const act = b.dataset.attAct, host = b.dataset.host, h = host ? attHosts[host] : null;
+  if (act === 'view' || act === 'download') attOpen(b.dataset.file, act);
+  else if (act === 'detach') attAskDetach(b.dataset.att);
+  else if (act === 'add') attDirectAdd(b.dataset.kind, b.dataset.target, b.dataset.ctx || '');
+  else if (act === 'h-add') attHostAdd(host);
+  else if (act === 'h-rm' && h) { h.add.splice(Number(b.dataset.i), 1); attHostRender(host); }
+  else if (act === 'h-rmx' && h) { h.rm.add(b.dataset.att); attHostRender(host); }
+  else if (act === 'h-undo' && h) { h.rm.delete(b.dataset.att); attHostRender(host); }
+  else if (act === 'p-nav' && att.pick) { att.pick.path = b.dataset.path || ''; attPickRender(); attEl('attList').scrollTop = 0; }
+});
+attEl('attQ').addEventListener('input', e => { if (att.pick) { att.pick.q = e.target.value; attPickRender(); } });
+attEl('attPerm').addEventListener('change', e => { if (att.pick) { att.pick.perm = e.target.checked; attPickRender(); } });
+attEl('attList').addEventListener('change', e => {
+  const p = att.pick, cb = e.target;
+  if (!p || !cb.matches('input[type="checkbox"]')) return;
+  const f = p.files.find(x => x.id === cb.dataset.id);
+  if (!f) return;
+  if (cb.checked) { if (p.sel.size >= p.max) { cb.checked = false; showToast('⚠️ เลือกครบเพดานแล้ว — แต่ละรายการแนบได้ไม่เกิน ' + ATT_MAX + ' ไฟล์'); return; } p.sel.set(f.id, f); }
+  else p.sel.delete(f.id);
+  attEl('attList').querySelectorAll('input[type="checkbox"]').forEach(c => { c.disabled = c.dataset.used === '1' || (!c.checked && p.sel.size >= p.max); });     // ช่องที่เหลือปิด/เปิดตามเพดาน (ไม่วาดใหม่ — โฟกัสคีย์บอร์ดต้องอยู่ที่เดิม)
+  attPickFoot();
+});
+attEl('attDlgOk').addEventListener('click', () => attPickOk());
+attEl('attDlgCancel').addEventListener('click', () => attPickClose());
+attEl('attDlg').addEventListener('close', () => { if (!attEl('attDlg').open) att.pick = null; });
+
+// ===========================================================================
 // งานของฉัน — Work Checklist พนักงานรายบุคคล (#tasks · Alt+T · migration 037 + 038)
 // ดีไซน์: console-workspace/DESIGN-staff-worklist.md (หัวข้อ A ชนะข้อความเก่า) · ภาพตัวอย่าง: console-workspace/mockups/staff-worklist/
 //
@@ -14253,13 +14631,15 @@ const workReqPendingForMe = () => work.reqs.filter(r => r.status === 'pending' &
 async function loadWork() {
   if (!currentUserId) return;
   const uid = currentUserId;
-  const [t, e, q, p] = await Promise.all([
+  const [t, e, q, p, ar] = await Promise.all([
     db.from('work_tasks').select(WORK_COLS).order('created_at', { ascending: false }).limit(500),
     db.from('work_task_events').select(WORK_EV_COLS).order('created_at', { ascending: false }).limit(3000),     // ใหม่สุดก่อนแล้วกลับด้านทีหลัง — ถ้าเกินเพดาน ตัดของเก่าทิ้ง ไม่ใช่ของใหม่
     db.from('work_requests').select(WORK_REQ_COLS).order('created_at', { ascending: false }).limit(500),
     db.from('admins').select('id, full_name, role, is_active').order('full_name'),
+    attFetch(['task', 'request']),                         // ไฟล์แนบจากคลังไฟล์ (053)
   ]);
   if (uid !== currentUserId) return;                       // สลับบัญชี/ออกจากระบบระหว่างโหลด — ทิ้งผล ไม่เอามาแสดง
+  attApplyLoad(['task', 'request'], ar);
   const before = work.loaded ? { ids: new Set(work.tasks.map(x => x.id)), status: new Map(work.tasks.map(x => [x.id, x.status])),
     reqIds: new Set(work.reqs.map(x => x.id)), reqStatus: new Map(work.reqs.map(x => [x.id, x.status])) } : null;
   work.loaded = true;
@@ -14464,10 +14844,13 @@ function workEvLabel(e, t) {
 // รายละเอียดใบงาน: ใช้ร่วมกันทั้งแผงตรวจงานและหน้าต่างดู (mode: review = ปุ่มผ่าน/ส่งกลับ · manage = แก้/ยกเลิก/ปิดงาน · view = อ่านอย่างเดียว) · ทุกโหมดมีปุ่มยื่นคำขอ (ยกเว้นเจ้าของ)
 function workDetailHtml(t, mode) {
   const evs = workEvents(t.id), last = workLastEv(t.id, 'submitted');
+  const rounds = evs.filter(x => x.kind === 'submitted'), lastN = rounds.length, roundOf = e => rounds.indexOf(e) + 1;     // ไฟล์แนบจากคลังของแต่ละรอบส่ง (ctx submit:N)
+  const attRound = n => (att.off ? '' : '<div class="att-list">' + attOf('task', t.id, 'submit:' + n).map(a => attChipHtml(a)).join('') + '</div>').replace('<div class="att-list"></div>', '');
   const refs = (t.ref_links || []).map(l => { const h = workHref(l.url); return '<div class="wk-link"><div class="wk-url">' + escapeHtml(l.url) + '</div>' + (h ? '<a class="btn btn-sm" href="' + escapeHtml(h) + '" target="_blank" rel="noopener noreferrer">เปิดในแท็บใหม่</a>' : '') + '</div>'; }).join('');
   const hist = evs.slice().reverse().map(e => '<li><span class="t">' + escapeHtml(workDt(e.created_at)) + '</span><span><strong>' + escapeHtml(workEvLabel(e, t)) + '</strong> · ' + escapeHtml(workName(e.actor_id)) +
     (e.kind === 'submitted' ? ' · ครั้งที่ ' + (evs.filter(x => x.kind === 'submitted' && Date.parse(x.created_at) <= Date.parse(e.created_at)).length) : '') +
-    (e.note ? '<div class="wk-note">' + escapeHtml(e.note) + '</div>' : '') + '</span></li>').join('');
+    (e.note ? '<div class="wk-note">' + escapeHtml(e.note) + '</div>' : '') +
+    (e.kind === 'submitted' && roundOf(e) !== lastN ? attRound(roundOf(e)) : '') + '</span></li>').join('');          // รอบล่าสุดแสดงในส่วนหลักฐาน · รอบก่อนหน้าแสดงในประวัติ
   const reqBtn = !isOwner() ? '<button type="button" class="btn" data-act="req-new" data-id="' + escapeHtml(t.id) + '">ยื่นคำขอเกี่ยวกับงานนี้</button>' : '';
   let actions = '';
   if (mode === 'review') {
@@ -14491,10 +14874,12 @@ function workDetailHtml(t, mode) {
     (t.submitted_at ? '<dt>ส่งเมื่อ</dt><dd>' + escapeHtml(workDt(t.submitted_at)) + '</dd>' : '') + '</dl>' +
     (t.detail ? '<h4 class="wk-sec-h">รายละเอียดงาน</h4><div class="wk-note">' + escapeHtml(t.detail) + '</div>' : '') +
     (refs ? '<h4 class="wk-sec-h">ลิงก์ตัวอย่างจากผู้สั่ง</h4>' + refs : '') +
+    attSectionHtml('task', t.id, 'brief', 'ไฟล์ตัวอย่างจากผู้สั่ง (คลังไฟล์)') +
     (last ? '<h4 class="wk-sec-h">หลักฐานที่แนบ' + (workStaged(t) ? (last.phase === 'content' ? ' (ขั้นไฟล์' : ' (ขั้นลิงก์โพสต์') + ' · ส่งครั้งที่ ' + workRound(t.id) + ')' : ' (ส่งครั้งที่ ' + workRound(t.id) + ')') + '</h4>' + workEvidenceHtml(last) +
       '<p class="hint">ลิงก์เปิดในแท็บใหม่เท่านั้น ระบบไม่ฝังหน้าเว็บของคนอื่นไว้ในคอนโซล · รูปเปิดผ่านลิงก์ชั่วคราวอายุสั้น</p>' +
+      attSectionHtml('task', t.id, 'submit:' + lastN, 'ไฟล์จากคลังไฟล์ที่แนบมากับการส่งครั้งที่ ' + lastN) +
       (last.note ? '<h4 class="wk-sec-h">ข้อความจากพนักงาน</h4><div class="wk-note">' + escapeHtml(last.note) + '</div>' : '') : '') +
-    (stage1 ? '<h4 class="wk-sec-h">ไฟล์ที่ผ่านขั้น 1 แล้ว</h4>' + workEvidenceHtml(stage1) : '') +
+    (stage1 ? '<h4 class="wk-sec-h">ไฟล์ที่ผ่านขั้น 1 แล้ว</h4>' + workEvidenceHtml(stage1) + (roundOf(stage1) !== lastN ? attRound(roundOf(stage1)) : '') : '') +
     '<h4 class="wk-sec-h">ประวัติ</h4><ul class="wk-tl">' + hist + '</ul></div>' + actions + '</section>';
 }
 // รูปหลักฐาน: ขอลิงก์ชั่วคราวทีละรูป (ถังส่วนตัว) แล้วค่อยใส่ <img> — เปลี่ยนบัญชีระหว่างรอ = ทิ้งผล
@@ -14545,7 +14930,7 @@ function workReqDetailHtml(r) {
   }
   return '<section class="card wk-card"><div class="wk-card-head"><span>' + (r.requester_id === currentUserId ? 'คำขอของฉัน' : 'จาก ' + escapeHtml(workName(r.requester_id)) + ' · ' + escapeHtml(workRoleOf(r.requester_id))) + '</span>' +
     '<span class="wk-pills"><span class="wk-chan">ถึง ' + escapeHtml(workReqToLabel(r)) + '</span><span class="' + st[1] + '">' + st[0] + '</span></span></div><div class="wk-card-body">' +
-    '<div class="wk-note">' + escapeHtml(r.body) + '</div>' + att +
+    '<div class="wk-note">' + escapeHtml(r.body) + '</div>' + att + attSectionHtml('request', r.id, '', 'ไฟล์แนบจากคลังไฟล์') +
     '<dl class="wk-kv" style="margin-top:14px"><dt>ผู้ยื่น</dt><dd>' + escapeHtml(workName(r.requester_id)) + ' · ' + escapeHtml(workRoleOf(r.requester_id)) + ' · ' + escapeHtml(workDt(r.created_at)) + '</dd>' +
     '<dt>ส่งถึง</dt><dd>' + escapeHtml(workReqToLabel(r)) + (r.to_group ? ' · ใครในกลุ่มตอบก่อนเป็นคนตัดสิน' : '') + '</dd></dl>' + ans +
     (workReqCanDecide(r) ? '<p class="hint">อนุมัติ = รับเรื่อง <strong class="wk-red">ระบบไม่ย้ายงานหรือเลื่อนกำหนดให้</strong> — ผู้อนุมัติไปทำเองที่หน้าใบงาน</p>' : '') + '</div>' + actions + '</section>';
@@ -14685,7 +15070,9 @@ function workSubOpen(id) {
   document.getElementById('workSubTask').innerHTML = '<div class="wk-top">' + workPills(t) + '<span class="wk-due">' + (t.due_at ? 'กำหนด ' + escapeHtml(workWhen(t.due_at)) : 'ไม่มีกำหนด') + '</span></div>' +
     '<div class="wk-title">' + escapeHtml(t.title) + '</div><div class="wk-meta">' + workChips(t) + '</div>' +
     '<div class="wk-by">สั่งโดย ' + escapeHtml(workName(t.created_by)) + ' · ' + escapeHtml(workDt(t.created_at)) + '</div>' +
-    (t.detail ? '<div class="wk-note">' + escapeHtml(t.detail) + '</div>' : '') + workQuoteHtml(t);
+    (t.detail ? '<div class="wk-note">' + escapeHtml(t.detail) + '</div>' : '') + workQuoteHtml(t) +
+    (!att.off && attOf('task', t.id, 'brief').length ? '<h4 class="wk-sec-h">ไฟล์ตัวอย่างจากผู้สั่ง (คลังไฟล์)</h4><div class="att-list">' + attOf('task', t.id, 'brief').map(a => attChipHtml(a)).join('') + '</div>' : '');
+  attHostInit('workSubAtt', 'task', 'submit', null);                  // ไฟล์ที่แนบมากับการส่งครั้งนี้ (ctx submit:N ตั้งตอนส่งสำเร็จ)
   let chans = '';
   if (content) chans = '<div class="alert alert-plain"><strong>งานนี้ตรวจ 2 รอบ</strong> — รอบนี้ส่ง<strong>ไฟล์</strong>ให้ตรวจก่อน <strong class="wk-red">ยังไม่ต้องลง ' + t.channels.map(c => escapeHtml(WORK_CHAN[c] || c)).join(' / ') + '</strong>' +
     ' · เมื่อไฟล์ผ่านแล้วงานจะขึ้นป้าย "รอลงโซเชียล" ค่อยลงโพสต์แล้วกลับมาแนบลิงก์โพสต์ในรอบที่ 2</div>';
@@ -14740,7 +15127,7 @@ async function workSubmit() {
   if (!s || s.busy) return;
   const chk = workSubCheck();
   if (!chk.ok) { workSubRender(); return; }
-  const uid = currentUserId, uploaded = [], t = workTask(s.id), wasContent = !!t && t.phase === 'content';
+  const uid = currentUserId, uploaded = [], t = workTask(s.id), wasContent = !!t && t.phase === 'content', round = workRound(s.id) + 1;
   s.busy = true; btn.disabled = true; err.hidden = true;
   try {
     for (const im of s.imgs) {
@@ -14760,9 +15147,13 @@ async function workSubmit() {
     return;
   }
   if (workSub !== s || uid !== currentUserId) return;
+  const ac = await attHostCommit('workSubAtt', s.id, 'submit:' + round);        // ไฟล์จากคลังที่แนบมากับการส่งครั้งนี้ (ส่งงานสำเร็จแล้ว — แนบไม่ผ่านก็ไม่ย้อนการส่ง)
+  if (uid !== currentUserId) return;
+  attHostClear('workSubAtt');
   workSubFree(); workSub = null;
   document.getElementById('workSubDialog').close();
   showToast(wasContent ? '✅ ส่งไฟล์แล้ว — รอผู้ตรวจ' : '✅ ส่งงานแล้ว — รอผู้ตรวจ');
+  if (!ac.ok) showFatalError('ส่งงานแล้ว แต่แนบไฟล์จากคลังไฟล์ไม่สำเร็จ: ' + ac.err + ' — เปิดใบงานแล้วกด "แนบไฟล์จากคลังไฟล์" ได้อีกครั้ง');
   await loadWork();
 }
 
@@ -14826,6 +15217,7 @@ function workFormOpen(id) {
       : '<label class="off"><input type="checkbox" value="' + escapeHtml(p.id) + '" disabled><span class="cb" aria-hidden="true"></span><span>' + escapeHtml(p.full_name) + '</span><span class="sub">' + escapeHtml(WORK_ROLE[p.role] || p.role) + ' · สั่งไม่ได้</span></label>').join('') + '</div>';
   }
   document.getElementById('workfErr').hidden = true;
+  attHostInit('workfAtt', 'task', 'brief', t ? t.id : null);
   workFormSync();
   const d = document.getElementById('workFormDialog');
   if (!d.open) d.showModal();
@@ -14850,10 +15242,19 @@ async function workFormSave() {
     if (!f.id) {
       const people = [...document.querySelectorAll('#workfPeople input[type=checkbox]:checked')].map(i => i.value);
       if (!people.length) { fail('เลือกผู้รับงานอย่างน้อย 1 คน'); return; }
+      const beforeIds = new Set(work.tasks.map(x => x.id));
       const { data, error } = await db.rpc('work_create', { p_title: title, p_detail: detail, p_kind: f.kind, p_channels: channels, p_assignees: people, p_due_at: dueIso, p_ref_links: refs });
       if (error) { console.error('[Work create]', error); fail('สั่งงานไม่สำเร็จ: ' + error.message); return; }
+      let ids = attIdsFrom(data), ac = { ok: true };
+      if (attHostChanged('workfAtt')) {
+        if (ids.length !== people.length) { await loadWork(); ids = work.tasks.filter(x => !beforeIds.has(x.id) && x.created_by === uid && x.title === title).map(x => x.id); }     // ฟังก์ชันไม่คืนรหัสครบ — หาใบที่เพิ่งสร้างเอง
+        ac = ids.length ? await attHostCommit('workfAtt', ids) : { ok: false, err: 'หาใบงานที่เพิ่งสร้างไม่พบ' };
+        if (uid !== currentUserId) return;
+      }
+      attHostClear('workfAtt');
       document.getElementById('workFormDialog').close(); workForm = null;
       showToast('✅ สั่งงานแล้ว ' + (Array.isArray(data) ? data.length : people.length) + ' ใบ');
+      if (!ac.ok) showFatalError('สั่งงานแล้ว แต่แนบไฟล์จากคลังไฟล์ไม่สำเร็จ: ' + ac.err + ' — เปิดใบงานแล้วกด "แนบไฟล์จากคลังไฟล์" ได้อีกครั้ง');
     } else {
       const t = workTask(f.id);
       if (!t) { fail('ไม่พบใบงานนี้แล้ว'); return; }
@@ -14861,7 +15262,7 @@ async function workFormSave() {
       const same = JSON.stringify(t.channels) === JSON.stringify(channels) && JSON.stringify((t.ref_links || []).map(l => l.url)) === JSON.stringify(refUrls) && (t.due_at ? Date.parse(t.due_at) : null) === (dueIso ? Date.parse(dueIso) : null);
       const edited = !(same && t.title === title && t.detail === detail && t.kind === f.kind);
       const moved = toId !== t.assignee_id, reason = document.getElementById('workfReason').value.trim() || null;
-      if (!edited && !moved) { fail('ไม่มีอะไรเปลี่ยน'); return; }
+      if (!edited && !moved && !attHostChanged('workfAtt')) { fail('ไม่มีอะไรเปลี่ยน'); return; }
       if (edited) {
         const r = await db.rpc('work_edit', { p_task: f.id, p_title: title, p_detail: detail, p_kind: f.kind, p_channels: channels, p_due_at: dueIso, p_ref_links: refs, p_note: reason });
         if (r.error) { console.error('[Work edit]', r.error); fail('แก้ใบงานไม่สำเร็จ: ' + r.error.message); return; }
@@ -14870,8 +15271,12 @@ async function workFormSave() {
         const r = await db.rpc('work_reassign', { p_task: f.id, p_assignee: toId, p_note: reason });
         if (r.error) { console.error('[Work reassign]', r.error); fail((edited ? 'แก้ใบงานแล้ว แต่' : '') + 'ย้ายผู้รับไม่สำเร็จ: ' + r.error.message); await loadWork(); return; }
       }
+      const ac = await attHostCommit('workfAtt', f.id, 'brief');
+      if (uid !== currentUserId) return;
+      attHostClear('workfAtt');
       document.getElementById('workFormDialog').close(); workForm = null;
       showToast('✅ บันทึกการแก้ไขแล้ว');
+      if (!ac.ok) showFatalError('บันทึกการแก้ไขแล้ว แต่แนบ/ถอดไฟล์จากคลังไฟล์ไม่สำเร็จ: ' + ac.err);
     }
     if (uid === currentUserId) await loadWork();
   } catch (e) {
@@ -14908,6 +15313,7 @@ function workReqOpen(taskId) {
   document.getElementById('workrTask').innerHTML = '<option value="">ไม่แนบใบงาน</option>' + cand.map(t => '<option value="' + escapeHtml(t.id) + '"' + (t.id === taskId ? ' selected' : '') + '>' + escapeHtml(t.title) + ' · ' + escapeHtml(workName(t.assignee_id)) + '</option>').join('');
   document.getElementById('workrBody').value = '';
   document.getElementById('workrErr').hidden = true;
+  attHostInit('workrAtt', 'request', '', null);
   workReqSync();
   const d = document.getElementById('workReqDialog');
   if (!d.open) d.showModal();
@@ -14920,12 +15326,22 @@ async function workReqSave() {
   if (!body) { err.textContent = 'ใส่ข้อความคำขอก่อน'; err.hidden = false; return; }
   const uid = currentUserId, task = document.getElementById('workrTask').value || null;
   r.busy = true; btn.disabled = true;
-  const { error } = await workRpc('work_request_create', { p_to_user: r.mode === 'user' ? document.getElementById('workrUser').value : null, p_to_group: r.mode === 'group' ? r.group : null, p_task: task, p_body: body });
+  const beforeIds = new Set(work.reqs.map(x => x.id));
+  const { data, error } = await workRpc('work_request_create', { p_to_user: r.mode === 'user' ? document.getElementById('workrUser').value : null, p_to_group: r.mode === 'group' ? r.group : null, p_task: task, p_body: body });
   if (uid !== currentUserId) return;
   r.busy = false;
   if (error) { console.error('[Work request]', error); err.textContent = 'ส่งคำขอไม่สำเร็จ: ' + error.message; err.hidden = false; workReqSync(); return; }
+  let ac = { ok: true };
+  if (attHostChanged('workrAtt')) {
+    let ids = attIdsFrom(data);
+    if (ids.length !== 1) { await loadWork(); ids = work.reqs.filter(x => !beforeIds.has(x.id) && x.requester_id === uid && x.body === body).map(x => x.id); }
+    ac = ids.length === 1 ? await attHostCommit('workrAtt', ids) : { ok: false, err: 'หาคำขอที่เพิ่งส่งไม่พบ' };
+    if (uid !== currentUserId) return;
+  }
+  attHostClear('workrAtt');
   document.getElementById('workReqDialog').close(); workReq = null;
   showToast('✅ ส่งคำขอแล้ว — รอผู้รับตอบ');
+  if (!ac.ok) showFatalError('ส่งคำขอแล้ว แต่แนบไฟล์จากคลังไฟล์ไม่สำเร็จ: ' + ac.err + ' — เปิดคำขอแล้วกด "แนบไฟล์จากคลังไฟล์" ได้อีกครั้ง');
   work.reqBox = 'out'; work.reqSel = null; workTab('req');
   await loadWork();
 }
