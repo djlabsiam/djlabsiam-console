@@ -864,7 +864,7 @@ const resync = loadWith('#booking', 'u1', wait + `
     // channel realtime หลุดแล้วต่อใหม่
     missed();
     const names = Object.keys(window.RTSUB || {}).sort();
-    ok('ทั้ง 10 channel ของหน้านี้ฟังสถานะการเชื่อมต่อ (ไม่มี channel ที่สมัครโดยไม่มีตัวฟังสถานะ)', names.length === 10 && names.every(n => typeof window.RTSUB[n] === 'function'), names.join());
+    ok('ทั้ง 11 channel ของหน้านี้ฟังสถานะการเชื่อมต่อ (ไม่มี channel ที่สมัครโดยไม่มีตัวฟังสถานะ)', names.length === 11 && names.every(n => typeof window.RTSUB[n] === 'function'), names.join());
     window.FROMS.length = 0; window.RTSUB['desk-room-bookings']('SUBSCRIBED'); await sleep(SETTLE);
     ok('channel ตอบ SUBSCRIBED ตอนเริ่มต่อครั้งแรก (ไม่เคยหลุด): ไม่โหลดซ้ำ', nFrom('room_bookings') === 0 && rowsN() === base + 2, nFrom('room_bookings') + ' ' + rowsN());
     window.RTSUB['desk-room-bookings']('CHANNEL_ERROR'); await sleep(SETTLE);

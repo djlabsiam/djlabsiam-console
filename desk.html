@@ -1105,6 +1105,31 @@
   .wk-need:empty { display: none; }
   /* คำเตือน/ข้อความสำคัญ (ห้ามทำ · ทำไม่ได้ · บังคับ · ย้อนกลับไม่ได้) = แดงตัวหนา — ไม่ใช้สีอย่างเดียว ตัวหนาและคำบอกชัดเสมอ */
   .wk-red { color: var(--red); font-weight: 700; }
+  /* คอร์สเรียน (#teach · migration 047): แถวเป็นการ์ด — จอกว้างจัดเป็นคอลัมน์ · iPhone (< 768px) เรียงลงเป็นการ์ด · ตัวหนังสือ ≥ 14px · เป้ากด ≥ 44px */
+  .te-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; margin-bottom: 16px; }
+  .te-bar .grow { flex: 1 1 240px; min-width: 0; }
+  .te-seg { display: inline-flex; border: 1px solid var(--line-strong); background: var(--surface); }
+  .te-seg button { min-height: 44px; padding: 0 16px; border: 0; background: var(--surface); font: inherit; font-weight: 600; cursor: pointer; }
+  .te-seg button + button { border-left: 1px solid var(--line-strong); }
+  .te-seg button[aria-pressed="true"] { background: var(--black); color: #fff; }
+  .te-head, .te-row { display: grid; grid-template-columns: minmax(190px, 1.7fr) minmax(150px, 1.3fr) minmax(80px, .7fr) minmax(130px, 1fr) minmax(110px, .9fr) minmax(130px, 1fr) minmax(120px, 1fr); gap: 6px 14px; padding: 10px 16px; align-items: start; }
+  .te-head { background: var(--head); border: 1px solid var(--line); border-bottom: 2px solid var(--black); font-weight: 700; font-size: 14px; }
+  .te-list { background: var(--surface); border: 1px solid var(--line); border-top: 0; }
+  .te-row { border-bottom: 1px solid var(--line); min-height: 44px; overflow-wrap: anywhere; }
+  .te-row:last-child { border-bottom: 0; }
+  .te-srow { grid-template-columns: minmax(170px, 1.4fr) minmax(150px, 1.4fr) minmax(150px, 1.4fr) minmax(80px, .8fr) minmax(90px, .8fr); }
+  .te-name { font-family: var(--font-head); font-weight: 600; font-size: 16px; line-height: 1.4; }
+  .te-sub { font-size: 14px; color: var(--text2); }
+  .te-pills { display: flex; flex-wrap: wrap; gap: 6px 8px; margin-top: 6px; }
+  .te-prog { display: inline-block; width: 64px; height: 10px; border: 1px solid var(--black); background: var(--surface); vertical-align: middle; }
+  .te-prog i { display: block; height: 100%; background: var(--black); }
+  .te-frow { grid-template-columns: minmax(180px, 1fr) auto auto; align-items: center; }
+  .te-seg button:disabled { color: var(--text3); background: var(--surface2); cursor: not-allowed; }
+  @media (max-width: 767px) {
+    .te-head { display: none; }
+    .te-row, .te-srow { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+    .te-row > [data-l]::before { content: attr(data-l) ': '; color: var(--text2); font-size: 14px; }
+  }
   /* แจ้งเตือนงานบนเครื่องนี้ (Web Push) */
   #notifDevices { margin: 0; padding: 0; list-style: none; }
   #notifDevices li { padding: 8px 0; border-top: 1px solid var(--line); font-size: 14px; }
@@ -2323,6 +2348,31 @@
         </section>
 
         <!-- ============ โอนไฟล์ — ถังโอนถ่ายไฟล์ภายในร้าน (migration 049) ============ -->
+        <section class="section" id="sec-teach" hidden aria-label="คอร์สเรียน นักเรียน รอบเรียน การลงเรียน">
+          <div id="teAlert"></div>
+          <div class="toolbar calc-clear">
+            <div class="mail-tabs" id="teTabs" role="tablist" aria-label="ส่วนของหน้า" style="margin:0; flex:1;">
+              <button class="mail-tab" type="button" role="tab" data-tab="summary" aria-selected="true">สรุป</button>
+              <button class="mail-tab" type="button" role="tab" data-tab="queue" aria-selected="false">รอคิว <span class="n" id="teQueueN"></span></button>
+              <button class="mail-tab" type="button" role="tab" data-tab="active" aria-selected="false">กำลังเรียน <span class="n soft" id="teActiveN"></span></button>
+              <button class="mail-tab" type="button" role="tab" data-tab="ended" aria-selected="false">หมดอายุ / จบ</button>
+              <button class="mail-tab" type="button" role="tab" data-tab="enroll" aria-selected="false">ลงเรียน / ย้อนหลัง</button>
+            </div>
+            <button class="btn" id="teReload" type="button">↻ รีเฟรช</button>
+          </div>
+          <div id="teListPane">
+          <div class="te-bar">
+            <div class="te-seg" id="teWho" role="group" aria-label="ผู้สอน" hidden>
+              <button type="button" data-who="all" aria-pressed="true">ทุกคน</button>
+              <button type="button" data-who="mine" aria-pressed="false">ของฉัน</button>
+            </div>
+            <input type="search" id="teSearch" class="input grow" placeholder="ค้นหาชื่อนักเรียน ชื่อเล่น คอร์ส หรือครู" autocomplete="off" aria-label="ค้นหานักเรียน">
+          </div>
+          <div id="teBody"><div class="empty">กำลังโหลดข้อมูลคอร์สเรียน…</div></div>
+          </div>
+          <div id="teEnrollPane" hidden><div id="teEnrollBody"></div></div>
+        </section>
+
         <section class="section" id="sec-transfer" hidden aria-label="โอนไฟล์ ถังโอนถ่ายไฟล์ภายในร้าน เก็บ 30 วัน">
           <div id="trAlert"></div>
           <div class="toolbar calc-clear">
@@ -3383,6 +3433,8 @@ const SECTIONS = [
   { id: 'catalog',  hash: 'catalog',       group: 'การขาย',      icon: 'catalog', label: 'ราคา / โปรโมชัน', key: 'P' },
   { id: 'booking',  hash: 'booking',       group: 'ห้องซ้อมและลูกค้า', icon: 'booking', label: 'จองห้องซ้อม', key: '6' },
   { id: 'customers',hash: 'customers',     group: 'ห้องซ้อมและลูกค้า', icon: 'customers', label: 'ข้อมูลลูกค้า', key: '7' },
+  // L = คอร์สเรียน (migration 047) — เฉพาะทีมงานที่มีแถว admins · ครูล้วนยังไม่มีหน้าจอ (P1b) · ไม่ใช้ E/F/D (Alt+E/F/D ของ Chrome บนวินโดวส์เป็นเมนูเบราว์เซอร์)
+  { id: 'teach',    hash: 'teach',         group: 'การสอน',        icon: 'teach', label: 'คอร์สเรียน', key: 'L' },
   { id: 'daily',    hash: 'daily',         group: 'บัญชีและระบบ', icon: 'daily', label: 'สรุปรายวัน', key: '8' },
   { id: 'activity', hash: 'activity',      group: 'บัญชีและระบบ', icon: 'activity', label: 'บันทึกการใช้งาน', manager: true, key: '9' },
   { id: 'admin',    hash: 'admin',         group: 'บัญชีและระบบ', icon: 'admin', label: 'จัดการข้อมูล', manager: true, key: '0' },
@@ -3411,6 +3463,7 @@ const NAV_ICONS = {
   catalog:   '<path d="M3 3.5h6.5l7.5 7.5-6 6L3 9.5z"/><path d="M6.8 7h.01"/>',
   tasks:     '<rect x="4" y="3.5" width="12" height="14"/><path d="M7.5 3.5V2h5v1.5M7 9l1.5 1.5L11 8M7 14h6"/>',
   transfer:  '<path d="M10 12.5V3M6.5 6.5L10 3l3.5 3.5"/><path d="M3 12.5v4.5h14v-4.5"/>',
+  teach:     '<path d="M2 7.5L10 3.5l8 4-8 4z"/><path d="M5.5 9.5V14c0 1.2 2 2.5 4.5 2.5s4.5-1.3 4.5-2.5V9.5M18 7.5v5"/>',
 };
 function navIcon(k) { return '<svg class="ico-svg" viewBox="0 0 20 20" aria-hidden="true" focusable="false">' + (NAV_ICONS[k] || '') + '</svg>'; }
 const HOME = 'home';   // หมวดเริ่มต้นหลังล็อกอิน และที่ที่ถูกส่งกลับเมื่อเปิดหมวดที่ไม่มีสิทธิ์
@@ -3510,6 +3563,7 @@ async function handleAuthState(session) {
     wbReset();                      // และล้างแผง "จองออนไลน์" (ค่าตั้งการจองเว็บ/สถานะซิงก์ที่โหลดไว้)
     workReset();                    // และล้างงานของฉัน/คำขอ (ใบงาน ประวัติ รูปหลักฐาน ฟอร์มที่พิมพ์ค้าง)
     trReset();                      // และล้างโอนไฟล์ (รายการไฟล์ ประวัติ คิวอัปโหลดที่ค้าง)
+    teReset();                     // คอร์สเรียน: รายการนักเรียน/รอบเรียนของคนก่อนต้องไม่ค้างหน้าจอ
     notifReset();                   // และล้างหน้าต่างแจ้งเตือน (รายการเครื่อง/ข้อความของคนก่อน)
     dcStop();                       // ออกจากระบบ = หยุดดึงข้อความ Discord และล้างที่ค้างในหน่วยความจำ
     closeCam();                     // ออกจากระบบ = ปิดกล้อง (iPad) ด้วย
@@ -3534,6 +3588,12 @@ async function handleAuthState(session) {
   if (!adminRow || !adminRow.is_active) {
     const errBox = document.getElementById('loginError');
     errBox.textContent = 'บัญชีนี้ยังไม่ได้รับสิทธิ์เข้าใช้งานระบบร้าน — แจ้งเจ้าของร้านหรือผู้ดูแลระบบให้เพิ่มสิทธิ์ทีมงานก่อน';
+    if (!adminRow) {                  // บัญชีครู (ไม่มีแถว admins) — บอกตรง ๆ ว่ายังไม่มีหน้าจอสำหรับครู (P1b) ไม่ใช่แค่ "ไม่มีสิทธิ์"
+      try {
+        const tr = await db.rpc('my_teacher_id');
+        if (tr && tr.data) errBox.textContent = 'บัญชีนี้เป็นบัญชีครู — หน้าจอสำหรับครูยังไม่เปิดให้ใช้งาน (กำลังเตรียม) หากต้องการดูข้อมูลนักเรียนก่อน แจ้งเจ้าของร้าน';
+      } catch (e) { /* ถามไม่สำเร็จ = ใช้ข้อความเดิม */ }
+    }
     errBox.style.display = '';
     document.getElementById('loginBtn').disabled = false;
     document.getElementById('loginOverlay').style.display = 'flex';
@@ -3625,6 +3685,12 @@ async function initSupabaseSync() {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'work_task_events' }, () => workScheduleReload())
     .on('postgres_changes', { event: '*', schema: 'public', table: 'work_requests' }, () => workScheduleReload())
     .subscribe(rtWatch('desk-work'));
+  db.channel('desk-teach')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'enrollments' }, () => teScheduleReload())
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'class_sessions' }, () => teScheduleReload())
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'enrollment_payments' }, () => teScheduleReload())
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'enrollment_extension_requests' }, () => teScheduleReload())
+    .subscribe(rtWatch('desk-teach'));
 }
 
 // ── เก็บตกข้อมูลที่ realtime พลาด ──
@@ -3656,6 +3722,7 @@ async function resyncAll() {
   loadHomeToday();
   if (current === 'calendar') loadCalendar();
   if (current === 'transfer') loadTransfer(); else trLoadUnseen();
+  if (current === 'teach') loadTeach();
   loadWork();
 }
 document.addEventListener('visibilitychange', () => {
@@ -5852,6 +5919,7 @@ function showSection(id, mode) {
     if (id === 'catalog') { renderCatalog(); loadCatalog(); }
     if (id === 'tasks') { renderWork(); loadWork(); }
     if (id === 'transfer') { renderTransfer(); loadTransfer(); }
+    if (id === 'teach') { renderTeach(); loadTeach(); }
     if (id === 'mail') loadMailList();
     if (id === 'pos') renderSellers();
     if (id === 'calendar') loadCalendar();
@@ -10963,6 +11031,7 @@ function onAccountSwitched() {
   wbReset();                     // แผง "จองออนไลน์": ฟอร์มตั้งค่าของคนเดิม (เจ้าของ/ผู้ดูแล) ต้องไม่ค้างให้พนักงานเห็น
   workReset();                   // งานของฉัน/คำขอ: ใบงาน คำขอ รูปหลักฐานของคนเดิมต้องไม่ค้าง (คอมหน้าร้านใช้ร่วมกันหลายคน)
   trReset();                     // โอนไฟล์: รายการ ประวัติ และคิวอัปโหลดของคนเดิมต้องไม่ค้าง (อัปโหลดที่ยังไม่จบถูกทิ้ง)
+  teReset();                     // คอร์สเรียน: รายการนักเรียน/รอบเรียนของคนก่อนต้องไม่ค้างหน้าจอ
   notifReset();                  // หน้าต่างแจ้งเตือน: รายการเครื่อง/ข้อความของคนเดิมต้องไม่ค้าง
   coSellers = [];
   launchDraft = null;
@@ -13024,6 +13093,703 @@ function toggleCalc(fromButton) {
   if (saved && saved.open) openCalc(false);    // เปิดค้างไว้ครั้งก่อน = เปิดไว้ให้ แต่ไม่แย่งโฟกัสจากช่องยิงบาร์โค้ด
   else renderCalc();
 })();
+
+// ===========================================================================
+// คอร์สเรียน (#teach · Alt+L · migration 047) — ก้อน A: อ่านอย่างเดียว (สรุป · รอคิว · กำลังเรียน · หมดอายุ/จบ)
+//
+// แบบ: console-workspace/DESIGN-courses-teacher.md §7 · สิทธิ์ตัวจริงอยู่ที่ฐาน (RLS) หน้าจอ "ไม่วาด" ส่วนที่สิทธิ์ไม่ถึง (ไม่ใช่วาดแล้วซ่อน)
+//   ข้อมูลมาจาก view enrollment_overview (ไม่มีคอลัมน์เงินเลย — พนักงานเห็น ✓ชำระครบ + จำนวนงวดเท่านั้น) · ตาราง class_sessions · student_profiles
+//   ชื่อนักเรียนมาจากตัวแปร customers ของคอนโซล (พนักงานทุกตำแหน่งอ่านทะเบียนลูกค้าได้) — ครูล้วน (ไม่มีแถว admins) เข้าหน้านี้ไม่ได้ (P1b)
+// สถานะ (te.rows[].state) คำนวณที่ฐาน: waiting_payment · queued · active · expired · completed · closed — หน้าจอไม่คำนวณซ้ำ
+// ⚠️ ชื่อ/ชื่อเล่น/คอร์ส/ครู/ห้อง มาจากผู้ใช้ — escapeHtml เสมอ · ห้ามพิมพ์ข้อมูลนักเรียน (เบอร์/สลิป) ลง console.log
+// ⚠️ ออกจากระบบ/สลับบัญชี → teReset() · ผลโหลดที่มาช้าตอนสลับบัญชีถูกทิ้ง (uid + te.tok) · Realtime → teScheduleReload (รวบ 400ms)
+// ⚠️ สลิป: ปิดไว้หลัง TE_SLIPS_ENABLED (ค่าตั้งต้น false) — นโยบายความเป็นส่วนตัวของเว็บยังไม่แก้ ห้ามเก็บสลิปจริง · ก้อนนี้ไม่เรียกถัง course-slips
+// ===========================================================================
+const TE_SLIPS_ENABLED = window.DJLAB_SLIPS_ENABLED === true;
+const TE_SOON_DAYS = 14;          // ใกล้หมดอายุ (แดงตัวหนา) — §7
+const TE_SUMMARY_DAYS = 30;       // การ์ดสรุป "หมดอายุใน 30 วัน"
+const TE_WEEK_DAYS = 7;           // รอบเรียนที่จะถึง (สรุป)
+const TE_CLOSED = { refund: 'คืนเงิน', quit: 'เลิกเรียน', transfer: 'ย้ายไปที่อื่น', cancelled: 'ยกเลิก' };
+function teBlank() {
+  return { tab: 'summary', who: null, q: '', rows: [], nicks: new Map(), week: [], extPending: 0, tid: null,
+           loaded: false, missing: false, error: '', tok: 0, rt: null, cat: null, members: null, f: teFormBlank() };
+}
+let te = teBlank();
+
+// จำนวนวันจากวันนี้ (เวลาไทย) ถึงวันที่ 'YYYY-MM-DD' — ผ่านไปแล้ว = ติดลบ
+function teDays(ymd) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(ymd || ''));
+  if (!m) return null;
+  const t = todayBangkok().split('-').map(Number);
+  return Math.round((Date.UTC(+m[1], +m[2] - 1, +m[3]) - Date.UTC(t[0], t[1] - 1, t[2])) / 86400000);
+}
+const teWhen = iso => {
+  const d = new Date(iso);
+  return isNaN(d) ? '-' : d.toLocaleString('th-TH', { timeZone: 'Asia/Bangkok', weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false });
+};
+// ผู้ใช้ที่มีครูผูกบัญชี (เช่น Tibass/Nutty/Zlex) เห็นทั้ง "ทุกคน" และ "ของฉัน" · ครูที่เป็นพนักงานทั่วไปตั้งต้น "ของฉัน" · เจ้าของ/ผู้ดูแลตั้งต้น "ทุกคน" (§7)
+function teWho() {
+  if (!te.tid) return 'all';
+  if (te.who) return te.who;
+  return currentAdmin && currentAdmin.role === 'staff' ? 'mine' : 'all';
+}
+function teCustName(id) {
+  const c = customers.find(x => x.id === id);
+  return c ? c.full_name : '(ไม่พบชื่อ)';
+}
+
+// ── โหลด ──
+async function loadTeach() {
+  if (!currentUserId) return;
+  const uid = currentUserId, tok = ++te.tok;
+  const now = new Date(), end = new Date(now.getTime() + TE_WEEK_DAYS * 86400000);
+  const [ov, pf, cs, ex, me] = await Promise.all([
+    db.from('enrollment_overview').select('*').order('created_at', { ascending: false }).limit(3000),
+    db.from('student_profiles').select('customer_id, nickname, is_minor'),
+    db.from('class_sessions').select('id, enrollment_id, teacher_id, status, starts_at, ends_at, room, gcal_uid')
+      .eq('status', 'scheduled').gte('starts_at', now.toISOString()).lte('starts_at', end.toISOString()).order('starts_at', { ascending: true }).limit(500),
+    isOwner() ? db.from('enrollment_extension_requests').select('id').eq('status', 'pending') : Promise.resolve({ data: [], error: null }),
+    db.rpc('my_teacher_id'),
+  ]);
+  if (uid !== currentUserId || tok !== te.tok) return;      // สลับบัญชี/ออกจากระบบ/โหลดซ้อนระหว่างรอ — ทิ้งผล
+  te.loaded = true;
+  const bad = ov.error || cs.error;
+  if (bad) {
+    console.error('[Teach load]', bad.code || '', bad.message);
+    te.rows = []; te.week = []; te.nicks = new Map(); te.extPending = 0;
+    te.missing = WORK_NO_TABLE.test(bad.message || '');
+    te.error = te.missing ? '' : 'โหลดคอร์สเรียนไม่สำเร็จ: ' + bad.message;
+    if (te.error && current === 'teach') showFatalError(te.error);
+  } else {
+    te.missing = false; te.error = '';
+    te.rows = ov.data || [];
+    te.week = cs.data || [];
+    te.nicks = new Map((pf.error ? [] : (pf.data || [])).map(p => [p.customer_id, { nick: p.nickname || '', minor: !!p.is_minor }]));
+    te.extPending = ex.error ? 0 : (ex.data || []).length;
+  }
+  te.tid = me.error ? null : (me.data || null);
+  if (!customers.length) {
+    const c = await db.from('customers').select('id, full_name').order('full_name');
+    if (uid !== currentUserId || tok !== te.tok) return;
+    if (!c.error) customers = c.data || [];
+  }
+  renderTeach();
+}
+function teScheduleReload() {           // Realtime: รวบหลายการเปลี่ยนแปลงติดกันเป็นการโหลดครั้งเดียว
+  if (!currentUserId || !te.loaded) return;
+  clearTimeout(te.rt);
+  te.rt = setTimeout(() => { te.rt = null; loadTeach(); }, 400);
+}
+function teReset() {
+  clearTimeout(te.rt);
+  te = teBlank();
+  const body = document.getElementById('teBody');
+  if (body) body.innerHTML = '<div class="empty">กำลังโหลดข้อมูลคอร์สเรียน…</div>';
+  const al = document.getElementById('teAlert');
+  if (al) al.innerHTML = '';
+  const q = document.getElementById('teSearch');
+  if (q) q.value = '';
+  const eb = document.getElementById('teEnrollBody');
+  if (eb) eb.innerHTML = '';                  // ฟอร์มลงเรียน (ชื่อ/เบอร์นักเรียนที่เลือกค้างไว้) ต้องหายจาก DOM ด้วย
+  ['teQueueN', 'teActiveN'].forEach(id => { const n = document.getElementById(id); if (n) n.textContent = ''; });
+  teTabMark();
+}
+
+// ── แถวที่เห็น (ตามตัวกรอง "ทุกคน/ของฉัน" + ค้นหา) ──
+function teMine(r) { return !!te.tid && r.teacher_id === te.tid; }
+function teScope() {                    // ตามตัวกรองผู้สอนอย่างเดียว (การ์ดสรุป)
+  return teWho() === 'mine' ? te.rows.filter(teMine) : te.rows;
+}
+function teVisible() {                  // + ค้นหา (รายการในแท็บ)
+  const q = te.q.trim().toLowerCase();
+  return teScope().filter(r => {
+    if (!q) return true;
+    const n = te.nicks.get(r.customer_id);
+    return [teCustName(r.customer_id), n ? n.nick : '', r.course_title, r.teacher_name].some(s => String(s || '').toLowerCase().includes(q));
+  });
+}
+const teByExpiry = (a, b) => String(a.effective_expiry || '9999').localeCompare(String(b.effective_expiry || '9999')) || teCustName(a.customer_id).localeCompare(teCustName(b.customer_id), 'th');
+const teByCreated = (a, b) => String(a.created_at).localeCompare(String(b.created_at));
+
+// ── วาด ──
+function tePayHtml(r) {
+  const n = r.payment_count ? ' <span class="te-sub">บันทึก ' + Number(r.payment_count) + ' งวด</span>' : '';
+  if (r.paid_in_full === true) return '<span class="st st-ok">✓ ชำระครบ' + (r.paid_unknown ? ' (ไม่ทราบวันที่)' : '') + '</span>' + n;
+  if (r.paid_in_full === false) return '<span class="st st-warn">ยังไม่ครบ</span>' + n;
+  return '';
+}
+function teExpiryHtml(r) {
+  if (!r.effective_expiry) return '<span class="te-sub">ยังไม่เริ่มเรียน</span>';
+  const d = teDays(r.effective_expiry), date = fmtDate(r.effective_expiry);
+  const ext = r.extended_until ? '<div class="te-sub">ขยายอายุแล้ว</div>' : '';
+  if (r.state === 'expired') return '<div class="wk-red">หมดอายุแล้ว เหลือ ' + Number(r.sessions_remaining) + ' ครั้ง</div><div class="te-sub">' + date + '</div>' + ext;
+  if (r.state === 'active' && d !== null && d <= TE_SOON_DAYS) {
+    return '<div class="wk-red">ใกล้หมดอายุ (' + (d <= 0 ? 'วันนี้' : d + ' วัน') + ')</div><div class="te-sub">' + date + '</div>' + ext;
+  }
+  return '<div>' + date + '</div>' + ext;
+}
+function teRowHtml(r) {
+  const nk = te.nicks.get(r.customer_id) || { nick: '', minor: false };
+  const used = Number(r.sessions_used) || 0, done = Number(r.sessions_done) || 0, tot = Number(r.sessions_total) || 0;
+  const pct = tot ? Math.min(100, Math.round(used / tot * 100)) : 0;
+  const closed = r.state === 'closed' ? ' · ' + escapeHtml(TE_CLOSED[r.closed_reason] || r.closed_reason || '') : '';
+  const stateTxt = { waiting_payment: 'รอชำระ', queued: 'รอคิว', active: 'กำลังเรียน', expired: 'หมดอายุ', completed: 'จบ (ใช้สิทธิ์ครบ)', closed: 'ปิดแล้ว' }[r.state] || '';
+  return '<div class="te-row" role="row" data-id="' + escapeHtml(r.id) + '">' +
+    '<div role="cell" class="te-c1"><div class="te-name">' + escapeHtml(teCustName(r.customer_id)) + '</div>' +
+      (nk.nick ? '<div class="te-sub">ชื่อเล่น ' + escapeHtml(nk.nick) + '</div>' : '') +
+      '<div class="te-pills">' + (stateTxt ? '<span class="st st-off">' + stateTxt + closed + '</span>' : '') + tePayHtml(r) +
+      (nk.minor ? '<span class="st st-off">ผู้เยาว์</span>' : '') +
+      (r.source === 'backfill' ? '<span class="st st-off">กรอกย้อนหลัง · ข้อมูลอาจไม่ครบ</span>' : '') + '</div></div>' +
+    '<div role="cell" data-l="คอร์ส">' + escapeHtml(r.course_title) + (r.teach_lang === 'en' ? ' <span class="st st-off">สอนภาษาอังกฤษ</span>' : '') + '</div>' +
+    '<div role="cell" data-l="ครู">' + escapeHtml(r.teacher_name || '') + '</div>' +
+    '<div role="cell" data-l="เรียนแล้ว"><span class="te-prog" aria-hidden="true"><i style="width:' + pct + '%"></i></span> <strong>' + done + '/' + tot + '</strong>' +
+      (used > done ? '<div class="te-sub">ใช้สิทธิ์ ' + used + ' ครั้ง (รวมไม่มา/แจ้งช้า)</div>' : '') + '</div>' +
+    '<div role="cell" data-l="วันเริ่ม">' + (r.started_on ? fmtDate(r.started_on) : '<span class="te-sub">—</span>') + '</div>' +
+    '<div role="cell" data-l="หมดอายุ">' + teExpiryHtml(r) + '</div>' +
+    '<div role="cell" data-l="ครั้งถัดไป">' + (r.next_session_at ? escapeHtml(teWhen(r.next_session_at)) : '<span class="te-sub">—</span>') + '</div>' +
+  '</div>';
+}
+const TE_HEAD = '<div class="te-head" role="row"><div role="columnheader">นักเรียน</div><div role="columnheader">คอร์ส</div><div role="columnheader">ครู</div>' +
+  '<div role="columnheader">เรียนแล้ว</div><div role="columnheader">วันเริ่ม</div><div role="columnheader">หมดอายุ</div><div role="columnheader">ครั้งถัดไป</div></div>';
+function teGroupHtml(title, rows, emptyText) {
+  return '<div class="wk-group"><h3><span>' + escapeHtml(title) + ' <span class="n">' + rows.length + ' คน</span></span></h3>' +
+    (rows.length ? '<div role="table" aria-label="' + escapeHtml(title) + '">' + TE_HEAD + '<div class="te-list">' + rows.map(teRowHtml).join('') + '</div></div>'
+      : '<div class="te-list"><div class="empty">' + escapeHtml(emptyText) + '</div></div>') + '</div>';
+}
+function teSummaryHtml() {
+  const sc = teScope();
+  const active = sc.filter(r => r.state === 'active'), queued = sc.filter(r => r.state === 'queued'), waiting = sc.filter(r => r.state === 'waiting_payment');
+  const soon = active.filter(r => { const d = teDays(r.effective_expiry); return d !== null && d <= TE_SUMMARY_DAYS; }).sort(teByExpiry);
+  const expired = sc.filter(r => r.state === 'expired');
+  const byId = new Map(te.rows.map(r => [r.id, r]));
+  const week = te.week.filter(s => teWho() === 'all' || s.teacher_id === te.tid);
+  const stat = (v, l, red) => '<div class="stat"><div class="stat-value' + (red && v > 0 ? ' wk-red' : '') + '">' + v + '</div><div class="stat-label">' + l + '</div></div>';
+  let h = '<div class="stats stats-4" aria-label="สรุปคอร์สเรียน">' +
+    stat(active.length, 'กำลังเรียน') + stat(queued.length, 'รอคิว (ชำระแล้ว ยังไม่เริ่ม)') +
+    stat(soon.length + expired.length, 'ใกล้หมดอายุ ≤ ' + TE_SUMMARY_DAYS + ' วัน / หมดอายุแล้ว', true) + stat(week.length, 'รอบเรียนใน ' + TE_WEEK_DAYS + ' วัน') + '</div>';
+  if (te.extPending > 0) {
+    h += '<div class="alert alert-red wk-red" role="status">คำขอขยายอายุรอตัดสิน ' + te.extPending + ' ใบ</div>';
+  }
+  if (waiting.length) h += '<p class="te-sub">รอชำระ ' + waiting.length + ' คน — ดูที่แท็บ "รอคิว"</p>';
+  h += teGroupHtml('ใกล้หมดอายุ (ภายใน ' + TE_SUMMARY_DAYS + ' วัน) และหมดอายุแล้วที่ยังเหลือครั้ง', soon.concat(expired).sort(teByExpiry), 'ไม่มีนักเรียนที่ใกล้หมดอายุ');
+  const wrows = week.map(s => {
+    const r = byId.get(s.enrollment_id);
+    return '<div class="te-row te-srow" role="row"><div role="cell" class="te-c1"><div class="te-name">' + escapeHtml(teWhen(s.starts_at)) + '</div>' +
+      '<div class="te-sub">' + (s.gcal_uid ? 'ผูกปฏิทินแล้ว ✓' : 'ยังไม่ผูกปฏิทิน') + '</div></div>' +
+      '<div role="cell" data-l="นักเรียน">' + escapeHtml(r ? teCustName(r.customer_id) : '—') + '</div>' +
+      '<div role="cell" data-l="คอร์ส">' + escapeHtml(r ? r.course_title : '—') + '</div>' +
+      '<div role="cell" data-l="ครู">' + escapeHtml(r ? r.teacher_name || '' : '') + '</div>' +
+      '<div role="cell" data-l="ห้อง">' + escapeHtml(s.room || '—') + '</div></div>';
+  });
+  h += '<div class="wk-group"><h3><span>รอบเรียนที่จะถึง (' + TE_WEEK_DAYS + ' วัน) <span class="n">' + week.length + ' รอบ</span></span></h3>' +
+    '<div class="te-list">' + (wrows.length ? wrows.join('') : '<div class="empty">ไม่มีรอบเรียนที่นัดไว้ใน ' + TE_WEEK_DAYS + ' วันข้างหน้า</div>') + '</div></div>';
+  return h;
+}
+function teTabMark() {
+  document.querySelectorAll('#teTabs .mail-tab').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === te.tab)));
+}
+function renderTeach() {
+  const al = document.getElementById('teAlert'), body = document.getElementById('teBody');
+  if (!al || !body) return;
+  al.innerHTML = te.missing ? '<div class="alert alert-warn">ยังไม่ได้ติดตั้งระบบคอร์สเรียนในฐานข้อมูล — ต้องรัน migration 047 ก่อน (วางใน Supabase SQL Editor ของโปรเจกต์ร้าน)</div>'
+    : te.error ? '<div class="alert alert-red">' + escapeHtml(te.error) + '</div>' : '';
+  teTabMark();
+  const enr = te.tab === 'enroll';             // แท็บ "ลงเรียน / ย้อนหลัง" ไม่ใช้ตัวกรอง/รายการ — แผงของมันเอง
+  document.getElementById('teListPane').hidden = enr;
+  document.getElementById('teEnrollPane').hidden = !enr;
+  if (enr) { teEnrollOpen(); return; }
+  const who = document.getElementById('teWho');
+  who.hidden = !te.tid;
+  who.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.who === teWho())));
+  if (!te.loaded) { body.innerHTML = '<div class="empty">กำลังโหลดข้อมูลคอร์สเรียน…</div>'; return; }
+  if (te.missing || te.error) { body.innerHTML = ''; return; }
+  const vis = teVisible();
+  const queued = vis.filter(r => r.state === 'queued').sort(teByCreated), waiting = vis.filter(r => r.state === 'waiting_payment').sort(teByCreated);
+  const active = vis.filter(r => r.state === 'active').sort(teByExpiry);
+  const ended = vis.filter(r => r.state === 'expired' || r.state === 'completed' || r.state === 'closed')
+    .sort((a, b) => String(b.effective_expiry || b.closed_on || b.created_at).localeCompare(String(a.effective_expiry || a.closed_on || a.created_at)));
+  document.getElementById('teQueueN').textContent = queued.length + waiting.length ? String(queued.length + waiting.length) : '';
+  document.getElementById('teActiveN').textContent = active.length ? String(active.length) : '';
+  if (te.tab === 'queue') {
+    body.innerHTML = teGroupHtml('รอคิว — ชำระแล้ว ยังไม่เริ่มเรียน (เรียงตามวันที่ลงเรียน)', queued, 'ไม่มีนักเรียนรอคิว') +
+      teGroupHtml('รอชำระ — ลงเรียนแล้ว ยังชำระไม่ครบ', waiting, 'ไม่มีนักเรียนที่รอชำระ');
+  } else if (te.tab === 'active') {
+    body.innerHTML = teGroupHtml('กำลังเรียน (ใกล้หมดอายุอยู่บน)', active, 'ไม่มีนักเรียนที่กำลังเรียน');
+  } else if (te.tab === 'ended') {
+    body.innerHTML = teGroupHtml('หมดอายุ / จบ / ปิดแล้ว', ended, 'ยังไม่มีรายการ');
+  } else body.innerHTML = teSummaryHtml();
+}
+
+// ── ก้อน B: แท็บ "ลงเรียน / ย้อนหลัง" (พนักงานทุกตำแหน่ง) ──────────────────────────────────────────────
+// ค้นนักเรียน teach_student_find (เบอร์ไทยไม่สนรูปแบบ — ฐานเทียบ normalize_thai_phone กับ customers และ members) → เลือก/สร้างลูกค้า
+//   (เจอแค่ในทะเบียนสมาชิก = member_only: สร้าง customers โดยผูก member_id ก่อน) → teach_enroll_create → (ย้อนหลัง) teach_session_backfill → (ชำระ) teach_payment_record
+// โหมดย้อนหลัง (source = 'backfill'): "ชำระครบแล้ว (ไม่ทราบวันที่)" · ราคาที่ตกลงว่างได้ · ไม่มีสลิป (ไม่ใช่ข้อผิดพลาด) · กรอกเฉพาะคนที่ยังมีสิทธิ์เหลือ
+// ทางลัด "ผู้สมัครกรอกย้อนหลัง": ป้าย "นักเรียน <ชื่อเล่นครู>" ในทะเบียนสมาชิก (ช่อง member_type/membership สลับกันได้) — ไม่ใช่ข้อมูลการเรียนจริง แค่ทางลัดหาตัวคน
+// ⚠️ ข้อความผิดพลาดที่แสดง = เฉพาะข้อความไทยของฟังก์ชันฐาน (ไม่มียอด/เบอร์) · ข้อความอังกฤษของฐาน (อาจมีค่าในแถว) ไม่แสดง ไม่ log
+// ⚠️ ปุ่มบันทึกล็อกระหว่างส่ง · ล้มกลางทาง → กดซ้ำแล้วทำต่อจากขั้นที่ค้าง (ไม่สร้างการลงเรียนซ้ำ · ชำระใช้ request_id เดิม)
+const TE_NICK_TEACHER = { 'เบส': 'Tibass', 'หนุ่ย': 'Zlex', 'นัตตี้': 'Nutty', 'หมิง': 'Maniac', 'ลีโอนี': 'Leonie', 'โหน่ง': 'Alldayz' };   // เจ้าของตอบแล้ว 7 + 9 ต.ค. 69 · พนักงานเปลี่ยนครูได้เสมอ
+const TE_EQUIP = ['CDJ+Mixer', 'Controller', 'Turntable+Mixer'];
+const TE_METHODS = [['transfer', 'โอน'], ['promptpay', 'พร้อมเพย์'], ['cash', 'เงินสด'], ['card', 'บัตร'], ['other', 'อื่น ๆ']];
+const TE_CAND_SHOW = 40;
+function teFormBlank() {
+  return { student: null, found: null, q: '', newOpen: false, newName: '', newPhone: '', mode: 'console', courseId: '', teacherId: '', lang: 'th',
+    price: '', priceTouched: false, listPrice: '', track: '', equip: '', note: '', started: '', sessN: 0, sessDates: [],
+    pay: 'none', payDate: '', payAmount: '', payMethod: 'transfer', busy: false, err: '', ok: '', candQ: '', candOpen: false,
+    createdId: null, sessDone: false, payDone: false, payReq: null };
+}
+const teMoney = v => { const s = String(v == null ? '' : v).replace(/[,\s฿]/g, ''); if (s === '') return null; const n = Number(s); return Number.isFinite(n) ? n : NaN; };
+const teFmt = n => Number(n).toLocaleString('th-TH', { maximumFractionDigits: 2 });
+function teErrText(e) {
+  const m = String((e && e.message) || '');
+  if (/[ก-๙]/.test(m)) return m;                                                 // ข้อความไทยของฟังก์ชันฐาน
+  if ((e && e.code === '42501') || /row-level security|permission denied/i.test(m)) return 'ไม่มีสิทธิ์ทำรายการนี้';
+  if (WORK_NO_TABLE.test(m)) return 'ยังไม่ได้รัน migration 047 ในฐานข้อมูล';
+  return 'ฐานข้อมูลตอบกลับผิดปกติ' + (e && e.code ? ' (รหัส ' + e.code + ')' : '');
+}
+const teTeacherId = name => { const t = te.cat && te.cat.teachers.find(x => String(x.display_name).toLowerCase() === String(name || '').toLowerCase()); return t ? t.id : ''; };
+const teCourse = () => te.cat && te.cat.courses.find(c => c.id === te.f.courseId) || null;
+function teTeachersOf(courseId) {
+  if (!te.cat) return [];
+  const ids = new Set(te.cat.links.filter(l => l.course_id === courseId).map(l => l.teacher_id));
+  return te.cat.teachers.filter(t => ids.has(t.id) && t.is_active !== false);
+}
+
+// ── โหลดข้อมูลประกอบฟอร์ม (ตอนเปิดแท็บ) ──
+async function teLoadCatalog() {
+  if (te.cat && (te.cat.loading || te.cat.loaded)) return;
+  const uid = currentUserId, cur = te;
+  te.cat = { loading: true, loaded: false, error: '', courses: [], links: [], teachers: [] };
+  const [c, l, t] = await Promise.all([
+    db.from('courses').select('id, title, list_price, sessions_total, hours_per_session, practice_hours, valid_months, tracks, is_active').order('title'),
+    db.from('course_teachers').select('course_id, teacher_id'),
+    db.from('teachers').select('id, display_name, is_active').order('display_name'),
+  ]);
+  if (uid !== currentUserId || te !== cur) return;
+  const bad = c.error || l.error || t.error;
+  if (bad) {
+    console.error('[Teach catalog]', bad.code || '', bad.message);
+    te.cat = { loading: false, loaded: false, error: 'โหลดรายการคอร์ส/ครูไม่สำเร็จ: ' + teErrText(bad), courses: [], links: [], teachers: [] };
+    if (current === 'teach') showFatalError(te.cat.error);
+  } else {
+    te.cat = { loading: false, loaded: true, error: '', courses: (c.data || []).filter(x => x.is_active !== false), links: l.data || [], teachers: t.data || [] };
+  }
+  if (te.tab === 'enroll') teEnrollRender();
+}
+async function teLoadMembers() {
+  if (te.members) return;
+  const uid = currentUserId, cur = te;
+  te.members = { loading: true, rows: [], custOf: new Map(), error: '' };
+  const [m, c] = await Promise.all([
+    db.from('members').select('id, full_name, phone, code, member_type, membership').order('full_name'),
+    db.from('customers').select('id, member_id').not('member_id', 'is', null),
+  ]);
+  if (uid !== currentUserId || te !== cur) return;
+  if (m.error || c.error) {
+    console.error('[Teach members]', (m.error || c.error).code || '', (m.error || c.error).message);
+    te.members = { loading: false, rows: [], custOf: new Map(), error: 'โหลดทะเบียนสมาชิกไม่สำเร็จ — ทางลัดผู้สมัครใช้ไม่ได้ (ลงเรียนด้วยการค้นหาตามปกติได้)' };
+  } else {
+    te.members = { loading: false, rows: m.data || [], custOf: new Map((c.data || []).map(x => [x.member_id, x.id])), error: '' };
+  }
+  if (te.tab === 'enroll') teEnrollRender();
+}
+function teCandidates() {
+  if (!te.members || !te.members.rows.length) return [];
+  const enrolled = new Set(te.rows.map(r => r.customer_id));
+  return te.members.rows.map(m => {
+    const lab = [m.member_type, m.membership].map(x => /นักเรียน\s*([^\s,;/]+)/.exec(String(x || ''))).find(Boolean);
+    if (!lab) return null;
+    const cid = te.members.custOf.get(m.id) || null;
+    return { member: m, nick: lab[1], teacher: TE_NICK_TEACHER[lab[1]] || '', customerId: cid, enrolled: !!cid && enrolled.has(cid) };
+  }).filter(Boolean).sort((a, b) => (a.enrolled - b.enrolled) || a.teacher.localeCompare(b.teacher) || String(a.member.full_name).localeCompare(String(b.member.full_name), 'th'));
+}
+function teEnrollOpen() {
+  teLoadCatalog();
+  teLoadMembers();
+  teEnrollRender();
+}
+
+// ── วาดฟอร์ม ──
+const teOpt = (v, t, sel) => '<option value="' + escapeHtml(v) + '"' + (sel ? ' selected' : '') + '>' + escapeHtml(t) + '</option>';
+function teStudentHtml() {
+  const f = te.f;
+  if (f.student) {
+    return '<div class="card" style="padding:14px 18px;margin-bottom:16px;"><div class="te-name">' + escapeHtml(f.student.name) + '</div>' +
+      '<div class="te-sub">' + (f.student.phone ? 'เบอร์ ' + escapeHtml(f.student.phone) + ' · ' : '') +
+      (f.student.customer_id ? 'มีในทะเบียนลูกค้าแล้ว' : 'จะสร้างเป็นลูกค้าตอนบันทึก (ผูกกับทะเบียนสมาชิก)') + '</div>' +
+      '<button class="btn btn-sm" type="button" data-act="unpick" style="margin-top:10px;">เปลี่ยนนักเรียน</button></div>';
+  }
+  let h = '<div class="field"><label class="lbl" for="teFindQ">1. ค้นหานักเรียน (ชื่อ · ชื่อเล่น · เบอร์โทร)</label>' +
+    '<div class="te-bar"><input id="teFindQ" class="input grow" type="search" autocomplete="off" data-f="q" value="' + escapeHtml(f.q) + '" placeholder="เช่น สมชาย หรือ 081-234-5678">' +
+    '<button class="btn btn-primary" type="button" data-act="find"' + (f.busy ? ' disabled' : '') + '>ค้นหา</button></div>' +
+    '<div class="hint">เบอร์พิมพ์แบบไหนก็ได้ (081-234-5678 · +66 81 234 5678) ระบบเทียบกับทะเบียนลูกค้าและสมาชิกให้ เพื่อไม่ให้สร้างนักเรียนซ้ำ</div></div>' +
+    (f.err ? '<div class="alert alert-red wk-red" id="teFormErr" role="alert">' + escapeHtml(f.err) + '</div>' : '');
+  if (f.found) {
+    h += f.found.length
+      ? '<div class="te-list">' + f.found.map((r, i) =>
+          '<div class="te-row te-frow"><div role="cell" class="te-c1"><div class="te-name">' + escapeHtml(r.full_name) + '</div>' +
+          '<div class="te-sub">' + (r.phone ? escapeHtml(r.phone) + ' · ' : '') +
+          (r.customer_id ? (r.enrollment_count ? 'มีการลงเรียนแล้ว ' + Number(r.enrollment_count) + ' รายการ' : 'ยังไม่เคยลงเรียน') : 'มีในทะเบียนสมาชิก แต่ยังไม่มีในทะเบียนลูกค้า') + '</div></div>' +
+          '<div role="cell"><button class="btn btn-sm" type="button" data-act="pick" data-i="' + i + '">เลือกคนนี้</button></div></div>').join('') + '</div>'
+      : '<div class="alert alert-plain">ไม่พบนักเรียนที่ตรงกับคำค้น — สร้างลูกค้าใหม่ได้ด้านล่าง</div>';
+    h += '<p><button class="btn btn-sm" type="button" data-act="newToggle">' + (f.newOpen ? 'ปิดฟอร์มลูกค้าใหม่' : '+ ไม่ใช่คนเหล่านี้ — สร้างลูกค้าใหม่') + '</button></p>';
+  }
+  if (f.newOpen) {
+    h += '<div class="card" style="padding:14px 18px;margin-bottom:16px;"><div class="wk-form-grid">' +
+      '<div class="field"><label class="lbl" for="teNewName">ชื่อ-นามสกุล</label><input id="teNewName" class="input" data-f="newName" maxlength="120" value="' + escapeHtml(f.newName) + '"></div>' +
+      '<div class="field"><label class="lbl" for="teNewPhone">เบอร์โทร (ถ้ามี)</label><input id="teNewPhone" class="input" data-f="newPhone" inputmode="tel" maxlength="30" value="' + escapeHtml(f.newPhone) + '"></div></div>' +
+      '<button class="btn btn-primary" type="button" data-act="newCreate"' + (f.busy ? ' disabled' : '') + '>สร้างลูกค้าและเลือก</button></div>';
+  }
+  return h;
+}
+function teCandHtml() {
+  const f = te.f;
+  if (te.members && te.members.error) return '<div class="alert alert-warn">' + escapeHtml(te.members.error) + '</div>';
+  const all = teCandidates();
+  const q = f.candQ.trim().toLowerCase();
+  const list = all.filter(c => !q || [c.member.full_name, c.nick, c.teacher].some(s => String(s || '').toLowerCase().includes(q)));
+  const todo = all.filter(c => !c.enrolled).length;
+  let h = '<details id="teCands" class="card" style="padding:12px 18px;margin-bottom:16px;"' + (f.candOpen ? ' open' : '') + '><summary><strong>ทางลัด: ผู้สมัครกรอกย้อนหลัง</strong> ' +
+    '<span class="te-sub">จากป้าย "นักเรียน …" ในทะเบียนสมาชิก · ยังไม่มีการลงเรียน ' + todo + ' จาก ' + all.length + ' คน</span></summary>' +
+    '<p class="hint">ป้ายนี้บอกแค่ว่าเคยเป็นนักเรียน (ไม่ใช่ข้อมูลการเรียนจริง) — กรอกย้อนหลังเฉพาะคนที่ยังมีสิทธิ์เหลืออยู่ · เลือกแล้วระบบเลือกครูให้ตามชื่อเล่น แก้ได้เสมอ</p>' +
+    '<input id="teCandQ" class="input" type="search" autocomplete="off" data-f="candQ" value="' + escapeHtml(f.candQ) + '" placeholder="กรองตามชื่อ ชื่อเล่นครู หรือชื่อครู" aria-label="กรองผู้สมัคร">';
+  if (!all.length) h += '<div class="empty">' + (te.members && te.members.loading ? 'กำลังโหลดทะเบียนสมาชิก…' : 'ไม่พบป้าย "นักเรียน …" ในทะเบียนสมาชิก') + '</div>';
+  else {
+    h += '<div class="te-list" style="margin-top:10px;">' + list.slice(0, TE_CAND_SHOW).map(c =>
+      '<div class="te-row te-frow"><div role="cell" class="te-c1"><div class="te-name">' + escapeHtml(c.member.full_name) + '</div>' +
+      '<div class="te-sub">ป้าย: นักเรียน ' + escapeHtml(c.nick) + ' → ' + (c.teacher ? 'ครู ' + escapeHtml(c.teacher) : 'ยังไม่รู้ว่าครูคนไหน (เลือกเอง)') + '</div></div>' +
+      '<div role="cell">' + (c.enrolled ? '<span class="st st-ok">มีการลงเรียนแล้ว</span>' : '<span class="st st-off">ยังไม่มีการลงเรียน</span>') + '</div>' +
+      '<div role="cell"><button class="btn btn-sm" type="button" data-act="cand" data-mid="' + escapeHtml(c.member.id) + '">กรอกย้อนหลัง</button></div></div>').join('') + '</div>' +
+      (list.length > TE_CAND_SHOW ? '<div class="hint">แสดง ' + TE_CAND_SHOW + ' จาก ' + list.length + ' คน — พิมพ์ในช่องกรองเพื่อหาเฉพาะคน</div>' : '') +
+      (!list.length ? '<div class="empty">ไม่มีผู้สมัครที่ตรงกับคำกรอง</div>' : '');
+  }
+  return h + '</details>';
+}
+function teDetailHtml() {
+  const f = te.f;
+  if (!f.student) return '';
+  if (!te.cat || te.cat.loading || !te.cat.loaded) {
+    return te.cat && te.cat.error ? '<div class="alert alert-red">' + escapeHtml(te.cat.error) + '</div>' : '<div class="empty">กำลังโหลดรายการคอร์ส…</div>';
+  }
+  const backfill = f.mode === 'backfill', course = teCourse(), mgr = isManager();
+  const teachers = teTeachersOf(f.courseId);
+  const lp = f.lang === 'en' ? teMoney(f.listPrice) : (course ? Number(course.list_price) : null);
+  const agreed = teMoney(f.price);
+  const tracks = course && Array.isArray(course.tracks) ? course.tracks.map(t => t && t.name).filter(Boolean) : [];
+  let h = '<div class="field"><span class="lbl">2. รูปแบบการลงเรียน</span><div class="te-seg" role="group" aria-label="รูปแบบ">' +
+    '<button type="button" data-act="mode" data-v="console" aria-pressed="' + !backfill + '">ลงเรียนใหม่</button>' +
+    '<button type="button" data-act="mode" data-v="backfill" aria-pressed="' + backfill + '">กรอกย้อนหลัง (นักเรียนเก่า)</button></div>' +
+    (backfill ? '<div class="alert alert-warn" style="margin-top:10px;">กรอกย้อนหลังเฉพาะนักเรียนที่ <strong>ยังมีสิทธิ์เหลืออยู่</strong> — ข้อมูลที่ไม่ครบ (วันชำระ/ยอด/สลิป) ปล่อยว่างได้ ระบบติดป้าย "กรอกย้อนหลัง · ข้อมูลอาจไม่ครบ" ให้</div>' : '') + '</div>';
+  h += '<div class="wk-form-grid"><div>' +
+    '<div class="field"><label class="lbl" for="teCourse">คอร์ส</label><select id="teCourse" class="input" data-f="courseId">' + teOpt('', '— เลือกคอร์ส —', !f.courseId) +
+      te.cat.courses.map(c => teOpt(c.id, c.title, c.id === f.courseId)).join('') + '</select></div>' +
+    '<div class="field"><label class="lbl" for="teTeacher">ครูผู้สอน</label><select id="teTeacher" class="input" data-f="teacherId">' + teOpt('', f.courseId ? '— เลือกครู —' : '— เลือกคอร์สก่อน —', !f.teacherId) +
+      teachers.map(t => teOpt(t.id, t.display_name, t.id === f.teacherId)).join('') + '</select>' +
+      (f.courseId && !teachers.length ? '<div class="hint wk-red">คอร์สนี้ยังไม่มีครูที่เปิดสอนในระบบ — แจ้งเจ้าของร้าน</div>' : '') + '</div>' +
+    '<div class="field"><span class="lbl">ภาษาที่สอน</span><div class="te-seg" role="group" aria-label="ภาษาที่สอน">' +
+      '<button type="button" data-act="lang" data-v="th" aria-pressed="' + (f.lang === 'th') + '">ไทย</button>' +
+      '<button type="button" data-act="lang" data-v="en" aria-pressed="' + (f.lang === 'en') + '"' + (mgr ? '' : ' disabled') + '>อังกฤษ (International)</button></div>' +
+      (mgr ? '' : '<div class="hint">คอร์สภาษาอังกฤษตั้งราคาตั้งได้เฉพาะเจ้าของหรือผู้ดูแล — ให้ผู้ดูแลลงให้</div>') + '</div>' +
+    (f.lang === 'en' ? '<div class="field"><label class="lbl" for="teListPrice">ราคาตั้งของคอร์สภาษาอังกฤษ (บาท)</label><input id="teListPrice" class="input" inputmode="decimal" data-f="listPrice" value="' + escapeHtml(f.listPrice) + '">' +
+      '<div class="hint">ราคานี้ไม่อยู่ในไฟล์คอร์ส — กรอกเอง</div></div>' : '') +
+    '<div class="field"><label class="lbl" for="tePrice">ราคาที่ตกลง (บาท)' + (backfill ? ' — ไม่ทราบให้เว้นว่าง' : '') + '</label><input id="tePrice" class="input" inputmode="decimal" data-f="price" value="' + escapeHtml(f.price) + '">' +
+      (course && f.lang === 'th' ? '<div class="hint">ราคาตั้ง ' + escapeHtml(teFmt(course.list_price)) + ' บาท</div>' : '') +
+      (agreed !== null && Number.isFinite(agreed) && lp !== null && Number.isFinite(lp) && agreed !== lp
+        ? '<div class="hint wk-red" id="tePriceWarn">ราคาที่ตกลงต่างจากราคาตั้ง — ต้องใส่หมายเหตุบอกเหตุผล (เช่น ส่วนลดที่ตกลง)</div>' : '') + '</div>' +
+    '</div><div>' +
+    (tracks.length ? '<div class="field"><label class="lbl" for="teTrack">แนวที่เลือก</label><select id="teTrack" class="input" data-f="track">' + teOpt('', '— ไม่ระบุ —', !f.track) +
+      tracks.map(t => teOpt(t, t, t === f.track)).join('') + '</select></div>' : '') +
+    '<div class="field"><label class="lbl" for="teEquip">ชุดอุปกรณ์</label><select id="teEquip" class="input" data-f="equip">' + teOpt('', '— ไม่ระบุ —', !f.equip) +
+      TE_EQUIP.map(t => teOpt(t, t, t === f.equip)).join('') + '</select></div>' +
+    '<div class="field"><label class="lbl" for="teNote">หมายเหตุ (ไม่เกิน 500 ตัวอักษร · ห้ามใส่เบอร์โทร/เลขบัญชี)</label><textarea id="teNote" class="input" rows="3" maxlength="500" data-f="note">' + escapeHtml(f.note) + '</textarea></div>' +
+    '</div></div>';
+  if (backfill) {
+    h += '<div class="card" style="padding:14px 18px;margin-bottom:16px;"><h3>รอบที่เรียนไปแล้ว</h3><div class="wk-form-grid"><div>' +
+      '<div class="field"><label class="lbl" for="teStarted">วันเริ่มเรียน (โดยประมาณได้ · เว้นว่างถ้าไม่ทราบ)</label><input id="teStarted" class="input" type="date" data-f="started" max="' + todayBangkok() + '" value="' + escapeHtml(f.started) + '">' +
+        '<div class="hint">ระบบนับอายุคอร์สจากวันนี้ (3 เดือนตามคอร์ส) · ผ่อนผันวันหมดอายุ = เจ้าของตั้งภายหลัง</div></div>' +
+      '<div class="field"><label class="lbl" for="teSessN">เรียนไปแล้วกี่ครั้ง' + (course ? ' (คอร์สนี้ ' + Number(course.sessions_total) + ' ครั้ง)' : '') + '</label>' +
+        '<input id="teSessN" class="input" type="number" min="0" max="' + (course ? Number(course.sessions_total) : 100) + '" step="1" data-f="sessN" value="' + Number(f.sessN) + '"></div></div><div>' +
+      (f.sessDates.length ? '<span class="lbl">วันที่เรียนแต่ละครั้ง (ใส่วันโดยประมาณได้)</span>' + f.sessDates.map((d, i) =>
+        '<div class="field"><input class="input" type="date" data-sd="' + i + '" aria-label="วันที่เรียนครั้งที่ ' + (i + 1) + '" max="' + todayBangkok() + '" value="' + escapeHtml(d) + '"></div>').join('') : '<div class="hint">ยังไม่ได้เรียนเลย = ใส่ 0</div>') +
+      '</div></div></div>';
+  }
+  h += '<div class="card" style="padding:14px 18px;margin-bottom:16px;"><h3>การชำระ</h3>';
+  if (backfill) {
+    h += '<div class="te-seg" role="group" aria-label="การชำระ">' +
+      '<button type="button" data-act="pay" data-v="unknown" aria-pressed="' + (f.pay === 'unknown') + '">ชำระครบแล้ว (ไม่ทราบวันที่)</button>' +
+      '<button type="button" data-act="pay" data-v="paid" aria-pressed="' + (f.pay === 'paid') + '">บันทึกงวดที่ทราบ</button>' +
+      '<button type="button" data-act="pay" data-v="none" aria-pressed="' + (f.pay === 'none') + '">ยังไม่ทราบ/ยังไม่ชำระ</button></div>';
+  } else {
+    h += '<label class="lbl" style="display:flex;gap:10px;align-items:center;min-height:44px;"><input type="checkbox" data-act="paychk"' + (f.pay === 'paid' ? ' checked' : '') + '> ชำระแล้ว (บันทึกงวดแรกพร้อมการลงเรียน)</label>';
+  }
+  if (f.pay === 'paid') {
+    h += '<div class="wk-form-grid" style="margin-top:12px;"><div class="field"><label class="lbl" for="tePayDate">วันที่ชำระ</label><input id="tePayDate" class="input" type="date" data-f="payDate" max="' + todayBangkok() + '" value="' + escapeHtml(f.payDate) + '"></div>' +
+      '<div class="field"><label class="lbl" for="tePayAmount">ยอด (บาท)</label><input id="tePayAmount" class="input" inputmode="decimal" data-f="payAmount" value="' + escapeHtml(f.payAmount) + '"></div>' +
+      '<div class="field"><label class="lbl" for="tePayMethod">วิธีชำระ</label><select id="tePayMethod" class="input" data-f="payMethod">' + TE_METHODS.map(([v, t]) => teOpt(v, t, v === f.payMethod)).join('') + '</select></div></div>' +
+      (!mgr ? '<div class="wk-red" id="tePayWarn" style="margin-top:10px;">บันทึกแล้วจะไม่แสดงยอดนี้อีก — ตรวจยอดและวันที่ก่อนกดบันทึก (แก้ภายหลังต้องให้เจ้าของหรือผู้ดูแลทำ)</div>' : '');
+  } else if (f.pay === 'unknown') {
+    h += '<div class="hint" style="margin-top:10px;">ระบบถือว่าชำระครบแล้วโดยไม่เก็บวัน/ยอด — แสดง "✓ ชำระครบ (ไม่ทราบวันที่)"</div>';
+  }
+  h += '</div>';
+  h += '<div class="hint" id="teSlipNote">แนบสลิป: ยังไม่เปิดใช้ (รอเจ้าของแก้นโยบายความเป็นส่วนตัวของเว็บก่อน) — ' + (backfill ? 'นักเรียนเก่าไม่มีสลิปได้ ไม่ใช่ข้อผิดพลาด (แสดงเป็น "ไม่มีสลิป (เก่า)")' : 'บันทึกชำระแล้วแนบสลิปทีหลังได้เมื่อเปิดใช้') + '</div>';
+  h += (f.err ? '<div class="alert alert-red wk-red" id="teFormErr" role="alert">' + escapeHtml(f.err) + '</div>' : '') +
+    '<div class="toolbar"><button class="btn btn-primary" type="button" id="teSave" data-act="save"' + (f.busy ? ' disabled' : '') + '>' + (f.busy ? 'กำลังบันทึก…' : 'บันทึกการลงเรียน') + '</button>' +
+    '<button class="btn" type="button" data-act="clear"' + (f.busy ? ' disabled' : '') + '>ล้างฟอร์ม</button></div>';
+  return h;
+}
+function teEnrollRender() {
+  const box = document.getElementById('teEnrollBody');
+  if (!box) return;
+  const f = te.f;
+  const act = document.activeElement;
+  const keep = act && box.contains(act) && act.id ? { id: act.id, s: act.selectionStart, e: act.selectionEnd } : null;
+  box.innerHTML = (f.ok ? '<div class="alert alert-plain" id="teFormOk" role="status" style="border-color:var(--ok);color:var(--ok);background:var(--ok-soft);">' + escapeHtml(f.ok) + '</div>' : '') +
+    teStudentHtml() + (f.student ? '' : teCandHtml()) + teDetailHtml();
+  if (keep) {
+    const el = document.getElementById(keep.id);
+    if (el) { el.focus(); try { if (keep.s != null) el.setSelectionRange(keep.s, keep.e); } catch (e) { /* input ชนิดที่ไม่รองรับ selection */ } }
+  }
+}
+
+// ── ทำงาน ──
+function teSetStudent(s) {
+  te.f.student = s; te.f.found = null; te.f.newOpen = false; te.f.err = ''; te.f.ok = '';
+}
+async function teFind() {
+  const f = te.f, q = f.q.trim();
+  if (q.length < TE_EN_MIN) { f.err = 'พิมพ์อย่างน้อย 2 ตัวอักษร หรือเบอร์โทร'; teEnrollRender(); return; }
+  const uid = currentUserId, cur = te;
+  f.busy = true; f.err = ''; f.ok = ''; teEnrollRender();
+  const { data, error } = await db.rpc('teach_student_find', { p_query: q });
+  if (uid !== currentUserId || te !== cur) return;
+  f.busy = false;
+  if (error) { console.error('[Teach find]', error.code || '', error.message && error.message.slice(0, 80)); f.err = 'ค้นหาไม่สำเร็จ: ' + teErrText(error); f.found = null; }
+  else f.found = data || [];
+  teEnrollRender();
+}
+const TE_EN_MIN = 2;
+async function teCreateCustomer(name, phone, memberId) {
+  const row = { full_name: name, phone: phone || null, created_by: currentUserId };
+  if (memberId) row.member_id = memberId;
+  const { data, error } = await db.from('customers').insert(row).select('id, full_name, phone').single();
+  if (error || !data) throw error || new Error('ไม่ได้รับรหัสลูกค้ากลับมา');
+  customers.push({ id: data.id, full_name: data.full_name, phone: data.phone, line_id: null, email: null, note: null, tags: [], created_at: new Date().toISOString(), created_by: currentUserId, admins: null });
+  if (memberId && te.members) te.members.custOf.set(memberId, data.id);
+  return data.id;
+}
+async function teNewCustomer() {
+  const f = te.f, name = f.newName.trim(), phone = f.newPhone.trim();
+  if (name.length < 2) { f.err = 'ใส่ชื่อ-นามสกุลของนักเรียน'; teEnrollRender(); return; }
+  const uid = currentUserId, cur = te;
+  f.busy = true; f.err = ''; teEnrollRender();
+  try {
+    if (normalizePhone(phone).length >= 9) {                      // กันสร้างซ้ำ: เบอร์นี้มีในระบบแล้วต้องเลือกคนเดิม
+      const dup = await db.rpc('teach_student_find', { p_query: phone });
+      if (uid !== currentUserId || te !== cur) return;
+      if (!dup.error && (dup.data || []).length) {
+        f.busy = false; f.found = dup.data; f.newOpen = false;
+        f.err = 'เบอร์นี้มีอยู่ในระบบแล้ว (' + dup.data.length + ' รายการ) — เลือกคนเดิมจากรายการด้านบน ไม่สร้างซ้ำ';
+        teEnrollRender();
+        return;
+      }
+    }
+    const id = await teCreateCustomer(name, phone, null);
+    if (uid !== currentUserId || te !== cur) return;
+    f.busy = false;
+    teSetStudent({ customer_id: id, member_id: null, name, phone });
+  } catch (e) {
+    if (uid !== currentUserId || te !== cur) return;
+    console.error('[Teach new customer]', e && e.code || '');
+    f.busy = false; f.err = 'สร้างลูกค้าไม่สำเร็จ: ' + teErrText(e);
+  }
+  teEnrollRender();
+}
+function teFormCheck() {
+  const f = te.f, course = teCourse(), backfill = f.mode === 'backfill';
+  if (!f.student) return 'เลือกนักเรียนก่อน';
+  if (!course) return 'เลือกคอร์ส';
+  if (!f.teacherId) return 'เลือกครูผู้สอน';
+  const price = teMoney(f.price);
+  if (Number.isNaN(price) || (price !== null && price < 0)) return 'ราคาที่ตกลงต้องเป็นตัวเลขไม่ติดลบ';
+  if (price === null && !backfill) return 'ใส่ราคาที่ตกลง';
+  let lp = Number(course.list_price);
+  if (f.lang === 'en') {
+    if (!isManager()) return 'คอร์สภาษาอังกฤษตั้งราคาตั้งได้เฉพาะเจ้าของหรือผู้ดูแล';
+    lp = teMoney(f.listPrice);
+    if (lp === null || Number.isNaN(lp) || lp < 0) return 'ใส่ราคาตั้งของคอร์สภาษาอังกฤษ';
+  }
+  if (price !== null && price !== lp && !f.note.trim()) return 'ราคาที่ตกลงต่างจากราคาตั้ง — ใส่หมายเหตุบอกเหตุผลด้วย';
+  if (f.note.length > 500) return 'หมายเหตุยาวเกิน 500 ตัวอักษร';
+  const today = todayBangkok();
+  if (backfill) {
+    if (f.started && f.started > today) return 'วันเริ่มเรียนต้องไม่เกินวันนี้';
+    const n = Number(f.sessN);
+    if (!Number.isInteger(n) || n < 0 || n > Number(course.sessions_total)) return 'จำนวนครั้งที่เรียนไปแล้วต้องอยู่ระหว่าง 0 ถึง ' + course.sessions_total;
+    for (let i = 0; i < n; i++) {
+      if (!f.sessDates[i]) return 'ใส่วันที่เรียนครั้งที่ ' + (i + 1) + ' (วันโดยประมาณได้)';
+      if (f.sessDates[i] > today) return 'วันที่เรียนครั้งที่ ' + (i + 1) + ' ต้องไม่เกินวันนี้';
+    }
+  }
+  if (f.pay === 'paid') {
+    const amt = teMoney(f.payAmount);
+    if (amt === null || Number.isNaN(amt) || amt <= 0) return 'ใส่ยอดชำระ (มากกว่า 0)';
+    if (!f.payDate) return 'ใส่วันที่ชำระ';
+    if (f.payDate > today) return 'วันที่ชำระต้องไม่เกินวันนี้';
+    if (price !== null && amt > price) return 'ยอดชำระเกินราคาที่ตกลง — ตรวจตัวเลขอีกครั้ง';
+  }
+  return '';
+}
+async function teEnrollSubmit() {
+  const f = te.f;
+  if (f.busy) return;
+  const bad = teFormCheck();
+  if (bad) { f.err = bad; f.ok = ''; teEnrollRender(); return; }
+  const uid = currentUserId, cur = te, course = teCourse(), backfill = f.mode === 'backfill';
+  f.busy = true; f.err = ''; f.ok = ''; teEnrollRender();
+  let step = 'ลงเรียน';
+  try {
+    if (!f.student.customer_id) {
+      step = 'สร้างลูกค้า';
+      f.student.customer_id = await teCreateCustomer(f.student.name, f.student.phone, f.student.member_id);
+    }
+    if (uid !== currentUserId || te !== cur) return;
+    if (!f.createdId) {
+      step = 'ลงเรียน';
+      const { data, error } = await db.rpc('teach_enroll_create', {
+        p_customer: f.student.customer_id, p_course: f.courseId, p_teacher: f.teacherId,
+        p_price_agreed: teMoney(f.price), p_track: f.track || null, p_equipment: f.equip || null,
+        p_started_on: backfill && f.started ? f.started : null, p_note: f.note.trim() || null,
+        p_source: backfill ? 'backfill' : 'console', p_teach_lang: f.lang,
+        p_list_price: f.lang === 'en' ? teMoney(f.listPrice) : null, p_paid_unknown: backfill && f.pay === 'unknown',
+      });
+      if (uid !== currentUserId || te !== cur) return;
+      if (error || !data) throw error || new Error('ไม่ได้รับรหัสการลงเรียนกลับมา');
+      f.createdId = data;
+    }
+    const n = backfill ? Number(f.sessN) : 0;
+    if (n > 0 && !f.sessDone) {
+      step = 'บันทึกรอบที่เรียนไปแล้ว';
+      const { error } = await db.rpc('teach_session_backfill', { p_enrollment: f.createdId, p_dates: f.sessDates.slice(0, n), p_hours: null, p_teacher: null });
+      if (uid !== currentUserId || te !== cur) return;
+      if (error) throw error;
+      f.sessDone = true;
+    }
+    if (f.pay === 'paid' && !f.payDone) {
+      step = 'บันทึกการชำระ';
+      if (!f.payReq) f.payReq = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 3 | 8)).toString(16); });
+      const { error } = await db.rpc('teach_payment_record', {
+        p_enrollment: f.createdId, p_paid_on: f.payDate, p_amount: teMoney(f.payAmount), p_method: f.payMethod, p_request_id: f.payReq, p_slip_path: null, p_note: null,
+      });
+      if (uid !== currentUserId || te !== cur) return;
+      if (error) throw error;
+      f.payDone = true;
+    }
+    const name = f.student.name, title = course.title;
+    te.f = teFormBlank();
+    te.f.ok = 'บันทึกแล้ว ✓ ' + name + ' · ' + title + (backfill ? ' (กรอกย้อนหลัง)' : '') + ' — ดูได้ที่แท็บ "รอคิว" หรือ "กำลังเรียน"';
+    teEnrollRender();
+    loadTeach();
+  } catch (e) {
+    if (uid !== currentUserId || te !== cur) return;
+    console.error('[Teach enroll]', step, e && e.code || '');
+    f.busy = false;
+    const created = !!f.createdId && step !== 'ลงเรียน' && step !== 'สร้างลูกค้า';
+    f.err = created
+      ? 'ลงเรียนเรียบร้อยแล้ว แต่ขั้น "' + step + '" ไม่สำเร็จ: ' + teErrText(e) + ' — กดบันทึกอีกครั้งเพื่อทำขั้นที่ค้างต่อ (ระบบไม่สร้างการลงเรียนซ้ำ)'
+      : step + 'ไม่สำเร็จ: ' + teErrText(e);
+    teEnrollRender();
+    loadTeach();
+  }
+}
+
+// ── ผู้ใช้กรอกฟอร์ม (ตัวฟังเดียวที่กล่องฟอร์ม) ──
+const TE_STRUCT = new Set(['courseId', 'sessN']);
+function teFormInput(el) {
+  const f = te.f, k = el.dataset.f;
+  if (!k) {
+    if (el.dataset.sd != null) f.sessDates[Number(el.dataset.sd)] = el.value;
+    return;
+  }
+  f[k] = el.value;
+  if (k === 'price') f.priceTouched = true;
+}
+function teFormChange(el) {
+  const f = te.f, k = el.dataset.f;
+  if (el.dataset.act === 'paychk') { f.pay = el.checked ? 'paid' : 'none'; teEnrollRender(); return; }
+  if (!k) return;
+  f[k] = el.value;
+  if (k === 'courseId') {
+    const c = teCourse();
+    f.track = ''; f.teacherId = '';
+    const ids = teTeachersOf(f.courseId);
+    if (f.pendingTeacher && ids.some(t => t.id === f.pendingTeacher)) f.teacherId = f.pendingTeacher;
+    else if (ids.length === 1) f.teacherId = ids[0].id;
+    if (c && f.lang === 'th' && !f.priceTouched) f.price = String(c.list_price);
+    const max = c ? Number(c.sessions_total) : 100;
+    if (Number(f.sessN) > max) { f.sessN = max; f.sessDates = f.sessDates.slice(0, max); }
+    teEnrollRender();
+  } else if (k === 'sessN') {
+    let n = Math.max(0, Math.min(Number(el.max) || 100, parseInt(el.value, 10) || 0));
+    f.sessN = n;
+    while (f.sessDates.length < n) f.sessDates.push(f.started || '');
+    f.sessDates.length = n;
+    teEnrollRender();
+  } else if (k === 'started') {
+    f.sessDates = f.sessDates.map(d => d || f.started);
+    teEnrollRender();
+  } else if (k === 'price' || k === 'listPrice' || k === 'payAmount') teEnrollRender();     // คำเตือนราคาต่างจากราคาตั้ง/ข้อความเตือนขึ้นทันที
+}
+function teFormClick(e) {
+  const b = e.target.closest('[data-act]');
+  if (!b || b.dataset.act === 'paychk') return;
+  const f = te.f, act = b.dataset.act;
+  if (act === 'find') teFind();
+  else if (act === 'pick') {
+    const r = (f.found || [])[Number(b.dataset.i)];
+    if (r) teSetStudent({ customer_id: r.customer_id || null, member_id: r.member_id || null, name: r.full_name, phone: r.phone || '' });
+    teEnrollRender();
+  } else if (act === 'unpick') { f.student = null; f.createdId = null; f.sessDone = false; f.payDone = false; f.payReq = null; f.err = ''; teEnrollRender(); }
+  else if (act === 'newToggle') { f.newOpen = !f.newOpen; teEnrollRender(); }
+  else if (act === 'newCreate') teNewCustomer();
+  else if (act === 'cand') {
+    const c = teCandidates().find(x => x.member.id === b.dataset.mid);
+    if (!c) return;
+    teSetStudent({ customer_id: c.customerId, member_id: c.member.id, name: c.member.full_name, phone: c.member.phone || '' });
+    f.mode = 'backfill';
+    f.pendingTeacher = c.teacher ? teTeacherId(c.teacher) : '';
+    f.teacherId = f.pendingTeacher && f.courseId && teTeachersOf(f.courseId).some(t => t.id === f.pendingTeacher) ? f.pendingTeacher : '';
+    teEnrollRender();
+  } else if (act === 'mode') {
+    f.mode = b.dataset.v;
+    if (f.mode === 'console') { f.sessN = 0; f.sessDates = []; f.started = ''; if (f.pay === 'unknown') f.pay = 'none'; }
+    teEnrollRender();
+  } else if (act === 'lang') { f.lang = b.dataset.v; if (f.lang === 'th') f.listPrice = ''; teEnrollRender(); }
+  else if (act === 'pay') { f.pay = b.dataset.v; teEnrollRender(); }
+  else if (act === 'clear') { const keep = f.candOpen; te.f = teFormBlank(); te.f.candOpen = keep; teEnrollRender(); }
+  else if (act === 'save') teEnrollSubmit();
+}
+{
+  const box = document.getElementById('teEnrollBody');
+  box.addEventListener('click', teFormClick);
+  box.addEventListener('input', e => { if (e.target.matches('[data-f], [data-sd]')) teFormInput(e.target); });
+  box.addEventListener('change', e => { if (e.target.matches('[data-f], [data-act="paychk"]')) teFormChange(e.target); else if (e.target.matches('[data-sd]')) teFormInput(e.target); });
+  box.addEventListener('toggle', e => { if (e.target.id === 'teCands') te.f.candOpen = e.target.open; }, true);
+  box.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.id === 'teFindQ') { e.preventDefault(); teFind(); } });
+}
+// กรองผู้สมัครต้องวาดรายการใหม่ระหว่างพิมพ์ (teFormInput เก็บค่าแล้ว) — วาดเฉพาะกล่องรายการ ไม่ล้างช่องพิมพ์
+document.getElementById('teEnrollBody').addEventListener('input', e => {
+  if (e.target.id === 'teCandQ') { te.f.candOpen = true; teEnrollRender(); }
+});
+
+document.getElementById('teTabs').addEventListener('click', e => {
+  const b = e.target.closest('.mail-tab');
+  if (b) { te.tab = b.dataset.tab; renderTeach(); }
+});
+document.getElementById('teWho').addEventListener('click', e => {
+  const b = e.target.closest('button[data-who]');
+  if (b) { te.who = b.dataset.who; renderTeach(); }
+});
+document.getElementById('teSearch').addEventListener('input', e => { te.q = e.target.value; renderTeach(); });
+document.getElementById('teReload').addEventListener('click', () => { loadTeach(); });
 
 // ===========================================================================
 // โอนไฟล์ — ถังโอนถ่ายไฟล์ภายในร้าน + คลัง Asset (#transfer · Alt+U · migration 049 + 050)
