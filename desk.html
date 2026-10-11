@@ -1125,6 +1125,23 @@
   .te-prog i { display: block; height: 100%; background: var(--black); }
   .te-frow { grid-template-columns: minmax(180px, 1fr) auto auto; align-items: center; }
   .te-seg button:disabled { color: var(--text3); background: var(--surface2); cursor: not-allowed; }
+  /* คอร์สเรียน ก้อน C: แผงรายละเอียดการลงเรียน (แผงขวากลาง) */
+  .te-row[data-id], .te-row[data-eid] { cursor: pointer; }
+  .te-row[data-id]:hover, .te-row[data-eid]:hover { background: var(--surface2); }
+  .te-row:focus-visible { outline: 2px solid var(--black); outline-offset: -2px; }
+  .te-chk { display: inline-flex; align-items: center; gap: 10px; min-height: 44px; font-weight: 600; }
+  .te-dsec { border-top: 1px solid var(--line); padding: 14px 0; }
+  .te-dsec:first-child { border-top: 0; padding-top: 0; }
+  .te-dsec h3 { margin: 0 0 8px; font-size: 16px; }
+  .te-dsec h4 { margin: 0 0 10px; font-size: 16px; }
+  .te-dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 14px; margin: 8px 0 0; font-size: 14px; }
+  .te-dl dt { color: var(--text2); }
+  .te-dl dd { margin: 0; overflow-wrap: anywhere; }
+  .te-ss { border: 1px solid var(--line); background: var(--surface); padding: 10px 12px; margin-bottom: 8px; overflow-wrap: anywhere; }
+  .te-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+  .te-prow { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; padding: 8px 0; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
+  .te-form { border: 1px solid var(--line-strong); background: var(--surface2); padding: 12px; margin-top: 10px; }
+  .te-note { margin-top: 8px; padding: 8px 10px; border-left: 3px solid var(--black); background: var(--surface2); }
   @media (max-width: 767px) {
     .te-head { display: none; }
     .te-row, .te-srow { grid-template-columns: minmax(0, 1fr); gap: 4px; }
@@ -2355,6 +2372,7 @@
               <button class="mail-tab" type="button" role="tab" data-tab="summary" aria-selected="true">สรุป</button>
               <button class="mail-tab" type="button" role="tab" data-tab="queue" aria-selected="false">รอคิว <span class="n" id="teQueueN"></span></button>
               <button class="mail-tab" type="button" role="tab" data-tab="active" aria-selected="false">กำลังเรียน <span class="n soft" id="teActiveN"></span></button>
+              <button class="mail-tab" type="button" role="tab" data-tab="sessions" aria-selected="false">รอบเรียน</button>
               <button class="mail-tab" type="button" role="tab" data-tab="ended" aria-selected="false">หมดอายุ / จบ</button>
               <button class="mail-tab" type="button" role="tab" data-tab="enroll" aria-selected="false">ลงเรียน / ย้อนหลัง</button>
             </div>
@@ -13112,7 +13130,8 @@ const TE_WEEK_DAYS = 7;           // รอบเรียนที่จะถ�
 const TE_CLOSED = { refund: 'คืนเงิน', quit: 'เลิกเรียน', transfer: 'ย้ายไปที่อื่น', cancelled: 'ยกเลิก' };
 function teBlank() {
   return { tab: 'summary', who: null, q: '', rows: [], nicks: new Map(), week: [], extPending: 0, tid: null,
-           loaded: false, missing: false, error: '', tok: 0, rt: null, cat: null, members: null, f: teFormBlank() };
+           loaded: false, missing: false, error: '', tok: 0, rt: null, cat: null, members: null, f: teFormBlank(),
+           det: null, sched: [], schedOnly: false };
 }
 let te = teBlank();
 
@@ -13143,11 +13162,12 @@ async function loadTeach() {
   if (!currentUserId) return;
   const uid = currentUserId, tok = ++te.tok;
   const now = new Date(), end = new Date(now.getTime() + TE_WEEK_DAYS * 86400000);
+  if (te.det) teDetLoad(te.det.id, true);
   const [ov, pf, cs, ex, me] = await Promise.all([
     db.from('enrollment_overview').select('*').order('created_at', { ascending: false }).limit(3000),
     db.from('student_profiles').select('customer_id, nickname, is_minor'),
     db.from('class_sessions').select('id, enrollment_id, teacher_id, status, starts_at, ends_at, room, gcal_uid')
-      .eq('status', 'scheduled').gte('starts_at', now.toISOString()).lte('starts_at', end.toISOString()).order('starts_at', { ascending: true }).limit(500),
+      .eq('status', 'scheduled').order('starts_at', { ascending: true }).limit(1000),
     isOwner() ? db.from('enrollment_extension_requests').select('id').eq('status', 'pending') : Promise.resolve({ data: [], error: null }),
     db.rpc('my_teacher_id'),
   ]);
@@ -13156,14 +13176,15 @@ async function loadTeach() {
   const bad = ov.error || cs.error;
   if (bad) {
     console.error('[Teach load]', bad.code || '', bad.message);
-    te.rows = []; te.week = []; te.nicks = new Map(); te.extPending = 0;
+    te.rows = []; te.week = []; te.sched = []; te.nicks = new Map(); te.extPending = 0;
     te.missing = WORK_NO_TABLE.test(bad.message || '');
     te.error = te.missing ? '' : 'โหลดคอร์สเรียนไม่สำเร็จ: ' + bad.message;
     if (te.error && current === 'teach') showFatalError(te.error);
   } else {
     te.missing = false; te.error = '';
     te.rows = ov.data || [];
-    te.week = cs.data || [];
+    te.sched = cs.data || [];
+    te.week = te.sched.filter(x => { const t = Date.parse(x.starts_at); return t >= now.getTime() && t <= end.getTime(); });
     te.nicks = new Map((pf.error ? [] : (pf.data || [])).map(p => [p.customer_id, { nick: p.nickname || '', minor: !!p.is_minor }]));
     te.extPending = ex.error ? 0 : (ex.data || []).length;
   }
@@ -13174,6 +13195,7 @@ async function loadTeach() {
     if (!c.error) customers = c.data || [];
   }
   renderTeach();
+  teDetRender();                 // แผงรายละเอียดที่เปิดอยู่ใช้ตัวนับ/สถานะจากรายการ — วาดใหม่หลังรายการเปลี่ยน
 }
 function teScheduleReload() {           // Realtime: รวบหลายการเปลี่ยนแปลงติดกันเป็นการโหลดครั้งเดียว
   if (!currentUserId || !te.loaded) return;
@@ -13182,6 +13204,13 @@ function teScheduleReload() {           // Realtime: รวบหลายกา
 }
 function teReset() {
   clearTimeout(te.rt);
+  if (te.det) {
+    closeDetail();
+    const db0 = document.getElementById('detailBody');
+    if (db0) db0.innerHTML = '';
+    const dt0 = document.getElementById('detailTitle');
+    if (dt0) dt0.textContent = '';
+  }
   te = teBlank();
   const body = document.getElementById('teBody');
   if (body) body.innerHTML = '<div class="empty">กำลังโหลดข้อมูลคอร์สเรียน…</div>';
@@ -13234,7 +13263,7 @@ function teRowHtml(r) {
   const pct = tot ? Math.min(100, Math.round(used / tot * 100)) : 0;
   const closed = r.state === 'closed' ? ' · ' + escapeHtml(TE_CLOSED[r.closed_reason] || r.closed_reason || '') : '';
   const stateTxt = { waiting_payment: 'รอชำระ', queued: 'รอคิว', active: 'กำลังเรียน', expired: 'หมดอายุ', completed: 'จบ (ใช้สิทธิ์ครบ)', closed: 'ปิดแล้ว' }[r.state] || '';
-  return '<div class="te-row" role="row" data-id="' + escapeHtml(r.id) + '">' +
+  return '<div class="te-row" role="row" tabindex="0" data-id="' + escapeHtml(r.id) + '">' +
     '<div role="cell" class="te-c1"><div class="te-name">' + escapeHtml(teCustName(r.customer_id)) + '</div>' +
       (nk.nick ? '<div class="te-sub">ชื่อเล่น ' + escapeHtml(nk.nick) + '</div>' : '') +
       '<div class="te-pills">' + (stateTxt ? '<span class="st st-off">' + stateTxt + closed + '</span>' : '') + tePayHtml(r) +
@@ -13274,7 +13303,7 @@ function teSummaryHtml() {
   h += teGroupHtml('ใกล้หมดอายุ (ภายใน ' + TE_SUMMARY_DAYS + ' วัน) และหมดอายุแล้วที่ยังเหลือครั้ง', soon.concat(expired).sort(teByExpiry), 'ไม่มีนักเรียนที่ใกล้หมดอายุ');
   const wrows = week.map(s => {
     const r = byId.get(s.enrollment_id);
-    return '<div class="te-row te-srow" role="row"><div role="cell" class="te-c1"><div class="te-name">' + escapeHtml(teWhen(s.starts_at)) + '</div>' +
+    return '<div class="te-row te-srow" role="row" tabindex="0" data-eid="' + escapeHtml(s.enrollment_id) + '"><div role="cell" class="te-c1"><div class="te-name">' + escapeHtml(teWhen(s.starts_at)) + '</div>' +
       '<div class="te-sub">' + (s.gcal_uid ? 'ผูกปฏิทินแล้ว ✓' : 'ยังไม่ผูกปฏิทิน') + '</div></div>' +
       '<div role="cell" data-l="นักเรียน">' + escapeHtml(r ? teCustName(r.customer_id) : '—') + '</div>' +
       '<div role="cell" data-l="คอร์ส">' + escapeHtml(r ? r.course_title : '—') + '</div>' +
@@ -13317,6 +13346,8 @@ function renderTeach() {
     body.innerHTML = teGroupHtml('กำลังเรียน (ใกล้หมดอายุอยู่บน)', active, 'ไม่มีนักเรียนที่กำลังเรียน');
   } else if (te.tab === 'ended') {
     body.innerHTML = teGroupHtml('หมดอายุ / จบ / ปิดแล้ว', ended, 'ยังไม่มีรายการ');
+  } else if (te.tab === 'sessions') {
+    body.innerHTML = teSessionsHtml();
   } else body.innerHTML = teSummaryHtml();
 }
 
@@ -13374,6 +13405,7 @@ async function teLoadCatalog() {
     te.cat = { loading: false, loaded: true, error: '', courses: (c.data || []).filter(x => x.is_active !== false), links: l.data || [], teachers: t.data || [] };
   }
   if (te.tab === 'enroll') teEnrollRender();
+  teDetRender();
 }
 async function teLoadMembers() {
   if (te.members) return;
@@ -13790,6 +13822,760 @@ document.getElementById('teWho').addEventListener('click', e => {
 });
 document.getElementById('teSearch').addEventListener('input', e => { te.q = e.target.value; renderTeach(); });
 document.getElementById('teReload').addEventListener('click', () => { loadTeach(); });
+
+// ── ก้อน C: แผงรายละเอียดการลงเรียน (คลิกแถว) + แท็บ "รอบเรียน" ────────────────────────────────────────────
+// แผงขวากลาง (openDetail) · ข้อมูลเฉพาะการลงเรียนนี้: class_sessions · (ผู้ที่สิทธิ์ถึงเท่านั้น) enrollment_money/enrollment_payments · session_notes · enrollment_extension_requests
+// ⚠️ ส่วนที่สิทธิ์ไม่ถึง "ไม่วาด" และ "ไม่ดึง" (ไม่ใช่วาดแล้วซ่อน): พนักงานทั่วไป = ✓ชำระครบ + บันทึก n งวด เท่านั้น (ฟอร์มบันทึกชำระได้ แต่ไม่เห็นยอด) · เจ้าของ/ผู้ดูแล/ครูของนักเรียนคนนั้น = เห็นยอด ·
+//   บันทึกการสอน = เจ้าของ + ครูของรอบ/ของนักเรียนนั้น (ผู้ดูแลที่ไม่ใช่ครูของคนนั้นไม่เห็น) · คำขอขยายอายุ = เจ้าของ + ครูผู้ขอ
+// ⚠️ ทุกการเขียนผ่านฟังก์ชัน teach_* (ฐานตรวจสิทธิ์ซ้ำ — ปุ่มที่ซ่อนเป็นแค่ความสะดวก) · ปุ่มทุกตัวล็อกระหว่างส่ง · ข้อความผิดพลาดไม่มียอด/เบอร์ (teErrText)
+// ⚠️ บันทึกชำระ: request_id สร้างตอนเปิดฟอร์ม ใช้ซ้ำเมื่อกดซ้ำ (ฐานตอบ duplicate ไม่เพิ่มแถว) · สลิป: ปิดหลัง TE_SLIPS_ENABLED (ไม่ส่ง p_slip_path)
+// ⚠️ ข้อความอิสระ (หมายเหตุ/เหตุผล/บันทึกการสอน/ชื่อ) มาจากผู้ใช้ — escapeHtml เสมอ · ห้าม console.log เนื้อหา
+const TE_BY = { student: 'นักเรียน', teacher: 'ครู', shop: 'ร้าน' };
+const TE_WARN = {
+  over_sessions: 'นัดรอบนี้เกินจำนวนครั้งของคอร์ส (ใช้สิทธิ์ + นัดไว้ครบแล้ว) — ระบบบันทึกนัดให้แล้ว ตรวจดูว่าถูกต้อง',
+  after_expiry: 'วันที่นัดอยู่หลังวันหมดอายุของคอร์ส — ระบบบันทึกนัดให้แล้ว ให้เจ้าของพิจารณาขยายอายุ',
+};
+const TE_LATE_DAYS = 3;               // แจ้งยกเลิกน้อยกว่า 3 วัน (นับวันปฏิทินไทย) = นับเป็นครั้งที่ใช้ไป — ต้องตรง teach_is_late_cancel ใน 047
+const TE_GCAL_NEAR_MIN = 30;          // นัดปฏิทินที่เวลาห่างไม่เกิน ±30 นาที ขึ้นก่อน
+const TE_PAY_WARN_BLIND = 'บันทึกแล้วจะไม่แสดงยอดนี้อีก — ตรวจยอดและวันที่ก่อนกดบันทึก (แก้ภายหลังต้องให้เจ้าของหรือผู้ดูแลทำ)';
+const TE_PAY_WARN_SEEN = 'บันทึกแล้วแก้/ลบเองไม่ได้ทันที — ตรวจยอดและวันที่ก่อนกดบันทึก (ลงผิดแก้ได้ที่ปุ่ม "แก้" ข้างรายการ โดยเจ้าของหรือผู้ดูแล)';
+const teUuid = () => (window.crypto && crypto.randomUUID) ? crypto.randomUUID()
+  : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 3 | 8)).toString(16); });
+const teYmd = iso => new Date(iso).toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' });
+const teHm = iso => new Date(iso).toLocaleTimeString('en-GB', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit', hour12: false });
+const teTName = id => ((te.cat && te.cat.teachers.find(t => t.id === id)) || (te.rows.find(r => r.teacher_id === id) && { display_name: te.rows.find(r => r.teacher_id === id).teacher_name }) || {}).display_name || '';
+const teIsMineTeacher = (r, s) => !!te.tid && (r.teacher_id === te.tid || (s && s.teacher_id === te.tid));
+const teCanNote = (r, s) => isOwner() || teIsMineTeacher(r, s);
+const teCanDone = (r, s) => isManager() || teIsMineTeacher(r, s);
+function teCaps(r) {
+  const mgr = isManager(), owner = isOwner(), mine = !!te.tid && r.teacher_id === te.tid, closed = !!r.closed_on;
+  return {
+    mgr, owner, mine, closed,
+    money: mgr || mine,                           // เห็นยอด/รายการชำระ
+    fix: mgr && (!closed || owner),               // แก้การลงเรียน (ปิดแล้ว = เจ้าของเท่านั้น)
+    close: mgr && !closed, reopen: owner && closed,
+    extSelf: owner && !closed && !!r.expires_on,  // ขยายอายุเอง
+    extReq: mine && !owner && !closed && !!r.expires_on,   // ครูของนักเรียนยื่นขอ (เจ้าของขยายเองได้ ไม่ต้องยื่น)
+    extSee: owner || mine,
+  };
+}
+function teDetBlank(id) {
+  return { id, tok: 0, loaded: false, error: '', sess: [], hasMoney: false, price: null, pays: [], notes: new Map(), reqs: [],
+           open: null, fv: {}, busy: '', err: '', ok: '', warn: [], link: null };
+}
+
+// ── เปิด/โหลด ──
+function teDetOpen(id) {
+  const r = te.rows.find(x => x.id === id);
+  if (!r) return;
+  te.det = teDetBlank(id);
+  openDetail(teCustName(r.customer_id), '<div id="teDet" data-eid="' + escapeHtml(id) + '"></div>');
+  teLoadCatalog();
+  teDetRender();
+  teDetLoad(id);
+}
+async function teDetLoad(id, silent) {
+  const d = te.det;
+  if (!d || d.id !== id || !currentUserId) return;
+  const r = te.rows.find(x => x.id === id);
+  const uid = currentUserId, cur = te, tok = ++d.tok, cap = r ? teCaps(r) : { money: false, extSee: isOwner() || !!te.tid };
+  if (!silent) { d.loaded = false; d.error = ''; teDetRender(); }
+  const skip = Promise.resolve({ data: null, error: null });
+  const [s, m, p, x] = await Promise.all([
+    db.from('class_sessions').select('id, enrollment_id, teacher_id, status, starts_at, ends_at, held_on, hours, room, cancel_by, notified_at, late_cancel, cancel_reason, gcal_uid, created_at').eq('enrollment_id', id),
+    cap.money ? db.from('enrollment_money').select('price_agreed').eq('enrollment_id', id) : skip,
+    cap.money ? db.from('enrollment_payments').select('id, paid_on, amount, kind, method, note, created_at').eq('enrollment_id', id).order('paid_on', { ascending: true }) : skip,
+    cap.extSee ? db.from('enrollment_extension_requests').select('id, requested_by, requested_until, reason, status, decision_note, approved_until, decided_at, created_at').eq('enrollment_id', id).order('created_at', { ascending: false }) : skip,
+  ]);
+  if (uid !== currentUserId || te !== cur || te.det !== d || tok !== d.tok) return;
+  const bad = s.error || m.error || p.error || x.error;
+  if (bad) {
+    console.error('[Teach detail load]', bad.code || '');
+    d.loaded = true;
+    d.error = 'โหลดรายละเอียดไม่สำเร็จ: ' + teErrText(bad);
+    teDetRender();
+    return;
+  }
+  d.sess = (s.data || []).slice().sort((a, b) => String(a.starts_at || (a.held_on ? a.held_on + 'T00:00:00+07:00' : a.created_at))
+    .localeCompare(String(b.starts_at || (b.held_on ? b.held_on + 'T00:00:00+07:00' : b.created_at))));
+  d.hasMoney = !!cap.money;
+  d.price = cap.money && m.data && m.data.length ? Number(m.data[0].price_agreed) : null;
+  d.pays = cap.money ? (p.data || []) : [];
+  d.reqs = cap.extSee ? (x.data || []) : [];
+  // บันทึกการสอน: ดึงเฉพาะรอบที่ผู้ใช้นี้มีสิทธิ์ (เจ้าของ + ครูของรอบ/ของนักเรียน) — ที่เหลือไม่ดึง ไม่วาด
+  const nids = r ? d.sess.filter(z => teCanNote(r, z)).map(z => z.id) : [];
+  d.notes = new Map();
+  if (nids.length) {
+    const n = await db.from('session_notes').select('session_id, note').in('session_id', nids);
+    if (uid !== currentUserId || te !== cur || te.det !== d || tok !== d.tok) return;
+    if (n.error) { console.error('[Teach notes load]', n.error.code || ''); d.error = 'โหลดบันทึกการสอนไม่สำเร็จ: ' + teErrText(n.error); }
+    else (n.data || []).forEach(z => d.notes.set(z.session_id, z.note));
+  }
+  d.loaded = true;
+  teDetRender();
+}
+
+// ── วาด ──
+const teIn = (name, label, o) => {
+  o = o || {};
+  const id = 'teD_' + name, v = teDetValue(name);
+  return '<div class="field"><label class="lbl" for="' + id + '">' + label + '</label>' +
+    '<input id="' + id + '" class="input" data-df="' + name + '" type="' + (o.type || 'text') + '"' + (o.inputmode ? ' inputmode="' + o.inputmode + '"' : '') +
+    (o.max ? ' max="' + escapeHtml(o.max) + '"' : '') + (o.min ? ' min="' + escapeHtml(o.min) + '"' : '') + (o.maxlength ? ' maxlength="' + o.maxlength + '"' : '') +
+    (o.placeholder ? ' placeholder="' + escapeHtml(o.placeholder) + '"' : '') + ' value="' + escapeHtml(v) + '">' + (o.hint ? '<div class="hint">' + o.hint + '</div>' : '') + '</div>';
+};
+const teSel = (name, label, opts, o) => {
+  o = o || {};
+  const id = 'teD_' + name, v = teDetValue(name);
+  return '<div class="field"><label class="lbl" for="' + id + '">' + label + '</label><select id="' + id + '" class="input" data-df="' + name + '"' + (o.struct ? ' data-struct="1"' : '') + '>' +
+    opts.map(([val, t]) => teOpt(val, t, String(val) === String(v))).join('') + '</select>' + (o.hint ? '<div class="hint">' + o.hint + '</div>' : '') + '</div>';
+};
+const teTa = (name, label, o) => {
+  o = o || {};
+  const id = 'teD_' + name;
+  return '<div class="field"><label class="lbl" for="' + id + '">' + label + '</label><textarea id="' + id + '" class="input" data-df="' + name + '" rows="' + (o.rows || 3) + '"' +
+    (o.maxlength ? ' maxlength="' + o.maxlength + '"' : '') + '>' + escapeHtml(teDetValue(name)) + '</textarea>' + (o.hint ? '<div class="hint">' + o.hint + '</div>' : '') + '</div>';
+};
+function teDetValue(name) { return te.det && te.det.fv[name] != null ? String(te.det.fv[name]) : ''; }
+const teBtn = (act, label, o) => {
+  o = o || {};
+  return '<button class="btn' + (o.primary ? ' btn-primary' : '') + (o.danger ? ' btn-danger' : '') + (o.sm ? ' btn-sm' : '') + '" type="button" data-act="' + act + '"' +
+    (o.k ? ' data-k="' + o.k + '"' : '') + (o.sid ? ' data-sid="' + escapeHtml(o.sid) + '"' : '') + (o.i != null ? ' data-i="' + o.i + '"' : '') +
+    (te.det && te.det.busy ? ' disabled' : '') + '>' + label + '</button>';
+};
+const teFormBar = (k, label, danger) => '<div class="toolbar">' + teBtn('submit', te.det.busy === k ? 'กำลังบันทึก…' : label, { primary: !danger, danger, k }) + teBtn('close-form', 'ยกเลิก') + '</div>';
+
+function teDetSummaryHtml(r) {
+  const nk = te.nicks.get(r.customer_id) || { nick: '', minor: false };
+  const used = Number(r.sessions_used) || 0, done = Number(r.sessions_done) || 0, tot = Number(r.sessions_total) || 0;
+  const stateTxt = { waiting_payment: 'รอชำระ', queued: 'รอคิว', active: 'กำลังเรียน', expired: 'หมดอายุ', completed: 'จบ (ใช้สิทธิ์ครบ)', closed: 'ปิดแล้ว' }[r.state] || '';
+  const closed = r.state === 'closed' ? ' · ' + escapeHtml(TE_CLOSED[r.closed_reason] || r.closed_reason || '') + (r.closed_on ? ' เมื่อ ' + fmtDate(r.closed_on) : '') : '';
+  return '<section class="te-dsec" id="teDetHead"><div class="te-name">' + escapeHtml(r.course_title) + '</div>' +
+    '<div class="te-pills">' + (stateTxt ? '<span class="st st-off">' + stateTxt + closed + '</span>' : '') +
+    (r.teach_lang === 'en' ? '<span class="st st-off">สอนภาษาอังกฤษ</span>' : '') +
+    (nk.minor ? '<span class="st st-off">ผู้เยาว์</span>' : '') +
+    (r.source === 'backfill' ? '<span class="st st-off">กรอกย้อนหลัง · ข้อมูลอาจไม่ครบ</span>' : '') + '</div>' +
+    '<dl class="te-dl">' +
+      (nk.nick ? '<dt>ชื่อเล่น</dt><dd>' + escapeHtml(nk.nick) + '</dd>' : '') +
+      '<dt>ครู</dt><dd>' + escapeHtml(r.teacher_name || '') + '</dd>' +
+      '<dt>เรียนแล้ว</dt><dd><strong>' + done + '/' + tot + '</strong> ครั้ง' + (used > done ? ' <span class="te-sub">(ใช้สิทธิ์ ' + used + ' ครั้ง รวมไม่มา/แจ้งช้า)</span>' : '') +
+        ' · ' + Number(r.hours_done || 0) + '/' + Number(r.hours_total || 0) + ' ชม.</dd>' +
+      '<dt>วันเริ่ม</dt><dd>' + (r.started_on ? fmtDate(r.started_on) : '<span class="te-sub">ยังไม่เริ่มเรียน</span>') + '</dd>' +
+      '<dt>หมดอายุ</dt><dd>' + teExpiryHtml(r) + '</dd>' +
+      (r.extension_note ? '<dt>หมายเหตุขยายอายุ</dt><dd>' + escapeHtml(r.extension_note) + ' <span class="te-sub">(ทั้งทีมเห็น)</span></dd>' : '') +
+      (r.track ? '<dt>แนว</dt><dd>' + escapeHtml(r.track) + '</dd>' : '') +
+      (r.equipment ? '<dt>อุปกรณ์</dt><dd>' + escapeHtml(r.equipment) + '</dd>' : '') +
+      (r.note ? '<dt>หมายเหตุ</dt><dd>' + escapeHtml(r.note) + '</dd>' : '') +
+    '</dl></section>';
+}
+
+function teDetPayHtml(r, d, cap) {
+  let h = '<section class="te-dsec" id="teDetPay"><h3>การชำระ</h3><div class="te-pills">' + tePayHtml(r) + '</div>';
+  if (cap.money) {
+    if (!d.loaded) h += '<div class="empty">กำลังโหลด…</div>';
+    else {
+      const net = d.pays.reduce((a, p) => a + Number(p.amount), 0);
+      h += '<dl class="te-dl" id="teMoney"><dt>ราคาที่ตกลง</dt><dd>' + (d.price != null ? '<strong>' + teFmt(d.price) + ' ฿</strong>' : '<span class="te-sub">ไม่ทราบ (กรอกย้อนหลัง)</span>') + '</dd>' +
+        '<dt>ชำระสะสม (สุทธิ)</dt><dd><strong>' + teFmt(net) + ' ฿</strong>' + (d.price != null ? ' <span class="te-sub">คงเหลือ ' + teFmt(Math.max(d.price - net, 0)) + ' ฿</span>' : '') + '</dd></dl>';
+      h += d.pays.length ? '<div class="te-plist">' + d.pays.map(p => {
+        const m = (TE_METHODS.find(x => x[0] === p.method) || [0, p.method])[1], refund = p.kind === 'refund';
+        const fixing = d.open === 'payfix' && d.fv.id === p.id;
+        return '<div class="te-prow" data-pid="' + escapeHtml(p.id) + '"><span>' + fmtDate(p.paid_on) + '</span><strong' + (refund ? ' class="wk-red"' : '') + '>' + (refund ? 'คืนเงิน −' : '') + teFmt(Math.abs(Number(p.amount))) + ' ฿</strong>' +
+          (refund ? '' : '<span>' + escapeHtml(m) + '</span>') + (p.note ? '<span class="te-sub">' + escapeHtml(p.note) + '</span>' : '') +
+          (cap.mgr && !fixing ? teBtn('open', 'แก้', { k: 'payfix', sid: p.id, sm: true }) : '') + '</div>' + (fixing ? teFormPayFix(p, d) : '');
+      }).join('') + '</div>' : '<div class="hint">' + (r.paid_unknown ? 'ชำระครบ (ไม่ทราบวันที่/ยอด)' : 'ยังไม่มีรายการชำระ') + (r.source === 'backfill' ? ' · ไม่มีสลิป (เก่า)' : '') + '</div>';
+    }
+  }
+  h += '<div class="hint" id="teDetSlipNote">แนบสลิป: ยังไม่เปิดใช้ (รอเจ้าของแก้นโยบายความเป็นส่วนตัวของเว็บก่อน)</div>';
+  if (r.closed_on) return h + '<div class="hint">การลงเรียนนี้ปิดแล้ว — บันทึกชำระเพิ่มไม่ได้</div></section>';
+  if (d.open === 'pay') h += teFormPay(cap, d);
+  else if (d.open === 'refund') h += teFormRefund(d);
+  else h += '<div class="toolbar">' + teBtn('open', '+ บันทึกชำระ', { k: 'pay' }) + (cap.mgr && cap.money ? teBtn('open', 'คืนเงิน', { k: 'refund' }) : '') + '</div>';
+  return h + '</section>';
+}
+function teFormPay(cap, d) {
+  return '<div class="te-form" id="teFormPay"><h4>บันทึกชำระ</h4>' +
+    teIn('date', 'วันที่ชำระ', { type: 'date', max: todayBangkok() }) + teIn('amount', 'ยอด (บาท)', { inputmode: 'decimal' }) +
+    teSel('method', 'วิธีชำระ', TE_METHODS) + teIn('note', 'หมายเหตุ (ไม่เกิน 200 ตัวอักษร · ห้ามใส่เลขบัญชี/เบอร์โทร)', { maxlength: 200 }) +
+    '<div class="wk-red" id="teDetPayWarn">' + (cap.money ? TE_PAY_WARN_SEEN : TE_PAY_WARN_BLIND) + '</div>' + teFormBar('pay', 'บันทึกชำระ') + '</div>';
+}
+function teFormRefund(d) {
+  return '<div class="te-form" id="teFormRefund"><h4>คืนเงิน</h4>' +
+    teIn('date', 'วันที่คืนเงิน', { type: 'date', max: todayBangkok() }) + teIn('amount', 'ยอดที่คืน (บาท · ใส่เป็นบวก)', { inputmode: 'decimal' }) +
+    teIn('note', 'หมายเหตุ (ไม่เกิน 200 ตัวอักษร)', { maxlength: 200 }) +
+    '<div class="wk-red">คืนเงินแล้วย้อนกลับไม่ได้ — ยอดคืนต้องไม่เกินยอดที่ชำระสะสม</div>' + teFormBar('refund', 'บันทึกคืนเงิน', true) + '</div>';
+}
+function teFormPayFix(p, d) {
+  return '<div class="te-form" id="teFormPayFix"><h4>แก้รายการชำระ</h4>' +
+    teIn('date', 'วันที่', { type: 'date', max: todayBangkok() }) + teIn('amount', 'ยอด (บาท · ใส่เป็นบวก)', { inputmode: 'decimal' }) +
+    (p.kind === 'refund' ? '' : teSel('method', 'วิธีชำระ', TE_METHODS)) + teIn('note', 'หมายเหตุ (ไม่เกิน 200 ตัวอักษร · เว้นว่าง = ลบหมายเหตุ)', { maxlength: 200 }) +
+    '<div class="wk-red">ค่าเดิมเก็บไว้ในบันทึกการเปลี่ยนแปลง (activity log) — แก้ผิดจะกระทบยอดคงเหลือทันที</div>' +
+    '<div class="toolbar">' + teBtn('submit', d.busy === 'payfix' ? 'กำลังบันทึก…' : 'บันทึกการแก้', { primary: true, k: 'payfix' }) +
+    teBtn('delpay', 'ลบรายการนี้', { danger: true, sid: p.id }) + teBtn('close-form', 'ยกเลิก') + '</div></div>';
+}
+
+function teReqLine(q) {
+  const st = { pending: 'รอเจ้าของตัดสิน', approved: 'อนุมัติแล้ว', rejected: 'ปฏิเสธ' }[q.status] || q.status;
+  const who = q.requested_by ? (teTName(q.requested_by) || 'ครู') : 'เจ้าของขยายเอง';
+  return '<div class="te-prow" data-qid="' + escapeHtml(q.id) + '"><span><strong>' + escapeHtml(st) + '</strong> · ' + escapeHtml(who) + '</span><span>ขอถึง ' + fmtDate(q.requested_until) + '</span>' +
+    (q.status === 'approved' && q.approved_until ? '<span>อนุมัติถึง ' + fmtDate(q.approved_until) + '</span>' : '') +
+    '<span class="te-sub">เหตุผล: ' + escapeHtml(q.reason || '') + '</span>' +
+    (q.decision_note ? '<span class="te-sub">หมายเหตุเจ้าของ: ' + escapeHtml(q.decision_note) + '</span>' : '') + '</div>';
+}
+function teDetExtHtml(r, d, cap) {
+  if (!cap.extSee) return '';
+  let h = '<section class="te-dsec" id="teDetExt"><h3>ขยายอายุคอร์ส</h3>';
+  if (!d.loaded) return h + '<div class="empty">กำลังโหลด…</div></section>';
+  const pending = d.reqs.find(q => q.status === 'pending');
+  if (!r.expires_on) h += '<div class="hint">ยังไม่มีวันหมดอายุ (ยังไม่เริ่มเรียน) — ขอขยายอายุไม่ได้</div>';
+  else if (r.closed_on) h += '<div class="hint">การลงเรียนนี้ปิดแล้ว — ขยายอายุไม่ได้</div>';
+  if (pending && cap.owner) {
+    const dec = d.open === 'decide' && d.fv.sid === pending.id;
+    h += '<div class="alert alert-red wk-red" id="teExtPending" role="status">มีคำขอขยายอายุรอตัดสิน</div>' + teReqLine(pending) +
+      (dec ? '<div class="te-form" id="teFormDecide"><h4>ตัดสินคำขอ</h4>' + teIn('until', 'อนุมัติถึงวันที่ (แก้ได้)', { type: 'date' }) +
+        teTa('note', 'หมายเหตุของเจ้าของ (ไม่เกิน 500 ตัวอักษร)', { rows: 2, maxlength: 500, hint: 'หมายเหตุนี้เก็บที่ใบคำขอ เห็นเฉพาะเจ้าของและครูผู้ขอ — ทีมงานอื่นเห็นแค่วันหมดอายุใหม่' }) +
+        '<div class="toolbar">' + teBtn('decide-yes', d.busy === 'decide' ? 'กำลังบันทึก…' : 'อนุมัติ', { primary: true, sid: pending.id }) +
+        teBtn('decide-no', 'ปฏิเสธ', { danger: true, sid: pending.id }) + teBtn('close-form', 'ยกเลิก') + '</div></div>'
+        : '<div class="toolbar">' + teBtn('open', 'ตัดสินคำขอ', { k: 'decide', sid: pending.id }) + '</div>');
+  } else if (pending) {
+    h += teReqLine(pending) + '<div class="hint">รอเจ้าของตัดสิน — ยื่นใหม่ไม่ได้จนกว่าจะตัดสิน</div>';
+  }
+  if (!pending && cap.extReq) {
+    h += d.open === 'extreq'
+      ? '<div class="te-form" id="teFormExtReq"><h4>ขอขยายอายุ</h4>' + teIn('until', 'ขอขยายถึงวันที่', { type: 'date', min: r.effective_expiry || '' }) +
+        teTa('reason', 'เหตุผล (ไม่เกิน 500 ตัวอักษร)', { rows: 3, maxlength: 500, hint: 'เหตุผลนี้เห็นเฉพาะเจ้าของและครูผู้ขอ' }) + teFormBar('extreq', 'ส่งคำขอ') + '</div>'
+      : '<div class="toolbar">' + teBtn('open', 'ขอขยายอายุ', { k: 'extreq' }) + '</div>';
+  }
+  if (!pending && cap.extSelf) {
+    h += d.open === 'ext'
+      ? '<div class="te-form" id="teFormExt"><h4>ขยายอายุเอง</h4>' + teIn('until', 'ขยายถึงวันที่', { type: 'date', min: r.effective_expiry || '' }) +
+        teTa('note', 'หมายเหตุ (ไม่เกิน 500 ตัวอักษร)', { rows: 2, maxlength: 500 }) +
+        '<div class="wk-red" id="teExtNoteWarn">หมายเหตุนี้ทั้งทีมเห็น (แสดงที่หน้าการลงเรียนของพนักงานทุกคน) — อย่าใส่ข้อมูลส่วนตัวหรือเรื่องเงิน</div>' + teFormBar('ext', 'ขยายอายุ') + '</div>'
+      : '<div class="toolbar">' + teBtn('open', 'ขยายอายุเอง', { k: 'ext' }) + '</div>';
+  }
+  h += d.reqs.filter(q => q !== pending).length ? '<div class="te-plist"><div class="te-sub">ประวัติคำขอ</div>' + d.reqs.filter(q => q !== pending).map(teReqLine).join('') + '</div>' : '';
+  return h + '</section>';
+}
+
+function teSessRowHtml(r, d, s, cap) {
+  const now = Date.now();
+  let st = '', when = '';
+  if (s.status === 'scheduled') {
+    const over = Date.parse(s.starts_at) < now;
+    st = '<span class="st st-warn">นัดไว้</span>';
+    when = escapeHtml(teWhen(s.starts_at)) + '–' + teHm(s.ends_at) + (over ? ' <span class="wk-red">เลยเวลานัดแล้ว ยังไม่ได้ทำเครื่องหมาย</span>' : '');
+  } else if (s.status === 'done') {
+    st = '<span class="st st-ok">สอนแล้ว</span>';
+    when = fmtDate(s.held_on) + ' · ' + Number(s.hours) + ' ชม.';
+  } else if (s.status === 'no_show') {
+    st = '<span class="st st-off">ไม่มา</span>';
+    when = (s.starts_at ? escapeHtml(teWhen(s.starts_at)) : '') + ' <span class="wk-red">นับเป็นครั้งที่ใช้ไป</span>';
+  } else {
+    st = '<span class="st st-off">ยกเลิก (' + escapeHtml(TE_BY[s.cancel_by] || '') + ')</span>';
+    when = (s.starts_at ? escapeHtml(teWhen(s.starts_at)) : '') + (s.late_cancel ? ' <span class="wk-red">แจ้งช้า — นับเป็นครั้งที่ใช้ไป</span>'
+      : s.cancel_by === 'student' ? ' <span class="te-sub">แจ้งล่วงหน้า — ไม่นับเป็นครั้งที่ใช้ไป</span>' : '');
+  }
+  const tn = teTName(s.teacher_id);
+  const here = d.open && d.fv.sid === s.id;
+  let h = '<div class="te-ss" data-sid="' + escapeHtml(s.id) + '"><div class="te-pills">' + st + '</div><div>' + when + '</div>' +
+    '<div class="te-sub">' + (tn ? 'ครู ' + escapeHtml(tn) : '') + (s.room ? ' · ห้อง ' + escapeHtml(s.room) : '') +
+    (s.status === 'scheduled' ? ' · ' + (s.gcal_uid ? 'ผูกปฏิทินแล้ว ✓' : 'ยังไม่ผูกปฏิทิน') : '') + '</div>' +
+    (s.cancel_reason ? '<div class="te-sub">เหตุผล: ' + escapeHtml(s.cancel_reason) + '</div>' : '');
+  const canNote = teCanNote(r, s);
+  if (canNote && d.notes.has(s.id) && !(d.open === 'note' && here)) h += '<div class="te-note" data-note="' + escapeHtml(s.id) + '"><span class="te-sub">บันทึกการสอน</span><div>' + escapeHtml(d.notes.get(s.id)).replace(/\n/g, '<br>') + '</div></div>';
+  if (here) {
+    if (d.open === 'done') h += teFormDone(s, d);
+    else if (d.open === 'cancel') h += teFormCancel(r, s, d);
+    else if (d.open === 'note') h += teFormNote(s, d);
+    else if (d.open === 'link') h += teFormLink(s, d);
+  } else {
+    let a = '';
+    if (s.status === 'scheduled') {
+      if (teCanDone(r, s)) a += teBtn('open', 'ทำเครื่องหมายสอนแล้ว', { k: 'done', sid: s.id, sm: true });
+      a += teBtn('open', 'ยกเลิก / ไม่มา', { k: 'cancel', sid: s.id, sm: true });
+      a += s.gcal_uid ? teBtn('unlink', 'ถอดนัดปฏิทิน', { sid: s.id, sm: true }) : teBtn('open', 'ผูกนัดปฏิทิน', { k: 'link', sid: s.id, sm: true });
+    }
+    if (canNote) a += teBtn('open', d.notes.has(s.id) ? 'แก้บันทึกการสอน' : 'บันทึกการสอน', { k: 'note', sid: s.id, sm: true });
+    if (a) h += '<div class="te-acts">' + a + '</div>';
+  }
+  return h + '</div>';
+}
+function teFormDone(s, d) {
+  return '<div class="te-form" id="teFormDone"><h4>ทำเครื่องหมายสอนแล้ว</h4>' + teIn('date', 'วันที่สอน', { type: 'date', max: todayBangkok() }) +
+    teIn('hours', 'ชั่วโมงที่สอนจริง (เว้นว่าง = ' + Number(s.hours) + ' ชม. ตามที่นัด)', { inputmode: 'decimal' }) +
+    '<div class="hint">ครั้งแรกที่สอนแล้ว ระบบตั้งวันเริ่มเรียนและวันหมดอายุให้เอง</div>' + teFormBar('done', 'ยืนยันสอนแล้ว') + '</div>';
+}
+function teLateOf(startsIso, notifiedYmd) {      // กติกาเดียวกับ teach_is_late_cancel (วันปฏิทินไทย) — ไว้แสดงตัวอย่างก่อนกด · ฐานเป็นผู้ตัดสินจริง
+  if (!startsIso || !notifiedYmd) return true;
+  const a = teYmd(startsIso).split('-').map(Number), b = notifiedYmd.split('-').map(Number);
+  return Math.round((Date.UTC(a[0], a[1] - 1, a[2]) - Date.UTC(b[0], b[1] - 1, b[2])) / 86400000) < TE_LATE_DAYS;
+}
+function teCancelPreview(s, fv) {
+  if (fv.as === 'no_show') return '<span class="wk-red">ไม่มาเรียน = นับเป็นครั้งที่ใช้ไปเสมอ</span>';
+  if (fv.by !== 'student') return '<span class="te-sub">ครู/ร้านยกเลิก = ไม่นับเป็นครั้งที่ใช้ไป</span>';
+  return teLateOf(s.starts_at, fv.notified)
+    ? '<span class="wk-red">แจ้งช้ากว่า ' + TE_LATE_DAYS + ' วันก่อนวันนัด (หรือหลังเวลานัด) — นับเป็นครั้งที่ใช้ไป</span>'
+    : '<span class="te-sub">แจ้งล่วงหน้าอย่างน้อย ' + TE_LATE_DAYS + ' วัน — ไม่นับเป็นครั้งที่ใช้ไป</span>';
+}
+function teFormCancel(r, s, d) {
+  const fv = d.fv;
+  return '<div class="te-form" id="teFormCancel"><h4>ยกเลิก / ไม่มา</h4>' +
+    teSel('as', 'เกิดอะไรขึ้น', [['cancelled', 'ยกเลิกรอบนี้'], ['no_show', 'นักเรียนไม่มาเรียน']], { struct: true }) +
+    (fv.as === 'cancelled' ? teSel('by', 'ใครยกเลิก', [['student', 'นักเรียน'], ['teacher', 'ครู'], ['shop', 'ร้าน']], { struct: true }) : '') +
+    (fv.as === 'cancelled' && fv.by === 'student' ? teIn('notified', 'นักเรียนแจ้งเมื่อวันที่', { type: 'date', max: todayBangkok() }) : '') +
+    teIn('reason', 'เหตุผล (ไม่เกิน 300 ตัวอักษร · เว้นว่างได้)', { maxlength: 300 }) +
+    '<div id="teCancelPrev" role="status">' + teCancelPreview(s, fv) + '</div>' + teFormBar('cancel', 'ยืนยัน', true) + '</div>';
+}
+function teFormNote(s, d) {
+  return '<div class="te-form" id="teFormNote"><h4>บันทึกการสอน</h4>' +
+    teTa('text', 'บันทึก (ไม่เกิน 4,000 ตัวอักษร · เว้นว่าง = ลบบันทึก)', { rows: 5, maxlength: 4000, hint: 'เห็นเฉพาะเจ้าของและครูของนักเรียนคนนี้ — ผู้ดูแล/พนักงานคนอื่นไม่เห็น' }) +
+    teFormBar('note', 'บันทึก') + '</div>';
+}
+function teGcalChoices(s, d) {
+  const lk = d.link;
+  if (!lk || lk.sid !== s.id) return [];
+  const tname = teTName(s.teacher_id).toLowerCase(), t0 = Date.parse(s.starts_at);
+  const rows = lk.events.map(ev => {
+    const p = parseGcalTitle(ev.title), t = Date.parse(ev.start + ':00+07:00');
+    return { ev, teacher: p.teacher, room: p.room, title: p.title, diff: Math.abs(t - t0) / 60000, ok: !!p.teacher && p.teacher.toLowerCase() === tname };
+  });
+  const same = rows.filter(x => x.ok);
+  return (same.length ? same : rows).sort((a, b) => a.diff - b.diff).map(x => Object.assign(x, { fallback: !same.length }));
+}
+function teFormLink(s, d) {
+  const lk = d.link && d.link.sid === s.id ? d.link : null;
+  let h = '<div class="te-form" id="teFormLink"><h4>ผูกกับนัดในปฏิทิน</h4>';
+  if (!lk || lk.loading) h += '<div class="empty">กำลังดึงนัดจากปฏิทิน…</div>';
+  else if (lk.error) h += '<div class="alert alert-red wk-red" role="alert">' + escapeHtml(lk.error) + '</div>';
+  else {
+    const ch = teGcalChoices(s, d);
+    if (!ch.length) h += '<div class="empty">ไม่พบนัดในปฏิทินของวันนั้น</div>';
+    else {
+      if (ch[0].fallback) h += '<div class="hint wk-red">ไม่พบนัดของครู ' + escapeHtml(teTName(s.teacher_id)) + ' ในวันนั้น — แสดงนัดทั้งหมดของวันนั้นให้เลือก</div>';
+      h += '<div class="te-plist">' + ch.map((x, i) => '<div class="te-prow"><span><strong>' + escapeHtml(x.ev.start.slice(11, 16)) + '–' + escapeHtml(x.ev.end.slice(11, 16)) + '</strong>' +
+        (x.diff <= TE_GCAL_NEAR_MIN ? ' <span class="st st-ok">เวลาตรง</span>' : '') + '</span><span>' + escapeHtml(x.title) + '</span>' +
+        '<span class="te-sub">' + (x.teacher ? 'ครู ' + escapeHtml(x.teacher) : '') + (x.room ? ' · ' + escapeHtml(x.room) : '') + '</span>' +
+        teBtn('link-pick', 'ผูกนัดนี้', { i, sm: true }) + '</div>').join('') + '</div>';
+    }
+  }
+  return h + '<div class="toolbar">' + teBtn('close-form', 'ปิด') + '</div></div>';
+}
+function teDetSessHtml(r, d, cap) {
+  let h = '<section class="te-dsec" id="teDetSess"><h3>รอบเรียน <span class="te-sub">' + (d.loaded ? d.sess.length + ' รอบ' : '') + '</span></h3>';
+  if (!d.loaded) return h + '<div class="empty">กำลังโหลด…</div></section>';
+  h += d.sess.length ? d.sess.map(s => teSessRowHtml(r, d, s, cap)).join('') : '<div class="empty">ยังไม่มีรอบเรียน</div>';
+  if (r.closed_on) return h + '<div class="hint">การลงเรียนนี้ปิดแล้ว — นัดรอบใหม่ไม่ได้</div></section>';
+  return h + (d.open === 'sched' ? teFormSched(r, d) : '<div class="toolbar">' + teBtn('open', '+ นัดรอบเรียน', { k: 'sched' }) + '</div>') + '</section>';
+}
+function teFormSched(r, d) {
+  const ids = new Set(te.cat ? te.cat.links.filter(l => l.course_id === r.course_id).map(l => l.teacher_id) : []);
+  ids.add(r.teacher_id);
+  const opts = (te.cat ? te.cat.teachers.filter(t => ids.has(t.id) && t.is_active !== false) : []).map(t => [t.id, t.display_name]);
+  if (!opts.some(o => o[0] === r.teacher_id)) opts.unshift([r.teacher_id, r.teacher_name || '']);
+  return '<div class="te-form" id="teFormSched"><h4>นัดรอบเรียน</h4>' + teSel('teacher', 'ครูผู้สอน', opts) +
+    teIn('date', 'วันที่', { type: 'date' }) + teIn('start', 'เวลาเริ่ม', { type: 'time' }) + teIn('end', 'เวลาจบ', { type: 'time' }) +
+    teIn('room', 'ห้อง (ไม่เกิน 40 ตัวอักษร · เว้นว่างได้)', { maxlength: 40 }) +
+    teIn('hours', 'ชั่วโมง (เว้นว่าง = ตามคอร์ส ' + (Number(r.hours_total) / Number(r.sessions_total)).toFixed(2).replace(/\.?0+$/, '') + ' ชม./ครั้ง)', { inputmode: 'decimal' }) +
+    '<div class="hint">ครูมีนัดซ้อนกัน = ระบบปฏิเสธ · เกินจำนวนครั้ง/เกินวันหมดอายุ = เตือนแต่บันทึกให้</div>' + teFormBar('sched', 'บันทึกนัด') + '</div>';
+}
+
+function teDetManageHtml(r, d, cap) {
+  if (!cap.fix && !cap.close && !cap.reopen) return '';
+  let h = '<section class="te-dsec" id="teDetManage"><h3>จัดการการลงเรียน</h3>';
+  if (d.open === 'fix') h += teFormFix(r, d);
+  else if (d.open === 'close') h += teFormClose(r, d);
+  else {
+    h += '<div class="toolbar">' + (cap.fix ? teBtn('open', 'แก้ข้อมูลการลงเรียน', { k: 'fix' }) : '') +
+      (cap.close ? teBtn('open', 'ปิดคอร์ส', { k: 'close', danger: true }) : '') + (cap.reopen ? teBtn('reopen', 'เปิดคอร์สกลับ') : '') + '</div>';
+  }
+  return h + '</section>';
+}
+function teFormFix(r, d) {
+  const ids = new Set(te.cat ? te.cat.links.filter(l => l.course_id === r.course_id).map(l => l.teacher_id) : []);
+  ids.add(r.teacher_id);
+  const opts = (te.cat ? te.cat.teachers.filter(t => ids.has(t.id) && t.is_active !== false) : []).map(t => [t.id, t.display_name]);
+  if (!opts.some(o => o[0] === r.teacher_id)) opts.unshift([r.teacher_id, r.teacher_name || '']);
+  const course = te.cat && te.cat.courses.find(c => c.id === r.course_id);
+  const tracks = course && Array.isArray(course.tracks) ? course.tracks.map(t => t && t.name).filter(Boolean) : [];
+  if (r.track && tracks.indexOf(r.track) < 0) tracks.unshift(r.track);
+  const eq = TE_EQUIP.slice();
+  if (r.equipment && eq.indexOf(r.equipment) < 0) eq.unshift(r.equipment);
+  return '<div class="te-form" id="teFormFix"><h4>แก้ข้อมูลการลงเรียน</h4>' + teSel('teacher', 'ครูรับผิดชอบ', opts) +
+    teIn('started', 'วันเริ่มเรียน', { type: 'date', max: todayBangkok(), hint: 'เปลี่ยนแล้วระบบคำนวณวันหมดอายุใหม่ · ล้างไม่ได้ถ้ามีรอบที่สอนแล้ว' }) +
+    (tracks.length ? teSel('track', 'แนวที่เลือก', [['', '— ไม่ระบุ —']].concat(tracks.map(t => [t, t]))) : '') +
+    teSel('equip', 'ชุดอุปกรณ์', [['', '— ไม่ระบุ —']].concat(eq.map(t => [t, t]))) +
+    (d.hasMoney ? teIn('price', 'ราคาที่ตกลง (บาท)' + (r.source === 'backfill' ? ' — เว้นว่าง = ไม่ทราบ' : ''), { inputmode: 'decimal' }) : '') +
+    (r.source === 'backfill' ? '<div class="field"><label class="lbl" style="display:flex;gap:10px;align-items:center;min-height:44px;"><input type="checkbox" id="teD_unknown" data-df="unknown" data-struct="1"' +
+      (d.fv.unknown ? ' checked' : '') + '> ชำระครบแล้ว (ไม่ทราบวันที่/ยอด)</label></div>' : '') +
+    teTa('note', 'หมายเหตุ (ไม่เกิน 500 ตัวอักษร · ห้ามใส่เบอร์โทร/เลขบัญชี)', { rows: 3, maxlength: 500 }) +
+    '<div class="wk-red">ทุกการแก้ไขถูกบันทึกในบันทึกการเปลี่ยนแปลง (ค่าเดิม → ค่าใหม่)</div>' + teFormBar('fix', 'บันทึกการแก้') + '</div>';
+}
+function teFormClose(r, d) {
+  const n = d.sess.filter(s => s.status === 'scheduled').length;
+  return '<div class="te-form" id="teFormClose"><h4>ปิดคอร์สก่อนจบ</h4>' +
+    teSel('reason', 'เหตุผล', [['', '— เลือกเหตุผล —']].concat(Object.entries(TE_CLOSED))) +
+    teIn('on', 'วันที่ปิด', { type: 'date', max: todayBangkok() }) +
+    '<div class="wk-red" id="teCloseWarn">ปิดแล้วนัดรอบใหม่/บันทึกชำระเพิ่มไม่ได้' + (n ? ' · รอบที่นัดไว้ค้างอยู่ ' + n + ' รอบจะถูกยกเลิกโดยร้าน (ไม่นับเป็นครั้งที่ใช้ไป)' : '') + '</div>' +
+    teFormBar('close', 'ปิดคอร์ส…', true) + '</div>';
+}
+
+function teDetHtml(r, d) {
+  const cap = teCaps(r);
+  let h = '';
+  if (d.ok) h += '<div class="alert alert-plain" id="teDetOk" role="status" style="border-color:var(--ok);color:var(--ok);background:var(--ok-soft);">' + escapeHtml(d.ok) + '</div>';
+  if (d.err) h += '<div class="alert alert-red wk-red" id="teDetErr" role="alert">' + escapeHtml(d.err) + '</div>';
+  if (d.warn.length) h += '<div class="alert alert-red" id="teDetWarn" role="alert">' + d.warn.map(w => '<div class="wk-red">' + escapeHtml(w) + '</div>').join('') + '</div>';
+  if (d.error) h += '<div class="alert alert-red wk-red" id="teDetLoadErr" role="alert">' + escapeHtml(d.error) + '</div>';
+  return h + teDetSummaryHtml(r) + teDetPayHtml(r, d, cap) + teDetExtHtml(r, d, cap) + teDetSessHtml(r, d, cap) + teDetManageHtml(r, d, cap);
+}
+function teDetRender() {
+  const d = te.det, root = document.getElementById('teDet');
+  if (!d) return;
+  if (!root || root.dataset.eid !== d.id) { te.det = null; return; }          // แผงถูกหมวดอื่น/การปิดแผงเอาไปแล้ว
+  const r = te.rows.find(x => x.id === d.id);
+  if (!r) { root.innerHTML = '<div class="empty">ไม่พบการลงเรียนนี้ (อาจถูกลบหรือสิทธิ์ไม่ถึง)</div>'; return; }
+  const act = document.activeElement;
+  const keep = act && root.contains(act) && act.id ? { id: act.id, s: act.selectionStart, e: act.selectionEnd } : null;
+  root.innerHTML = teDetHtml(r, d);
+  if (keep) {
+    const el = document.getElementById(keep.id);
+    if (el) { el.focus(); try { if (keep.s != null) el.setSelectionRange(keep.s, keep.e); } catch (e) { /* ชนิด input ที่ไม่รองรับ selection */ } }
+  }
+}
+
+// ── ทำงาน ──
+function teDetOpenForm(k, sid) {
+  const d = te.det, r = te.rows.find(x => x.id === d.id);
+  if (!r) return;
+  const today = todayBangkok();
+  d.open = k; d.err = ''; d.ok = ''; d.warn = []; d.link = null;
+  const s = sid ? d.sess.find(x => x.id === sid) : null;
+  d.fv = { sid: sid || '' };
+  if (k === 'pay') Object.assign(d.fv, { date: today, amount: '', method: 'transfer', note: '', req: teUuid() });
+  else if (k === 'refund') Object.assign(d.fv, { date: today, amount: '', note: '', req: teUuid() });
+  else if (k === 'payfix') {
+    const p = d.pays.find(x => x.id === sid);
+    if (p) Object.assign(d.fv, { id: p.id, date: p.paid_on, amount: String(Math.abs(Number(p.amount))), method: p.method, note: p.note || '' });
+  }
+  else if (k === 'sched') Object.assign(d.fv, { teacher: r.teacher_id, date: '', start: '', end: '', room: '', hours: '' });
+  else if (k === 'done') { const ymd = s && s.starts_at ? teYmd(s.starts_at) : today; Object.assign(d.fv, { date: ymd > today ? today : ymd, hours: '' }); }
+  else if (k === 'cancel') Object.assign(d.fv, { as: 'cancelled', by: 'student', notified: today, reason: '' });
+  else if (k === 'note') Object.assign(d.fv, { text: d.notes.get(sid) || '' });
+  else if (k === 'fix') Object.assign(d.fv, { teacher: r.teacher_id, started: r.started_on || '', track: r.track || '', equip: r.equipment || '',
+    note: r.note || '', price: d.price != null ? String(d.price) : '', unknown: !!r.paid_unknown });
+  else if (k === 'close') Object.assign(d.fv, { reason: '', on: today });
+  else if (k === 'ext') Object.assign(d.fv, { until: '', note: '' });
+  else if (k === 'extreq') Object.assign(d.fv, { until: '', reason: '' });
+  else if (k === 'decide') { const q = d.reqs.find(x => x.id === sid); Object.assign(d.fv, { until: q ? q.requested_until : '', note: '' }); }
+  if (k === 'link') teDetLinkLoad(sid);
+  teDetRender();
+  const first = document.querySelector('#teDet .te-form [data-df]');
+  if (first && !coarsePointer()) first.focus();
+}
+function coarsePointer() { return !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches); }
+function teDetFail(msg) { const d = te.det; d.err = msg; d.ok = ''; d.warn = []; teDetRender(); return false; }
+async function teDetRun(label, fn) {
+  const d = te.det;
+  if (!d || d.busy) return;
+  const uid = currentUserId, cur = te;
+  d.busy = label; d.err = ''; d.ok = ''; d.warn = [];
+  teDetRender();
+  try {
+    const res = await fn();
+    if (uid !== currentUserId || te !== cur || te.det !== d) return;
+    d.busy = ''; d.ok = (res && res.ok) || ''; d.warn = (res && res.warn) || [];
+    d.open = null; d.fv = {}; d.link = null;
+    teDetRender();
+    loadTeach();                                  // รายการ + แผงนี้ (loadTeach โหลดแผงซ้ำเอง)
+  } catch (e) {
+    if (uid !== currentUserId || te !== cur || te.det !== d) return;
+    console.error('[Teach detail]', label, e && e.code || '');
+    d.busy = ''; d.err = 'ไม่สำเร็จ: ' + teErrText(e);
+    teDetRender();
+  }
+}
+const teRpc = async (fn, args) => { const { data, error } = await db.rpc(fn, args); if (error) throw error; return data; };
+const teTs = (ymd, hm) => ymd + 'T' + hm + ':00+07:00';
+
+function teDetSubmit(k) {
+  const d = te.det, r = te.rows.find(x => x.id === d.id), fv = d.fv, today = todayBangkok();
+  if (!r) return;
+  if (k === 'pay') {
+    const amt = teMoney(fv.amount);
+    if (amt === null || Number.isNaN(amt) || amt <= 0) return teDetFail('ใส่ยอดชำระ (มากกว่า 0)');
+    if (!fv.date) return teDetFail('ใส่วันที่ชำระ');
+    if (fv.date > today) return teDetFail('วันที่ชำระต้องไม่เกินวันนี้');
+    if (String(fv.note).length > 200) return teDetFail('หมายเหตุยาวเกิน 200 ตัวอักษร');
+    return teDetRun('pay', async () => {
+      const res = await teRpc('teach_payment_record', { p_enrollment: d.id, p_paid_on: fv.date, p_amount: amt, p_method: fv.method, p_request_id: fv.req, p_slip_path: null, p_note: String(fv.note).trim() || null });
+      return { ok: res && res.duplicate ? 'รายการชำระนี้บันทึกไว้แล้วก่อนหน้านี้ (ระบบไม่บันทึกซ้ำ)' : 'บันทึกการชำระแล้ว ✓' };
+    });
+  }
+  if (k === 'refund') {
+    const amt = teMoney(fv.amount), net = d.pays.reduce((a, p) => a + Number(p.amount), 0);
+    if (amt === null || Number.isNaN(amt) || amt <= 0) return teDetFail('ใส่ยอดที่คืน (มากกว่า 0 — ใส่เป็นบวก)');
+    if (!fv.date) return teDetFail('ใส่วันที่คืนเงิน');
+    if (fv.date > today) return teDetFail('วันที่คืนเงินต้องไม่เกินวันนี้');
+    if (amt > net) return teDetFail('ยอดคืนเกินยอดที่ชำระสะสม');
+    if (String(fv.note).length > 200) return teDetFail('หมายเหตุยาวเกิน 200 ตัวอักษร');
+    return teDetRun('refund', async () => {
+      const res = await teRpc('teach_payment_refund', { p_enrollment: d.id, p_paid_on: fv.date, p_amount: amt, p_request_id: fv.req, p_note: String(fv.note).trim() || null });
+      return { ok: res && res.duplicate ? 'รายการคืนเงินนี้บันทึกไว้แล้วก่อนหน้านี้ (ระบบไม่บันทึกซ้ำ)' : 'บันทึกการคืนเงินแล้ว ✓' };
+    });
+  }
+  if (k === 'payfix') {
+    const amt = teMoney(fv.amount);
+    if (amt === null || Number.isNaN(amt) || amt <= 0) return teDetFail('ยอดต้องมากกว่า 0 (ใส่เป็นบวก)');
+    if (!fv.date) return teDetFail('ใส่วันที่');
+    if (fv.date > today) return teDetFail('วันที่ต้องไม่เกินวันนี้');
+    if (String(fv.note).length > 200) return teDetFail('หมายเหตุยาวเกิน 200 ตัวอักษร');
+    const p = d.pays.find(x => x.id === fv.id);
+    return teDetRun('payfix', async () => {
+      await teRpc('teach_payment_fix', { p_payment: fv.id, p_paid_on: fv.date, p_amount: amt, p_method: p && p.kind === 'refund' ? null : fv.method, p_note: String(fv.note).trim(), p_delete: false });
+      return { ok: 'แก้รายการชำระแล้ว ✓' };
+    });
+  }
+  if (k === 'sched') {
+    if (!fv.teacher) return teDetFail('เลือกครูผู้สอน');
+    if (!fv.date || !fv.start || !fv.end) return teDetFail('ใส่วันที่ เวลาเริ่ม และเวลาจบ');
+    if (fv.end <= fv.start) return teDetFail('เวลาจบต้องหลังเวลาเริ่ม');
+    const hrs = teMoney(fv.hours);
+    if (hrs !== null && (Number.isNaN(hrs) || hrs <= 0 || hrs > 12)) return teDetFail('ชั่วโมงต้องมากกว่า 0 และไม่เกิน 12');
+    return teDetRun('sched', async () => {
+      const res = await teRpc('teach_session_schedule', { p_enrollment: d.id, p_teacher: fv.teacher, p_starts: teTs(fv.date, fv.start), p_ends: teTs(fv.date, fv.end), p_room: String(fv.room).trim() || null, p_hours: hrs });
+      const warn = ((res && res.warnings) || []).map(w => TE_WARN[w] || ('คำเตือนจากระบบ (รหัส ' + String(w).slice(0, 40) + ')'));
+      return { ok: 'นัดรอบเรียนแล้ว ✓', warn };
+    });
+  }
+  if (k === 'done') {
+    const hrs = teMoney(fv.hours);
+    if (!fv.date) return teDetFail('ใส่วันที่สอน');
+    if (fv.date > today) return teDetFail('วันที่สอนต้องไม่เกินวันนี้');
+    if (hrs !== null && (Number.isNaN(hrs) || hrs <= 0 || hrs > 12)) return teDetFail('ชั่วโมงต้องมากกว่า 0 และไม่เกิน 12');
+    return teDetRun('done', async () => {
+      await teRpc('teach_session_done', { p_session: fv.sid, p_held_on: fv.date, p_hours: hrs });
+      return { ok: 'ทำเครื่องหมายสอนแล้ว ✓' };
+    });
+  }
+  if (k === 'cancel') {
+    const s = d.sess.find(x => x.id === fv.sid);
+    if (fv.as === 'cancelled' && fv.by === 'student' && !fv.notified) return teDetFail('ใส่วันที่นักเรียนแจ้ง');
+    if (fv.as === 'cancelled' && fv.by === 'student' && fv.notified > today) return teDetFail('วันที่แจ้งต้องไม่เกินวันนี้');
+    if (String(fv.reason).length > 300) return teDetFail('เหตุผลยาวเกิน 300 ตัวอักษร');
+    return teDetRun('cancel', async () => {
+      const res = await teRpc('teach_session_cancel', { p_session: fv.sid, p_as: fv.as, p_by: fv.as === 'cancelled' ? fv.by : null,
+        p_notified_at: fv.as === 'cancelled' && fv.by === 'student' && fv.notified !== today ? teTs(fv.notified, '12:00') : null, p_reason: String(fv.reason).trim() || null });
+      const counted = res && res.counted;
+      return { ok: (fv.as === 'no_show' ? 'บันทึกว่านักเรียนไม่มา' : 'ยกเลิกรอบแล้ว') + (counted ? ' — นับเป็นครั้งที่ใช้ไป' : ' — ไม่นับเป็นครั้งที่ใช้ไป') };
+    });
+  }
+  if (k === 'note') {
+    const txt = String(fv.text);
+    if (txt.length > 4000) return teDetFail('บันทึกยาวเกิน 4,000 ตัวอักษร');
+    return teDetRun('note', async () => {
+      const saved = await teRpc('teach_note_save', { p_session: fv.sid, p_note: txt });
+      return { ok: saved ? 'บันทึกการสอนแล้ว ✓' : 'ลบบันทึกการสอนแล้ว' };
+    });
+  }
+  if (k === 'fix') {
+    const patch = {};
+    if (fv.teacher && fv.teacher !== r.teacher_id) patch.teacher_id = fv.teacher;
+    if ((fv.started || null) !== (r.started_on || null)) {
+      if (fv.started && fv.started > today) return teDetFail('วันเริ่มเรียนต้องไม่เกินวันนี้');
+      patch.started_on = fv.started || null;
+    }
+    if ((fv.track || null) !== (r.track || null)) patch.track = fv.track || null;
+    if ((fv.equip || null) !== (r.equipment || null)) patch.equipment = fv.equip || null;
+    if ((String(fv.note).trim() || null) !== (r.note || null)) {
+      if (String(fv.note).length > 500) return teDetFail('หมายเหตุยาวเกิน 500 ตัวอักษร');
+      patch.note = String(fv.note).trim() || null;
+    }
+    if (r.source === 'backfill' && !!fv.unknown !== !!r.paid_unknown) patch.paid_unknown = !!fv.unknown;
+    if (d.hasMoney) {
+      const np = teMoney(fv.price);
+      if (Number.isNaN(np) || (np !== null && np < 0)) return teDetFail('ราคาที่ตกลงต้องเป็นตัวเลขไม่ติดลบ');
+      if (np !== d.price) {
+        if (np === null && r.source !== 'backfill') return teDetFail('ต้องมีราคาที่ตกลง (เว้นว่างได้เฉพาะการลงเรียนที่กรอกย้อนหลัง)');
+        patch.price_agreed = np;
+      }
+    }
+    if (!Object.keys(patch).length) return teDetFail('ยังไม่ได้แก้อะไร');
+    return teDetRun('fix', async () => {
+      await teRpc('teach_enroll_fix', { p_id: d.id, p_patch: patch });
+      return { ok: 'แก้ข้อมูลการลงเรียนแล้ว ✓' };
+    });
+  }
+  if (k === 'close') {
+    if (!fv.reason) return teDetFail('เลือกเหตุผลที่ปิดคอร์ส');
+    if (!fv.on) return teDetFail('ใส่วันที่ปิด');
+    if (fv.on > today) return teDetFail('วันที่ปิดต้องไม่เกินวันนี้');
+    const n = d.sess.filter(s => s.status === 'scheduled').length;
+    askConfirm('ปิดคอร์ส', '<div class="alert alert-red wk-red">ปิดคอร์สของ “' + escapeHtml(teCustName(r.customer_id)) + '” — ' + escapeHtml(TE_CLOSED[fv.reason] || '') + '</div>' +
+      '<p class="wk-red" id="teCloseConfirmN">' + (n ? 'รอบที่นัดไว้ค้างอยู่ ' + n + ' รอบ จะถูกยกเลิกโดยร้าน (ไม่นับเป็นครั้งที่ใช้ไป)' : 'ไม่มีรอบที่นัดไว้ค้างอยู่') + '</p>' +
+      '<p>ปิดแล้วนัดรอบใหม่และบันทึกชำระเพิ่มไม่ได้ · เจ้าของร้านเปิดกลับได้ภายหลัง (รอบที่ยกเลิกไปแล้วไม่ถูกคืนให้อัตโนมัติ)</p>', 'ยืนยันปิดคอร์ส', async () => {
+      closeConfirm();
+      if (te.det !== d) return;
+      await teDetRun('close', async () => {
+        await teRpc('teach_enroll_close', { p_id: d.id, p_reason: fv.reason, p_closed_on: fv.on });
+        return { ok: 'ปิดคอร์สแล้ว' + (n ? ' · ยกเลิกรอบที่นัดไว้ ' + n + ' รอบ' : '') };
+      });
+    });
+    return false;
+  }
+  if (k === 'ext') {
+    if (!fv.until) return teDetFail('ใส่วันที่ที่จะขยายถึง');
+    if (String(fv.note).length > 500) return teDetFail('หมายเหตุยาวเกิน 500 ตัวอักษร');
+    if (r.effective_expiry && fv.until <= r.effective_expiry) return teDetFail('วันที่ต้องเกินวันหมดอายุปัจจุบัน');
+    return teDetRun('ext', async () => {
+      await teRpc('teach_enroll_extend', { p_id: d.id, p_until: fv.until, p_note: String(fv.note).trim() || null });
+      return { ok: 'ขยายอายุแล้ว ✓' };
+    });
+  }
+  if (k === 'extreq') {
+    if (!fv.until) return teDetFail('ใส่วันที่ที่ขอขยายถึง');
+    if (!String(fv.reason).trim()) return teDetFail('ใส่เหตุผลที่ขอขยายอายุ');
+    if (String(fv.reason).length > 500) return teDetFail('เหตุผลยาวเกิน 500 ตัวอักษร');
+    if (r.effective_expiry && fv.until <= r.effective_expiry) return teDetFail('วันที่ขอต้องเกินวันหมดอายุปัจจุบัน');
+    return teDetRun('extreq', async () => {
+      await teRpc('teach_extend_request', { p_enrollment: d.id, p_until: fv.until, p_reason: String(fv.reason).trim() });
+      return { ok: 'ส่งคำขอขยายอายุแล้ว — รอเจ้าของตัดสิน' };
+    });
+  }
+  return false;
+}
+function teDetDecide(approve, sid) {
+  const d = te.det, r = te.rows.find(x => x.id === d.id), fv = d.fv;
+  if (!r) return;
+  if (approve) {
+    if (!fv.until) return teDetFail('ใส่วันที่ที่อนุมัติถึง');
+    if (r.effective_expiry && fv.until <= r.effective_expiry) return teDetFail('วันที่อนุมัติต้องเกินวันหมดอายุปัจจุบัน');
+  }
+  if (String(fv.note).length > 500) return teDetFail('หมายเหตุยาวเกิน 500 ตัวอักษร');
+  return teDetRun('decide', async () => {
+    await teRpc('teach_extend_decide', { p_request: sid, p_approve: approve, p_until: approve ? fv.until : null, p_note: String(fv.note).trim() || null });
+    return { ok: approve ? 'อนุมัติคำขอแล้ว ✓' : 'ปฏิเสธคำขอแล้ว' };
+  });
+}
+function teDetDelPay(pid) {
+  const d = te.det, p = d.pays.find(x => x.id === pid);
+  if (!p) return;
+  askConfirm('ลบรายการชำระ', '<div class="alert alert-red wk-red">ลบรายการ' + (p.kind === 'refund' ? 'คืนเงิน' : 'ชำระ') + 'วันที่ ' + fmtDate(p.paid_on) + ' — ยอดคงเหลือเปลี่ยนทันที</div>' +
+    '<p>ค่าเดิมเก็บไว้ในบันทึกการเปลี่ยนแปลง (activity log) แต่ลบแล้วกู้คืนที่หน้านี้ไม่ได้</p>', 'ยืนยันลบ', async () => {
+    closeConfirm();
+    if (te.det !== d) return;
+    await teDetRun('delpay', async () => {
+      await teRpc('teach_payment_fix', { p_payment: pid, p_delete: true });
+      return { ok: 'ลบรายการชำระแล้ว' };
+    });
+  });
+}
+function teDetReopen() {
+  const d = te.det, r = te.rows.find(x => x.id === d.id);
+  if (!r) return;
+  const n = d.sess.filter(s => s.status === 'cancelled' && s.cancel_by === 'shop' && s.cancel_reason === 'ปิดคอร์ส').length;
+  askConfirm('เปิดคอร์สกลับ', '<p>เปิดคอร์สของ “' + escapeHtml(teCustName(r.customer_id)) + '” กลับมาใช้งาน</p>' +
+    '<p class="wk-red" id="teReopenWarn">รอบที่ถูกยกเลิกตอนปิดคอร์ส' + (n ? ' (' + n + ' รอบ)' : '') + ' จะไม่ถูกคืนให้อัตโนมัติ — ต้องนัดรอบใหม่เอง</p>', 'ยืนยันเปิดกลับ', async () => {
+    closeConfirm();
+    if (te.det !== d) return;
+    await teDetRun('reopen', async () => {
+      const res = await teRpc('teach_enroll_reopen', { p_id: d.id });
+      const c = res && res.auto_cancelled_sessions;
+      return { ok: 'เปิดคอร์สกลับแล้ว' + (c ? ' · รอบที่ยกเลิกตอนปิด ' + c + ' รอบไม่ถูกคืน — นัดรอบใหม่เอง' : ''), warn: c ? ['รอบที่ยกเลิกตอนปิดคอร์ส ' + c + ' รอบไม่ถูกคืนอัตโนมัติ — ต้องนัดรอบใหม่เอง'] : [] };
+    });
+  });
+}
+async function teDetLinkLoad(sid) {
+  const d = te.det, s = d && d.sess.find(x => x.id === sid);
+  if (!s || !s.starts_at) return;
+  const uid = currentUserId, cur = te;
+  d.link = { sid, loading: true, events: [], error: '' };
+  const day = teYmd(s.starts_at);
+  const res = await callFn('gcal', { from: day, to: day });
+  if (uid !== currentUserId || te !== cur || te.det !== d || !d.link || d.link.sid !== sid) return;
+  if (res.error) {
+    d.link = { sid, loading: false, events: [], error: res.error.code === 'not_configured' ? 'ยังไม่ได้เชื่อมปฏิทิน Google — เจ้าของตั้งที่หน้า "ปฏิทิน"' : 'ดึงนัดจากปฏิทินไม่สำเร็จ: ' + (res.error.message || '') };
+  } else {
+    d.link = { sid, loading: false, events: (res.events || []).filter(ev => ev && !ev.all_day && ev.uid && ev.start && ev.end), error: '' };
+  }
+  teDetRender();
+}
+function teDetClick(e) {
+  const b = e.target.closest('[data-act]');
+  const d = te.det;
+  if (!b || !d || d.busy) return;
+  const act = b.dataset.act;
+  if (act === 'open') teDetOpenForm(b.dataset.k, b.dataset.sid || '');
+  else if (act === 'close-form') { d.open = null; d.fv = {}; d.link = null; d.err = ''; teDetRender(); }
+  else if (act === 'submit') teDetSubmit(b.dataset.k);
+  else if (act === 'decide-yes') teDetDecide(true, b.dataset.sid);
+  else if (act === 'decide-no') teDetDecide(false, b.dataset.sid);
+  else if (act === 'delpay') teDetDelPay(b.dataset.sid);
+  else if (act === 'reopen') teDetReopen();
+  else if (act === 'unlink') {
+    const sid = b.dataset.sid;
+    teDetRun('unlink', async () => { await teRpc('teach_gcal_unlink', { p_session: sid }); return { ok: 'ถอดนัดปฏิทินแล้ว' }; });
+  } else if (act === 'link-pick') {
+    const s = d.sess.find(x => x.id === d.fv.sid), ev = s && teGcalChoices(s, d)[Number(b.dataset.i)];
+    if (!ev) return;
+    teDetRun('link', async () => {
+      await teRpc('teach_gcal_link', { p_session: s.id, p_uid: ev.ev.uid, p_start: ev.ev.start + ':00+07:00' });
+      return { ok: 'ผูกนัดปฏิทินแล้ว ✓' };
+    });
+  }
+}
+function teDetInput(el) {
+  const d = te.det, k = el.dataset.df;
+  if (!d || !k) return;
+  d.fv[k] = el.type === 'checkbox' ? el.checked : el.value;
+  if (d.open === 'cancel' && (k === 'notified')) {                 // ตัวอย่างผลแจ้งช้า: แก้เฉพาะกล่องข้อความ ไม่วาดทั้งแผง (กันปุ่มหายตอนกดระหว่างโฟกัส)
+    const s = d.sess.find(x => x.id === d.fv.sid), pv = document.getElementById('teCancelPrev');
+    if (s && pv) pv.innerHTML = teCancelPreview(s, d.fv);
+  }
+}
+{
+  const body = document.getElementById('detailBody');
+  body.addEventListener('click', e => { if (e.target.closest('#teDet')) teDetClick(e); });
+  body.addEventListener('input', e => { if (e.target.closest('#teDet') && e.target.matches('[data-df]')) teDetInput(e.target); });
+  body.addEventListener('change', e => {
+    if (!e.target.closest('#teDet') || !e.target.matches('[data-df]')) return;
+    teDetInput(e.target);
+    if (e.target.matches('[data-struct]')) teDetRender();            // เปลี่ยนตัวเลือกที่ทำให้ฟอร์มเปลี่ยนรูป (ยกเลิก/ไม่มา · ใครยกเลิก)
+  });
+}
+
+// ── แท็บ "รอบเรียน" (นัดที่ยังไม่ทำเครื่องหมาย ตามเวลา) + แถวคลิกเปิดแผงรายละเอียด ──
+function teSessionsHtml() {
+  const scope = new Map(teVisible().map(r => [r.id, r]));
+  const now = Date.now(), weekEnd = now + TE_WEEK_DAYS * 86400000;
+  const all = te.sched.filter(s => scope.has(s.enrollment_id));
+  const unlinked = all.filter(s => !s.gcal_uid).length;
+  const list = te.schedOnly ? all.filter(s => !s.gcal_uid) : all;
+  const late = list.filter(s => Date.parse(s.starts_at) < now), week = list.filter(s => { const t = Date.parse(s.starts_at); return t >= now && t <= weekEnd; });
+  const later = list.filter(s => Date.parse(s.starts_at) > weekEnd);
+  const row = s => {
+    const r = scope.get(s.enrollment_id), over = Date.parse(s.starts_at) < now;
+    return '<div class="te-row te-srow" role="row" tabindex="0" data-eid="' + escapeHtml(s.enrollment_id) + '" data-sid="' + escapeHtml(s.id) + '">' +
+      '<div role="cell" class="te-c1"><div class="te-name">' + escapeHtml(teWhen(s.starts_at)) + '–' + teHm(s.ends_at) + '</div>' +
+      '<div class="te-sub">' + (s.gcal_uid ? 'ผูกปฏิทินแล้ว ✓' : 'ยังไม่ผูกปฏิทิน') + '</div>' + (over ? '<div class="wk-red">เลยเวลานัดแล้ว ยังไม่ได้ทำเครื่องหมาย</div>' : '') + '</div>' +
+      '<div role="cell" data-l="นักเรียน">' + escapeHtml(r ? teCustName(r.customer_id) : '—') + '</div>' +
+      '<div role="cell" data-l="คอร์ส">' + escapeHtml(r ? r.course_title : '—') + '</div>' +
+      '<div role="cell" data-l="ครู">' + escapeHtml(teTName(s.teacher_id) || (r ? r.teacher_name || '' : '')) + '</div>' +
+      '<div role="cell" data-l="ห้อง">' + escapeHtml(s.room || '—') + '</div></div>';
+  };
+  const group = (title, rows, empty) => '<div class="wk-group"><h3><span>' + escapeHtml(title) + ' <span class="n">' + rows.length + ' รอบ</span></span></h3>' +
+    '<div class="te-list">' + (rows.length ? rows.map(row).join('') : '<div class="empty">' + escapeHtml(empty) + '</div>') + '</div></div>';
+  return '<div class="te-bar"><label class="te-chk"><input type="checkbox" id="teSchedOnly"' + (te.schedOnly ? ' checked' : '') + '> เฉพาะที่ยังไม่ผูกปฏิทิน (' + unlinked + ')</label></div>' +
+    (late.length ? group('เลยเวลานัดแล้ว ยังไม่ได้ทำเครื่องหมาย', late, '') : '') +
+    group('สัปดาห์นี้ (' + TE_WEEK_DAYS + ' วันข้างหน้า)', week, 'ไม่มีรอบเรียนที่นัดไว้ใน ' + TE_WEEK_DAYS + ' วันข้างหน้า') +
+    group('ที่จะถึง', later, 'ไม่มีรอบเรียนที่นัดไว้ไกลกว่านั้น');
+}
+{
+  const body = document.getElementById('teBody');
+  const open = el => { const row = el.closest('.te-row[data-eid], .te-row[data-id]'); if (row) teDetOpen(row.dataset.eid || row.dataset.id); };
+  body.addEventListener('click', e => { if (!e.target.closest('input, label, button, a')) open(e.target); });
+  body.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.te-row')) { e.preventDefault(); open(e.target); } });
+  body.addEventListener('change', e => { if (e.target.id === 'teSchedOnly') { te.schedOnly = e.target.checked; renderTeach(); } });
+}
 
 // ===========================================================================
 // โอนไฟล์ — ถังโอนถ่ายไฟล์ภายในร้าน + คลัง Asset (#transfer · Alt+U · migration 049 + 050)

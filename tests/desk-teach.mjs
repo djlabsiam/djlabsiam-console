@@ -80,8 +80,8 @@ async function runTests() {
     && !CALLS.some(c => /^enrollment_(money|payments)$/.test(c.table || '')), CALLS.map(c => c.table).join());
   ok('ไม่เรียกฟังก์ชัน/ตารางสลิป (ปิดไว้หลัง feature flag)', !CALLS.some(c => /course-slips|teach_slip/.test(JSON.stringify(c))) && TE_SLIPS_ENABLED === false);
   ok('พนักงานที่ไม่ใช่ครู: ไม่มีตัวกรอง "ทุกคน/ของฉัน"', $('teWho').hidden === true);
-  ok('แท็บเริ่มที่ "สรุป" · แท็บมี 5 อัน: สรุป รอคิว กำลังเรียน หมดอายุ/จบ ลงเรียน/ย้อนหลัง', document.querySelector('#teTabs .mail-tab[aria-selected="true"]').dataset.tab === 'summary'
-    && [...document.querySelectorAll('#teTabs .mail-tab')].map(b => b.dataset.tab).join() === 'summary,queue,active,ended,enroll');
+  ok('แท็บเริ่มที่ "สรุป" · แท็บมี 6 อัน: สรุป รอคิว กำลังเรียน รอบเรียน หมดอายุ/จบ ลงเรียน/ย้อนหลัง', document.querySelector('#teTabs .mail-tab[aria-selected="true"]').dataset.tab === 'summary'
+    && [...document.querySelectorAll('#teTabs .mail-tab')].map(b => b.dataset.tab).join() === 'summary,queue,active,sessions,ended,enroll');
   ok('ไม่มีแท็บ "ค่าสอน" (เลื่อนไป 048)', !/ค่าสอน/.test($('teTabs').textContent));
 
   // ── 2. สรุป ───────────────────────────────────────────────────────────────

@@ -5,6 +5,9 @@
  *
  * ก้อน B เพิ่ม: courses · course_teachers · teachers · members · customers (insert) + ฟังก์ชัน teach_student_find / teach_enroll_create / teach_session_backfill / teach_payment_record (สำเนากติกาของ 047 เท่าที่หน้าจอพึ่ง)
  *   TEACH.created / sessions_bf / payments / newCust = สิ่งที่ถูกเขียน · TEACH.gateRpc = ค้างคำตอบของฟังก์ชัน · TEACH.fail.rpc_<ชื่อฟังก์ชัน> = ทำให้ฟังก์ชันนั้นล้ม
+ * ก้อน C เพิ่ม: enrollment_money · enrollment_payments · session_notes (RLS: เงิน = เจ้าของ/ผู้ดูแล/ครูของนักเรียน · บันทึกการสอน = เจ้าของ/ครูของรอบ · คำขอขยายอายุ = เจ้าของ/ครูผู้ขอ)
+ *   + ฟังก์ชัน teach_session_schedule/done/cancel · teach_note_save · teach_payment_refund/fix · teach_enroll_fix/close/reopen · teach_extend_request/decide · teach_enroll_extend · teach_gcal_link/unlink
+ *   TEACH.pay / money / notes / ext / sessions = ตารางจริงของฐานปลอม (RPC เขียนลงนี้ แล้ว recalc ตัวนับของ enrollment_overview ให้) · เทสต์ดักคำสั่งเขียนด้วย CALLS (op:'rpc')
  * ตัวควบคุมจากเทสต์: TEACH.seed() ใส่ข้อมูลตั้งต้น (สัมพัทธ์กับวันนี้ เวลาไทย) · TEACH.fail = { select, rpc } · TEACH.missing (ยังไม่รัน 047)
  *   TEACH.gate = Promise ที่ค้างคำตอบของ enrollment_overview · TEACH.subs = ตัวฟัง Realtime [{ name, table, cb }] · TEACH.status = { ชื่อช่อง: ตัวฟังสถานะ }
  *   TEACH.fireRt(table) ยิง Realtime · TEACH.loads = จำนวนครั้งที่ enrollment_overview ถูกอ่าน
@@ -64,12 +67,34 @@ const TEACH = { rows: [], profiles: [], sessions: [], ext: [], subs: [], status:
       R('e-xss', { customer_id: 'c9', course_title: '<b onmouseover=window.__xss=2>คอร์สแปลก</b>', teacher_name: '<i>ครู</i>', teacher_id: 't4', state: 'active', started_on: day(-10), expires_on: day(80), effective_expiry: day(80), sessions_done: 1, sessions_used: 1, sessions_remaining: 5 }),
     ];
     TEACH.profiles = [{ customer_id: 'c7', nickname: 'น้องดาว', is_minor: true }, { customer_id: 'c1', nickname: 'ชาย', is_minor: false }];
-    TEACH.sessions = [
-      { id: 's1', enrollment_id: 'e-active', teacher_id: 't1', status: 'scheduled', starts_at: at(2, '14:00'), ends_at: at(2, '16:00'), room: 'ห้องใหญ่', gcal_uid: 'uid-1' },
-      { id: 's2', enrollment_id: 'e-month', teacher_id: 't3', status: 'scheduled', starts_at: at(5, '10:00'), ends_at: at(5, '12:00'), room: 'ห้องเล็ก 1', gcal_uid: null },
-      { id: 's3', enrollment_id: 'e-soon', teacher_id: 't2', status: 'scheduled', starts_at: at(20, '10:00'), ends_at: at(20, '12:00'), room: null, gcal_uid: null },   // เกิน 7 วัน
+    TEACH.ext = [
+      { id: 'x1', enrollment_id: 'e-soon', requested_by: 't2', requested_until: day(35), reason: 'นักเรียนป่วยหลายสัปดาห์', status: 'pending', decision_note: null, approved_until: null, decided_at: null, created_at: new Date(Date.now() - 86400000).toISOString() },
+      { id: 'x2', enrollment_id: 'e-expired', requested_by: 't2', requested_until: day(20), reason: 'ติดสอบ', status: 'pending', decision_note: null, approved_until: null, decided_at: null, created_at: new Date(Date.now() - 2 * 86400000).toISOString() },
+      { id: 'x0', enrollment_id: 'e-active', requested_by: 't1', requested_until: day(60), reason: 'เดินทางต่างประเทศ', status: 'approved', decision_note: 'อนุมัติครั้งเดียว', approved_until: day(55), decided_at: new Date(Date.now() - 20 * 86400000).toISOString(), created_at: new Date(Date.now() - 22 * 86400000).toISOString() },
     ];
-    TEACH.ext = [{ id: 'x1', enrollment_id: 'e-soon', status: 'pending' }, { id: 'x2', enrollment_id: 'e-expired', status: 'pending' }];
+    // ก้อน C: ยอดเงิน/รายการชำระ (ไม่อยู่ใน view enrollment_overview) · รอบเรียนเต็มคอลัมน์ · บันทึกการสอน
+    TEACH.money = { 'e-active': 20000, 'e-soon': 18000, 'e-wait': 20000, 'e-queued': 20000, 'e-closed': 20000 };
+    const P = (id, enrollment_id, paid_on, amount, kind, method, note) => ({ id, enrollment_id, paid_on, amount, kind, method, note: note || null, request_id: 'rq-' + id, slip_path: null, created_at: paid_on + 'T05:00:00Z' });
+    TEACH.pay = [P('p1', 'e-active', day(-41), 20000, 'payment', 'transfer', 'งวดเดียว'), P('p2', 'e-soon', day(-86), 10000, 'payment', 'cash'), P('p3', 'e-soon', day(-60), 8000, 'payment', 'promptpay'),
+      P('p4', 'e-wait', day(-3), 5000, 'payment', 'transfer'), P('p5', 'e-queued', day(-9), 20000, 'payment', 'transfer'), P('p6', 'e-closed', day(-30), 20000, 'payment', 'card'), P('p7', 'e-closed', day(-4), -20000, 'refund', 'other', 'คืนเต็มจำนวน')];
+    const S = (id, enrollment_id, teacher_id, status, o) => Object.assign({ id, enrollment_id, teacher_id, status, starts_at: null, ends_at: null, held_on: null, hours: '2.00', room: null, cancel_by: null, notified_at: null,
+      late_cancel: false, cancel_reason: null, gcal_uid: null, gcal_start: null, created_at: '2026-01-01T00:00:00Z' }, o);
+    TEACH.sessions = [
+      S('s-d1', 'e-active', 't1', 'done', { held_on: day(-40), starts_at: at(-40, '14:00'), ends_at: at(-40, '16:00') }),
+      S('s-d2', 'e-active', 't1', 'done', { held_on: day(-20), starts_at: at(-20, '14:00'), ends_at: at(-20, '16:00') }),
+      S('s-d3', 'e-active', 't1', 'done', { held_on: day(-3), starts_at: at(-3, '14:00'), ends_at: at(-3, '16:00') }),
+      S('s1', 'e-active', 't1', 'scheduled', { starts_at: at(2, '14:00'), ends_at: at(2, '16:00'), room: 'ห้องใหญ่', gcal_uid: 'uid-1', gcal_start: at(2, '14:00') }),
+      S('s-m1', 'e-month', 't3', 'done', { held_on: day(-60), starts_at: at(-60, '10:00'), ends_at: at(-60, '12:00') }),
+      S('s-m2', 'e-month', 't3', 'done', { held_on: day(-30), starts_at: at(-30, '10:00'), ends_at: at(-30, '12:00') }),
+      S('s-m3', 'e-month', 't3', 'no_show', { starts_at: at(-15, '10:00'), ends_at: at(-15, '12:00'), cancel_by: 'student' }),
+      S('s2', 'e-month', 't3', 'scheduled', { starts_at: at(5, '10:00'), ends_at: at(5, '12:00'), room: 'ห้องเล็ก 1' }),
+      S('s-over', 'e-month', 't3', 'scheduled', { starts_at: at(-1, '10:00'), ends_at: at(-1, '12:00') }),
+      S('s3', 'e-soon', 't2', 'scheduled', { starts_at: at(20, '10:00'), ends_at: at(20, '12:00') }),
+      S('s-x1', 'e-done', 't1', 'cancelled', { starts_at: at(-50, '10:00'), ends_at: at(-50, '12:00'), cancel_by: 'student', late_cancel: true, cancel_reason: 'ป่วยกะทันหัน', notified_at: at(-50, '08:00') }),
+      S('s-x2', 'e-done', 't1', 'cancelled', { starts_at: at(-40, '10:00'), ends_at: at(-40, '12:00'), cancel_by: 'teacher', cancel_reason: 'ครูติดธุระ' }),
+      S('s-x3', 'e-closed', 't1', 'cancelled', { starts_at: at(-3, '10:00'), ends_at: at(-3, '12:00'), cancel_by: 'shop', cancel_reason: 'ปิดคอร์ส' }),
+    ];
+    TEACH.notes = [{ session_id: 's-d3', note: 'ฝึกสแครชเบสิกครั้งที่ 3 — ต้องซ้อมจังหวะเพิ่ม', written_by: 'u1' }, { session_id: 's-m2', note: 'บันทึกของครู Maniac เห็นเฉพาะเจ้าของและ Maniac', written_by: 'u-maniac' }];
     if (TEACH.seedB) TEACH.seedB();
   };
   TEACH.seed();
@@ -77,9 +102,9 @@ const TEACH = { rows: [], profiles: [], sessions: [], ext: [], subs: [], status:
   const who = c => c.session && c.session.user.id;
   const myTid = id => TID[id] || null;
   function builder(client, table) {
-    const st = { eq: [], gte: [], lte: [], order: null, limit: null, op: 'select', payload: null };
+    const st = { eq: [], gte: [], lte: [], inn: [], order: null, limit: null, op: 'select', payload: null, cols: '' };
     const q = {
-      select() { return q; },
+      select(c) { st.cols = c || ''; return q; }, in(c, v) { st.inn.push([c, v]); return q; },
       eq(c, v) { st.eq.push([c, v]); return q; }, gte(c, v) { st.gte.push([c, v]); return q; }, lte(c, v) { st.lte.push([c, v]); return q; },
       order(c, o) { st.order = { c, asc: !(o && o.ascending === false) }; return q; }, limit(n) { st.limit = n; return q; },
       insert(p) { st.op = 'insert'; st.payload = p; return q; }, update(p) { st.op = 'update'; st.payload = p; return q; }, delete() { st.op = 'delete'; return q; },
@@ -87,11 +112,13 @@ const TEACH = { rows: [], profiles: [], sessions: [], ext: [], subs: [], status:
     };
     async function run() {
       const me = who(client);
-      CALLS.push({ op: st.op, table, payload: st.payload, who: me, eq: st.eq });
+      CALLS.push({ op: st.op, table, payload: st.payload, who: me, eq: st.eq, cols: st.cols });
       if (TEACH.gate && table === 'enrollment_overview') await TEACH.gate;
+      if (TEACH.gateSess && table === 'class_sessions') await TEACH.gateSess;
       if (st.op !== 'select') return E('permission denied for table ' + table);
       if (table === 'enrollment_overview') TEACH.loads++;
       if (TEACH.fail.select && table === 'enrollment_overview') return E(TEACH.fail.select);
+      if (TEACH.fail.detail_sessions && table === 'class_sessions' && st.eq.some(([c]) => c === 'enrollment_id')) return E(TEACH.fail.detail_sessions);   // ล้มเฉพาะตอนโหลดรอบของแผงรายละเอียด
       if (TEACH.missing) return E('relation "public.' + table + '" does not exist');
       // RLS: ทีมงานที่ใช้งานอยู่เห็นทุกแถวของการลงเรียน/รอบเรียน/โปรไฟล์ · ครูล้วนเห็นเฉพาะของตัวเอง · คนอื่นไม่เห็นอะไร
       const team = isTeam(me), tid = myTid(me), owner = (FAKE.admins.find(a => a.id === me) || {}).role === 'owner';
@@ -99,10 +126,17 @@ const TEACH = { rows: [], profiles: [], sessions: [], ext: [], subs: [], status:
       if (table === 'enrollment_overview') rows = TEACH.rows.filter(r => team || (tid && r.teacher_id === tid));
       else if (table === 'class_sessions') rows = TEACH.sessions.filter(s => team || (tid && s.teacher_id === tid));
       else if (table === 'student_profiles') rows = team ? TEACH.profiles : [];
-      else if (table === 'enrollment_extension_requests') rows = owner ? TEACH.ext : [];
-      else rows = [];
+      else if (table === 'enrollment_extension_requests') rows = owner ? TEACH.ext : TEACH.ext.filter(x => tid && x.requested_by === tid);
+      else if (table === 'enrollment_money' || table === 'enrollment_payments') {
+        const role = (FAKE.admins.find(a => a.id === me && a.is_active) || {}).role;
+        const visible = en => role === 'owner' || role === 'admin' || (tid && (TEACH.rows.find(r => r.id === en) || {}).teacher_id === tid);
+        rows = table === 'enrollment_money' ? Object.keys(TEACH.money).filter(visible).map(en => ({ enrollment_id: en, price_agreed: TEACH.money[en] })) : TEACH.pay.filter(p => visible(p.enrollment_id));
+      } else if (table === 'session_notes') {
+        rows = TEACH.notes.filter(n => { const ss = TEACH.sessions.find(x => x.id === n.session_id), e = ss && TEACH.rows.find(r => r.id === ss.enrollment_id); return owner || (tid && ss && (ss.teacher_id === tid || (e && e.teacher_id === tid))); });
+      } else rows = [];
       rows = clone(rows);
       st.eq.forEach(([c, v]) => { rows = rows.filter(r => r[c] === v); });
+      st.inn.forEach(([c, v]) => { rows = rows.filter(r => v.indexOf(r[c]) >= 0); });
       st.gte.forEach(([c, v]) => { rows = rows.filter(r => String(r[c]) >= String(v)); });
       st.lte.forEach(([c, v]) => { rows = rows.filter(r => String(r[c]) <= String(v)); });
       if (st.order) rows.sort((a, b) => String(a[st.order.c]).localeCompare(String(b[st.order.c])) * (st.order.asc ? 1 : -1));
@@ -111,7 +145,7 @@ const TEACH = { rows: [], profiles: [], sessions: [], ext: [], subs: [], status:
     }
     return q;
   }
-  const TEACH_TABLES = ['enrollment_overview', 'student_profiles', 'class_sessions', 'enrollment_extension_requests'];
+  const TEACH_TABLES = ['enrollment_overview', 'student_profiles', 'class_sessions', 'enrollment_extension_requests', 'enrollment_money', 'enrollment_payments', 'session_notes'];
   TEACH.fireRt = table => TEACH.subs.filter(s => s.table === table).forEach(s => s.cb({}));
 
   // ── ก้อน B: แคตตาล็อก · ทะเบียนสมาชิก · ค้นนักเรียน · ลงเรียน (สำเนากติกาของ 047 เท่าที่หน้าจอพึ่ง) ──
@@ -228,10 +262,233 @@ const TEACH = { rows: [], profiles: [], sessions: [], ext: [], subs: [], status:
       if (!a.p_paid_on || a.p_paid_on > TODAY) return E('วันที่ชำระต้องไม่ว่างและไม่เกินวันนี้');
       if (['transfer', 'cash', 'card', 'promptpay', 'other'].indexOf(a.p_method) < 0) return E('วิธีชำระไม่ถูกต้อง');
       TEACH.payments.push({ request_id: a.p_request_id, enrollment: a.p_enrollment, amount: a.p_amount, paid_on: a.p_paid_on, slip: a.p_slip_path });
-      e.payment_count++; e.paid_in_full = true; if (!e.started_on) e.state = 'queued';
-      return OK({ ok: true, duplicate: false, paid_in_full: true, payment_count: e.payment_count });
+      TEACH.pay.push({ id: 'np' + (++TEACH.seq), enrollment_id: e.id, paid_on: a.p_paid_on, amount: a.p_amount, kind: 'payment', method: a.p_method, note: a.p_note || null, request_id: a.p_request_id, slip_path: a.p_slip_path || null, created_at: new Date().toISOString() });
+      if (e.closed_on) return E('การลงเรียนนี้ปิดแล้ว บันทึกชำระเพิ่มไม่ได้');
+      recalc(e);
+      return OK({ ok: true, duplicate: false, paid_in_full: e.paid_in_full, payment_count: e.payment_count });
     },
   };
+  // ── ก้อน C ──
+  function recalc(e) {
+    const ss = TEACH.sessions.filter(x => x.enrollment_id === e.id), ps = TEACH.pay.filter(p => p.enrollment_id === e.id);
+    const used = x => x.status === 'done' || x.status === 'no_show' || (x.status === 'cancelled' && x.late_cancel);
+    const doneRows = ss.filter(x => x.status === 'done');
+    if (ss.length || e.__touchedSess) {
+      e.sessions_done = doneRows.length; e.sessions_used = ss.filter(used).length;
+      e.hours_done = String(doneRows.reduce((a, x) => a + Number(x.hours), 0)); e.sessions_remaining = Math.max(0, e.sessions_total - e.sessions_used);
+      const sc = ss.filter(x => x.status === 'scheduled' && Date.parse(x.starts_at) >= Date.now()).map(x => x.starts_at).sort();
+      e.next_session_at = sc[0] || null;
+      e.last_session_on = doneRows.map(x => x.held_on).sort().pop() || null;
+      if (!e.started_on && doneRows.length) { e.started_on = doneRows.map(x => x.held_on).sort()[0]; const d = new Date(e.started_on + 'T12:00:00Z'); d.setUTCMonth(d.getUTCMonth() + e.valid_months); e.expires_on = d.toISOString().slice(0, 10); }
+    }
+    e.effective_expiry = e.extended_until || e.expires_on || null;
+    if (ps.length) {
+      e.payment_count = ps.filter(p => p.kind === 'payment').length;
+      const price = TEACH.money[e.id], net = ps.reduce((a, p) => a + Number(p.amount), 0);
+      e.paid_in_full = !!e.paid_unknown || (price != null ? net >= price : true);
+    } else if (e.paid_unknown) e.paid_in_full = true;
+    e.state = e.closed_on ? 'closed' : e.sessions_used >= e.sessions_total ? 'completed' : !e.started_on && e.paid_in_full ? 'queued' : !e.started_on ? 'waiting_payment'
+      : TODAY <= e.effective_expiry ? 'active' : 'expired';
+  }
+  TEACH.recalc = recalc;
+  const isMgr = r => r === 'owner' || r === 'admin';
+  const enr = id => TEACH.rows.find(r => r.id === id);
+  const mySess = (me, s) => { const e = enr(s.enrollment_id), t = myTid(me); return !!t && (s.teacher_id === t || (e && e.teacher_id === t)); };
+  const bkkYmd = iso => new Date(iso).toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' });
+  const dayDiff = (a, b) => Math.round((Date.UTC(+a.slice(0, 4), +a.slice(5, 7) - 1, +a.slice(8, 10)) - Date.UTC(+b.slice(0, 4), +b.slice(5, 7) - 1, +b.slice(8, 10))) / 86400000);
+  const addMonths = (ymd, n) => { const d = new Date(ymd + 'T12:00:00Z'); d.setUTCMonth(d.getUTCMonth() + n); return d.toISOString().slice(0, 10); };
+  Object.assign(RPC, {
+    teach_session_schedule(me, a) {
+      const role = roleOf(me), e = enr(a.p_enrollment), t = myTid(me);
+      if (!role && !(e && t && e.teacher_id === t)) return E('นัดรอบเรียนได้เฉพาะทีมงานหรือครูของนักเรียนคนนี้');
+      if (!e) return E('ไม่พบการลงเรียนนี้');
+      if (e.closed_on) return E('การลงเรียนนี้ปิดแล้ว นัดรอบใหม่ไม่ได้');
+      if (!TEACH.teachers.some(x => x.id === a.p_teacher && x.is_active)) return E('ครูไม่ถูกต้องหรือถูกปิดใช้งาน');
+      if (!a.p_starts || !a.p_ends || Date.parse(a.p_ends) <= Date.parse(a.p_starts)) return E('เวลาเริ่ม/จบไม่ถูกต้อง (เวลาจบต้องหลังเวลาเริ่ม)');
+      const hours = a.p_hours != null ? a.p_hours : Math.round(Number(e.hours_total) / e.sessions_total * 100) / 100;
+      if (hours <= 0 || hours > 12) return E('ชั่วโมงต่อครั้งต้องมากกว่า 0 และไม่เกิน 12');
+      const ss = TEACH.sessions.filter(x => x.enrollment_id === e.id);
+      const used = ss.filter(x => x.status === 'done' || x.status === 'no_show' || (x.status === 'cancelled' && x.late_cancel)).length, sched = ss.filter(x => x.status === 'scheduled').length;
+      const warnings = [];
+      if (used + sched >= e.sessions_total) warnings.push('over_sessions');
+      const exp = e.extended_until || e.expires_on;
+      if (exp && bkkYmd(a.p_starts) > exp) warnings.push('after_expiry');
+      const s0 = Date.parse(a.p_starts), e0 = Date.parse(a.p_ends);
+      if (TEACH.sessions.some(x => x.teacher_id === a.p_teacher && x.status === 'scheduled' && Date.parse(x.starts_at) < e0 && Date.parse(x.ends_at) > s0)) return E('ครูคนนี้มีนัดซ้อนกันในช่วงเวลานี้');
+      const id = 'ns' + (++TEACH.seq);
+      TEACH.sessions.push({ id, enrollment_id: e.id, teacher_id: a.p_teacher, status: 'scheduled', starts_at: a.p_starts, ends_at: a.p_ends, held_on: null, hours: String(hours), room: a.p_room || null, cancel_by: null,
+        notified_at: null, late_cancel: false, cancel_reason: null, gcal_uid: null, gcal_start: null, created_at: new Date().toISOString() });
+      e.__touchedSess = true; recalc(e);
+      return OK({ id, warnings });
+    },
+    teach_session_done(me, a) {
+      const s = TEACH.sessions.find(x => x.id === a.p_session);
+      if (!s) return E('ไม่พบรอบเรียนนี้');
+      if (!isMgr(roleOf(me)) && !mySess(me, s)) return E('ทำเครื่องหมายสอนแล้วได้เฉพาะครูของรอบนี้ เจ้าของ หรือผู้ดูแล');
+      if (s.status !== 'scheduled') return E('รอบนี้ไม่ได้อยู่ในสถานะนัดไว้ (ตอนนี้: ' + s.status + ')');
+      if (!a.p_held_on || a.p_held_on > TODAY) return E('วันที่สอนต้องไม่ว่างและไม่เกินวันนี้');
+      if (a.p_hours != null && (a.p_hours <= 0 || a.p_hours > 12)) return E('ชั่วโมงต้องมากกว่า 0 และไม่เกิน 12');
+      s.status = 'done'; s.held_on = a.p_held_on; if (a.p_hours != null) s.hours = String(a.p_hours);
+      const e = enr(s.enrollment_id); e.__touchedSess = true; recalc(e);
+      return OK({ ok: true, started_on: e.started_on });
+    },
+    teach_session_cancel(me, a) {
+      const s = TEACH.sessions.find(x => x.id === a.p_session);
+      if (!s) return E('ไม่พบรอบเรียนนี้');
+      if (!roleOf(me) && !mySess(me, s)) return E('ยกเลิกรอบได้เฉพาะทีมงานหรือครูของรอบนี้');
+      if (s.status !== 'scheduled') return E('รอบนี้ไม่ได้อยู่ในสถานะนัดไว้ (ตอนนี้: ' + s.status + ')');
+      if (['cancelled', 'no_show'].indexOf(a.p_as) < 0) return E('ต้องเป็น cancelled หรือ no_show');
+      let by = 'student', notified = null, late = false;
+      if (a.p_as === 'cancelled') {
+        by = a.p_by;
+        if (['student', 'teacher', 'shop'].indexOf(by) < 0) return E('ต้องระบุว่าใครยกเลิก (student / teacher / shop)');
+        if (by === 'student') { notified = a.p_notified_at || new Date().toISOString(); late = dayDiff(bkkYmd(s.starts_at), a.p_notified_at ? bkkYmd(a.p_notified_at) : TODAY) < 3; }
+      }
+      s.status = a.p_as; s.cancel_by = by; s.notified_at = notified; s.late_cancel = late; s.cancel_reason = a.p_reason || null;
+      const e = enr(s.enrollment_id); e.__touchedSess = true; recalc(e);
+      return OK({ ok: true, late_cancel: late, counted: a.p_as === 'no_show' || late });
+    },
+    teach_note_save(me, a) {
+      const s = TEACH.sessions.find(x => x.id === a.p_session);
+      if (!s) return E('ไม่พบรอบเรียนนี้');
+      if (roleOf(me) !== 'owner' && !mySess(me, s)) return E('บันทึกการสอนได้เฉพาะเจ้าของหรือครูของนักเรียนคนนี้');
+      TEACH.notes = TEACH.notes.filter(n => n.session_id !== s.id);
+      if (!String(a.p_note || '').trim()) return OK(false);
+      TEACH.notes.push({ session_id: s.id, note: a.p_note, written_by: me });
+      return OK(true);
+    },
+    teach_payment_refund(me, a) {
+      if (!isMgr(roleOf(me))) return E('คืนเงินได้เฉพาะเจ้าของหรือผู้ดูแล');
+      if (!a.p_request_id) return E('ต้องมีรหัสคำขอ (ใช้กันบันทึกซ้ำ)');
+      const e = enr(a.p_enrollment);
+      if (!e) return E('ไม่พบการลงเรียนนี้');
+      if (TEACH.pay.some(p => p.request_id === a.p_request_id)) return OK({ ok: true, duplicate: true });
+      if (a.p_amount == null || a.p_amount <= 0) return E('ยอดคืนต้องมากกว่า 0 (ใส่เป็นบวก)');
+      if (!a.p_paid_on || a.p_paid_on > TODAY) return E('วันที่คืนเงินต้องไม่ว่างและไม่เกินวันนี้');
+      const net = TEACH.pay.filter(p => p.enrollment_id === e.id).reduce((x, p) => x + Number(p.amount), 0);
+      if (a.p_amount > net) return E('ยอดคืนเกินยอดที่ชำระสะสม');
+      TEACH.pay.push({ id: 'nr' + (++TEACH.seq), enrollment_id: e.id, paid_on: a.p_paid_on, amount: -a.p_amount, kind: 'refund', method: 'other', note: a.p_note || null, request_id: a.p_request_id, slip_path: null, created_at: new Date().toISOString() });
+      recalc(e);
+      return OK({ ok: true, duplicate: false });
+    },
+    teach_payment_fix(me, a) {
+      if (!isMgr(roleOf(me))) return E('แก้ยอดชำระได้เฉพาะเจ้าของหรือผู้ดูแล');
+      const p = TEACH.pay.find(x => x.id === a.p_payment);
+      if (!p) return E('ไม่พบรายการชำระนี้');
+      const e = enr(p.enrollment_id);
+      if (a.p_delete) { TEACH.pay = TEACH.pay.filter(x => x !== p); recalc(e); return OK({ ok: true, deleted: true, slip_path: p.slip_path }); }
+      if (a.p_amount != null && a.p_amount <= 0) return E('ยอดต้องมากกว่า 0 (ใส่เป็นบวก — ระบบใส่เครื่องหมายตามชนิดรายการ)');
+      if (a.p_paid_on != null && a.p_paid_on > TODAY) return E('วันที่ต้องไม่เกินวันนี้');
+      if (a.p_method != null && ['transfer', 'cash', 'card', 'promptpay', 'other'].indexOf(a.p_method) < 0) return E('วิธีชำระไม่ถูกต้อง');
+      if (a.p_paid_on != null) p.paid_on = a.p_paid_on;
+      if (a.p_amount != null) p.amount = p.kind === 'refund' ? -a.p_amount : a.p_amount;
+      if (a.p_method != null) p.method = a.p_method;
+      if (a.p_note != null) p.note = String(a.p_note).trim() || null;
+      recalc(e);
+      return OK({ ok: true, deleted: false });
+    },
+    teach_enroll_fix(me, a) {
+      const role = roleOf(me), e = enr(a.p_id), p = a.p_patch;
+      if (!isMgr(role)) return E('แก้การลงเรียนได้เฉพาะเจ้าของหรือผู้ดูแล');
+      if (!p || typeof p !== 'object' || !Object.keys(p).length) return E('ไม่มีช่องที่จะแก้');
+      const bad = Object.keys(p).find(k => ['teacher_id', 'started_on', 'track', 'equipment', 'note', 'paid_unknown', 'price_agreed'].indexOf(k) < 0);
+      if (bad) return E('แก้ช่อง "' + bad + '" ไม่ได้ (แก้ได้: teacher_id started_on track equipment note paid_unknown price_agreed)');
+      if (!e) return E('ไม่พบการลงเรียนนี้');
+      if (e.closed_on && role !== 'owner') return E('การลงเรียนนี้ปิดแล้ว แก้ได้เฉพาะเจ้าของ');
+      if ('teacher_id' in p) {
+        if (!TEACH.links.some(l => l.course_id === e.course_id && l.teacher_id === p.teacher_id) || !TEACH.teachers.some(t => t.id === p.teacher_id && t.is_active)) return E('ครูคนนี้ไม่ได้เปิดสอนคอร์สนี้ หรือถูกปิดใช้งาน');
+      }
+      if ('started_on' in p && p.started_on === null && TEACH.sessions.some(x => x.enrollment_id === e.id && x.status === 'done')) return E('ล้างวันเริ่มเรียนไม่ได้ เพราะมีรอบที่สอนแล้ว (แก้เป็นวันอื่นแทน)');
+      if ('started_on' in p && p.started_on && p.started_on > TODAY) return E('วันเริ่มเรียนต้องไม่เกินวันนี้');
+      if ('paid_unknown' in p && p.paid_unknown && e.source !== 'backfill') return E('"ชำระครบ (ไม่ทราบวันที่)" ใช้ได้เฉพาะการลงเรียนที่กรอกย้อนหลัง');
+      if ('price_agreed' in p && p.price_agreed === null && e.source !== 'backfill') return E('ต้องมีราคาที่ตกลง (ล้างเป็นว่างได้เฉพาะการลงเรียนที่กรอกย้อนหลัง)');
+      if ('teacher_id' in p) { e.teacher_id = p.teacher_id; e.teacher_name = (TEACH.teachers.find(t => t.id === p.teacher_id) || {}).display_name; }
+      if ('started_on' in p) { e.started_on = p.started_on; e.expires_on = p.started_on ? addMonths(p.started_on, e.valid_months) : null; }
+      if ('track' in p) e.track = p.track; if ('equipment' in p) e.equipment = p.equipment; if ('note' in p) e.note = p.note;
+      if ('paid_unknown' in p) e.paid_unknown = p.paid_unknown;
+      if ('price_agreed' in p) { if (p.price_agreed === null) delete TEACH.money[e.id]; else TEACH.money[e.id] = p.price_agreed; }
+      recalc(e);
+      return OK({ ok: true, changed: Object.keys(p).sort() });
+    },
+    teach_enroll_close(me, a) {
+      if (!isMgr(roleOf(me))) return E('ปิดคอร์สได้เฉพาะเจ้าของหรือผู้ดูแล');
+      if (['refund', 'quit', 'transfer', 'cancelled'].indexOf(a.p_reason) < 0) return E('เหตุผลการปิดต้องเป็น refund / quit / transfer / cancelled');
+      const on = a.p_closed_on || TODAY;
+      if (on > TODAY) return E('วันที่ปิดต้องไม่เกินวันนี้');
+      const e = enr(a.p_id);
+      if (!e) return E('ไม่พบการลงเรียนนี้');
+      if (e.closed_on) return E('การลงเรียนนี้ปิดไปแล้ว');
+      e.closed_on = on; e.closed_reason = a.p_reason;
+      TEACH.sessions.filter(x => x.enrollment_id === e.id && x.status === 'scheduled').forEach(x => { x.status = 'cancelled'; x.cancel_by = 'shop'; x.late_cancel = false; x.cancel_reason = 'ปิดคอร์ส'; });
+      e.__touchedSess = true; recalc(e);
+      return OK(true);
+    },
+    teach_enroll_reopen(me, a) {
+      if (roleOf(me) !== 'owner') return E('เปิดคอร์สที่ปิดแล้วได้เฉพาะเจ้าของ');
+      const e = enr(a.p_id);
+      if (!e) return E('ไม่พบการลงเรียนนี้');
+      if (!e.closed_on) return E('การลงเรียนนี้ยังไม่ได้ปิด');
+      e.closed_on = null; e.closed_reason = null; recalc(e);
+      return OK({ ok: true, auto_cancelled_sessions: TEACH.sessions.filter(x => x.enrollment_id === e.id && x.status === 'cancelled' && x.cancel_by === 'shop' && x.cancel_reason === 'ปิดคอร์ส').length });
+    },
+    teach_extend_request(me, a) {
+      const t = myTid(me), e = enr(a.p_enrollment);
+      if (!t || !e || e.teacher_id !== t) return E('ยื่นขอขยายอายุได้เฉพาะครูของนักเรียนคนนี้');
+      if (e.closed_on) return E('การลงเรียนนี้ปิดแล้ว ขอขยายอายุไม่ได้');
+      if (!e.expires_on) return E('ยังไม่มีวันหมดอายุ (ยังไม่เริ่มเรียน) ขอขยายอายุไม่ได้');
+      if (!a.p_until || a.p_until <= (e.extended_until || e.expires_on)) return E('วันที่ขอต้องเกินวันหมดอายุปัจจุบัน');
+      if (!String(a.p_reason || '').trim() || a.p_reason.length > 500) return E('ต้องใส่เหตุผล (ไม่เกิน 500 ตัวอักษร)');
+      if (TEACH.ext.some(x => x.enrollment_id === e.id && x.status === 'pending')) return E('มีคำขอรอตัดสินอยู่แล้ว');
+      const id = 'nx' + (++TEACH.seq);
+      TEACH.ext.push({ id, enrollment_id: e.id, requested_by: t, requested_until: a.p_until, reason: a.p_reason.trim(), status: 'pending', decision_note: null, approved_until: null, decided_at: null, created_at: new Date().toISOString() });
+      return OK(id);
+    },
+    teach_extend_decide(me, a) {
+      if (roleOf(me) !== 'owner') return E('ตัดสินคำขอขยายอายุได้เฉพาะเจ้าของ');
+      const r = TEACH.ext.find(x => x.id === a.p_request);
+      if (!r) return E('ไม่พบคำขอนี้');
+      if (r.status !== 'pending') return E('คำขอนี้ตัดสินไปแล้ว');
+      if (a.p_approve) {
+        const e = enr(r.enrollment_id), until = a.p_until || r.requested_until;
+        if (e.closed_on) return E('การลงเรียนนี้ปิดแล้ว');
+        if (!e.expires_on || until <= (e.extended_until || e.expires_on)) return E('วันที่อนุมัติต้องเกินวันหมดอายุปัจจุบัน');
+        e.extended_until = until; e.extension_note = 'ขยายอายุ (เจ้าของอนุมัติ)'; recalc(e);
+        Object.assign(r, { status: 'approved', decided_at: new Date().toISOString(), decision_note: a.p_note || null, approved_until: until });
+        return OK({ ok: true, approved_until: until });
+      }
+      Object.assign(r, { status: 'rejected', decided_at: new Date().toISOString(), decision_note: a.p_note || null });
+      return OK({ ok: true, approved_until: null });
+    },
+    teach_enroll_extend(me, a) {
+      if (roleOf(me) !== 'owner') return E('ขยายอายุได้เฉพาะเจ้าของ');
+      const e = enr(a.p_id), why = String(a.p_note || '').trim() || 'เจ้าของขยายอายุ';
+      if (why.length > 500) return E('หมายเหตุยาวเกิน 500 ตัวอักษร');
+      if (!e) return E('ไม่พบการลงเรียนนี้');
+      if (e.closed_on) return E('การลงเรียนนี้ปิดแล้ว');
+      if (!e.expires_on) return E('ยังไม่มีวันหมดอายุ (ยังไม่มีวันเริ่มเรียน) — ใส่วันเริ่มเรียนก่อน');
+      if (!a.p_until || a.p_until <= (e.extended_until || e.expires_on)) return E('วันที่ต้องเกินวันหมดอายุปัจจุบัน');
+      if (TEACH.ext.some(x => x.enrollment_id === e.id && x.status === 'pending')) return E('มีคำขอรอตัดสินอยู่ — ตัดสินคำขอนั้นแทน');
+      e.extended_until = a.p_until; e.extension_note = why; recalc(e);
+      TEACH.ext.push({ id: 'nx' + (++TEACH.seq), enrollment_id: e.id, requested_by: null, requested_until: a.p_until, reason: why, status: 'approved', decision_note: null, approved_until: a.p_until, decided_at: new Date().toISOString(), created_at: new Date().toISOString() });
+      return OK(true);
+    },
+    teach_gcal_link(me, a) {
+      const s = TEACH.sessions.find(x => x.id === a.p_session);
+      if (!roleOf(me) && !(s && mySess(me, s))) return E('ผูกนัดได้เฉพาะทีมงานหรือครูของรอบนี้');
+      if (!s) return E('ไม่พบรอบเรียนนี้');
+      if (!String(a.p_uid || '').trim() || !a.p_start) return E('ต้องมีรหัสนัด (uid) และเวลาเริ่มของนัดในปฏิทิน');
+      if (TEACH.sessions.some(x => x !== s && x.gcal_uid === a.p_uid && x.gcal_start === a.p_start)) return E('นัดนี้ในปฏิทินถูกผูกกับรอบเรียนอื่นแล้ว');
+      s.gcal_uid = a.p_uid; s.gcal_start = a.p_start;
+      return OK(true);
+    },
+    teach_gcal_unlink(me, a) {
+      const s = TEACH.sessions.find(x => x.id === a.p_session);
+      if (!roleOf(me) && !(s && mySess(me, s))) return E('ถอดนัดได้เฉพาะทีมงานหรือครูของรอบนี้');
+      if (!s) return OK(false);
+      s.gcal_uid = null; s.gcal_start = null;
+      return OK(true);
+    },
+  });
   // ตารางที่ก้อน B อ่าน/เขียน (ฐานปลอมแบบเรียบ: ไม่จำลอง RLS ละเอียด — ตัวจริงตรวจที่ test047.mjs)
   const plain = (client, table, rowsFn, onInsert) => {
     const st = { op: 'select', notCol: null, order: null };
