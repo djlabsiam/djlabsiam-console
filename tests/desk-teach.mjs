@@ -427,6 +427,14 @@ async function runTests() {
   ok('ลงเรียนใหม่ตั้งต้น: โหมด "ลงเรียนใหม่" · ไม่มีช่องวันเริ่ม/รอบย้อนหลัง · มีช่องชำระแบบติ๊ก', pane().querySelector('[data-act="mode"][data-v="console"]').getAttribute('aria-pressed') === 'true' && !E('teStarted') && !!pane().querySelector('[data-act="paychk"]'));
   ok('พนักงานทั่วไป: ปุ่ม "อังกฤษ (International)" ปิดอยู่ + ข้อความอธิบายว่าต้องให้ผู้ดูแลลง', pane().querySelector('[data-act="lang"][data-v="en"]').disabled === true && /ให้ผู้ดูแลลงให้/.test(pane().textContent));
   fill('teTeacher', 't2'); await settle(50);
+  {   // ผู้ใช้ปลดปุ่มที่ปิดอยู่เอง (DevTools): ฟอร์มต้องปฏิเสธเอง (ฐานก็ปฏิเสธซ้ำ)
+    const en = pane().querySelector('[data-act="lang"][data-v="en"]'); en.disabled = false; en.click(); await settle(100);
+    fill('teListPrice', '28000'); fill('tePrice', '28000'); await settle(50);
+    const ne = rpcCalls('teach_enroll_create').length;
+    act('save'); await settle(100);
+    ok('พนักงานทั่วไปปลดปุ่มภาษาอังกฤษเองแล้วบันทึก: ฟอร์มปฏิเสธ · ไม่ส่งฐาน', /เฉพาะเจ้าของหรือผู้ดูแล/.test(errText()) && rpcCalls('teach_enroll_create').length === ne, errText());
+    act('lang', '[data-v="th"]'); await settle(100);
+  }
   fill('tePrice', '18000'); await settle(100);
   ok('ราคาที่ตกลงต่างจากราคาตั้ง: คำเตือนแดงตัวหนา ให้ใส่หมายเหตุ', isRed(E('tePriceWarn')) && /ต้องใส่หมายเหตุ/.test(E('tePriceWarn').textContent));
   const n0 = rpcCalls('teach_enroll_create').length;
@@ -525,6 +533,22 @@ async function runTests() {
   await findBy('สมชาย');
   act('pick', '[data-i="0"]'); await settle(300);
   ok('โหลดรายการคอร์สล้ม: ข้อความแดง · แถบ fatal (กฎข้อ 8) · ไม่เปิดฟอร์มปลอม ๆ', /โหลดรายการคอร์ส\\/ครูไม่สำเร็จ/.test(pane().textContent) && /โหลดรายการคอร์ส/.test(fatalText()) && !E('teSave'), pane().textContent.slice(0, 120));
+  // ── 11. กรอกย้อนหลังโดยไม่เลือกการชำระ · วันเริ่มเรียนในอนาคต ──
+  TEACH.fail = {};
+  await logout(); await login('Zen'); await open();
+  tab('enroll'); await settle(600);
+  act('cand', '[data-mid="m3"]'); await settle(100);
+  await pickCourse('basic-dj-class');
+  fill('tePrice', ''); fill('teStarted', day(5)); await settle(100);
+  const nb = rpcCalls('teach_enroll_create').length;
+  act('save'); await settle(100);
+  ok('วันเริ่มเรียนในอนาคต (ใส่ผ่านโค้ด ข้ามขีดจำกัดของช่องวันที่): ไม่ส่งฐาน · ข้อความแดง', /วันเริ่มเรียนต้องไม่เกินวันนี้/.test(errText()) && rpcCalls('teach_enroll_create').length === nb, errText());
+  fill('teStarted', ''); await settle(100);
+  const npay = rpcCalls('teach_payment_record').length;
+  act('save'); await settle(700);
+  const ab = lastArgs('teach_enroll_create');
+  ok('กรอกย้อนหลังโดยไม่เลือกการชำระ: paid_unknown = false (ไม่ตั้งธงชำระครบเอง) · ไม่มีวันเริ่ม · ไม่ส่งชำระ', rpcCalls('teach_enroll_create').length === nb + 1 && ab.p_source === 'backfill'
+    && ab.p_paid_unknown === false && ab.p_started_on === null && rpcCalls('teach_payment_record').length === npay, J(ab));
   L('RESULT:' + (fail ? 'FAIL' : 'PASS') + ' pass=' + pass + ' fail=' + fail);
 }
 const J = o => JSON.stringify(o);

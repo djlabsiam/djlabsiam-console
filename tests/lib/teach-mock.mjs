@@ -113,6 +113,7 @@ const TEACH = { rows: [], profiles: [], sessions: [], ext: [], subs: [], status:
     async function run() {
       const me = who(client);
       CALLS.push({ op: st.op, table, payload: st.payload, who: me, eq: st.eq, cols: st.cols });
+      const snapSess = table === 'class_sessions' ? clone(TEACH.sessions) : null;      // ข้อมูล ณ ตอนส่งคำขอ (ไม่ใช่ตอนตอบ)
       if (TEACH.gate && table === 'enrollment_overview') await TEACH.gate;
       if (TEACH.gateSess && table === 'class_sessions') await TEACH.gateSess;
       if (st.op !== 'select') return E('permission denied for table ' + table);
@@ -124,7 +125,7 @@ const TEACH = { rows: [], profiles: [], sessions: [], ext: [], subs: [], status:
       const team = isTeam(me), tid = myTid(me), owner = (FAKE.admins.find(a => a.id === me) || {}).role === 'owner';
       let rows;
       if (table === 'enrollment_overview') rows = TEACH.rows.filter(r => team || (tid && r.teacher_id === tid));
-      else if (table === 'class_sessions') rows = TEACH.sessions.filter(s => team || (tid && s.teacher_id === tid));
+      else if (table === 'class_sessions') rows = (snapSess || TEACH.sessions).filter(s => team || (tid && s.teacher_id === tid));
       else if (table === 'student_profiles') rows = team ? TEACH.profiles : [];
       else if (table === 'enrollment_extension_requests') rows = owner ? TEACH.ext : TEACH.ext.filter(x => tid && x.requested_by === tid);
       else if (table === 'enrollment_money' || table === 'enrollment_payments') {

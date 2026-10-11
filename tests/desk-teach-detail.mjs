@@ -497,6 +497,17 @@ async function runTests() {
   TEACH.fireRt('class_sessions'); await sleep(900);
   ok('Realtime: รอบที่เพิ่มจากที่อื่นโผล่ในแผงที่เปิดอยู่เอง · รายการหลักโหลดใหม่', !!ss('s-rt') && TEACH.loads > loads0, ssIds().join());
 
+  // ── ผลโหลดเก่าที่มาช้าต้องไม่ทับผลใหม่ (โหลดซ้อน) ──
+  let relA; TEACH.gateSess = new Promise(r => { relA = r; });
+  row('e-month').click(); await sleep(300);                 // โหลดครั้งที่ 1 ค้าง (ฐานปลอมถ่ายข้อมูล ณ ตอนนี้)
+  TEACH.gateSess = null;
+  TEACH.sessions.push({ id: 's-new2', enrollment_id: 'e-month', teacher_id: 't3', status: 'scheduled', starts_at: new Date(Date.now() + 12 * 86400000).toISOString(), ends_at: new Date(Date.now() + 12 * 86400000 + 7200000).toISOString(),
+    held_on: null, hours: '2.00', room: null, cancel_by: null, notified_at: null, late_cancel: false, cancel_reason: null, gcal_uid: null, gcal_start: null, created_at: new Date().toISOString() });
+  TEACH.fireRt('class_sessions'); await sleep(900);         // โหลดครั้งที่ 2 เสร็จ → เห็นรอบใหม่
+  ok('โหลดซ้ำเสร็จ: เห็นรอบใหม่ (s-new2)', !!D() && !!ss('s-new2'), D() && ssIds().join());
+  relA(); await sleep(600);                                 // ผลเก่ามาถึงทีหลัง
+  ok('ผลโหลดเก่าที่มาช้าไม่ทับผลใหม่: รอบใหม่ยังอยู่', !!D() && !!ss('s-new2'), D() && ssIds().join());
+
   // ── โหลดรอบของแผงล้ม ──
   TEACH.fail.detail_sessions = 'connection reset by peer';
   row('e-month').click(); await settle(600);
