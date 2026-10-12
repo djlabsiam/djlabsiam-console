@@ -250,7 +250,7 @@ async function runTests() {
   await login('Maniac');
   const err = $('loginError').textContent;
   ok('บัญชีครูล้วน: เปิดคอนโซลแล้วไม่พัง · ยังอยู่หน้าเข้าสู่ระบบ', $('loginOverlay').style.display !== 'none' && !fatalText(), fatalText());
-  ok('ข้อความบอกชัดว่าเป็นบัญชีครู ยังไม่มีหน้าจอสำหรับครู', /บัญชีนี้เป็นบัญชีครู/.test(err) && /ยังไม่เปิดให้ใช้งาน/.test(err), err);
+  ok('ข้อความบอกชัดว่าเป็นบัญชีครู ให้ไปหน้าครู · มีลิงก์ teacher.html', /บัญชีนี้เป็นบัญชีครู/.test(err) && /หน้าครู/.test(err) && $('loginTeacherLink').hidden === false && $('loginTeacherLink').getAttribute('href') === 'teacher.html', err);
   ok('บัญชีครูล้วน: ไม่ได้ดึงรายการนักเรียนของร้านเลย', TEACH.loads === 0 && !CALLS.some(c => c.table === 'enrollment_overview'));
   ok('บัญชีครูล้วน: ไม่ได้เข้าระบบ (ไม่มี currentAdmin/currentUserId) · ไม่มีรายการค้างในหน้า', currentAdmin === null && currentUserId === null && rowIds().length === 0);
   ok('ถามว่าเป็นครูผ่าน my_teacher_id (ฟังก์ชันของฐาน) ไม่เดาจากชื่อ', CALLS.some(c => c.op === 'rpc' && c.fn === 'my_teacher_id'));

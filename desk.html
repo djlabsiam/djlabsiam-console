@@ -1687,6 +1687,7 @@
     </div>
     <label class="chk" style="margin-bottom:14px;"><input type="checkbox" id="loginRemember" checked> จำบัญชีนี้ไว้ในเครื่องนี้ (ครั้งหน้าสลับเข้าด้วย PIN)</label>
     <div class="alert alert-red" id="loginError" style="display:none;" role="alert"></div>
+    <a class="btn btn-block" id="loginTeacherLink" href="teacher.html" hidden style="margin-bottom:10px;">ไปหน้าครู (ดูนักเรียนและรอบเรียนของฉัน)</a>
     <button class="btn btn-primary btn-block" id="loginBtn" type="submit">เข้าสู่ระบบ</button>
     <button class="btn btn-block" id="loginCancelBtn" type="button" hidden style="margin-top:8px;" onclick="cancelAddAccount()">ยกเลิก กลับไปบัญชีเดิม</button>
     <div class="login-accts" id="loginAccounts" hidden></div>
@@ -3522,6 +3523,7 @@ async function doLogin() {
   const password = document.getElementById('loginPassword').value;
   const errBox = document.getElementById('loginError');
   errBox.style.display = 'none';
+  document.getElementById('loginTeacherLink').hidden = true;
   if (!email || !password) {
     errBox.textContent = 'กรุณากรอกอีเมลและรหัสผ่าน';
     errBox.style.display = '';
@@ -3609,7 +3611,10 @@ async function handleAuthState(session) {
     if (!adminRow) {                  // บัญชีครู (ไม่มีแถว admins) — บอกตรง ๆ ว่ายังไม่มีหน้าจอสำหรับครู (P1b) ไม่ใช่แค่ "ไม่มีสิทธิ์"
       try {
         const tr = await db.rpc('my_teacher_id');
-        if (tr && tr.data) errBox.textContent = 'บัญชีนี้เป็นบัญชีครู — หน้าจอสำหรับครูยังไม่เปิดให้ใช้งาน (กำลังเตรียม) หากต้องการดูข้อมูลนักเรียนก่อน แจ้งเจ้าของร้าน';
+        if (tr && tr.data) {
+          errBox.textContent = 'บัญชีนี้เป็นบัญชีครู — ไม่ได้เข้าคอนโซลร้าน ใช้ "หน้าครู" เพื่อดูนักเรียนและรอบเรียนของคุณ';
+          document.getElementById('loginTeacherLink').hidden = false;
+        }
       } catch (e) { /* ถามไม่สำเร็จ = ใช้ข้อความเดิม */ }
     }
     errBox.style.display = '';

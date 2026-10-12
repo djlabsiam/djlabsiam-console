@@ -8,6 +8,8 @@
  * ก้อน C เพิ่ม: enrollment_money · enrollment_payments · session_notes (RLS: เงิน = เจ้าของ/ผู้ดูแล/ครูของนักเรียน · บันทึกการสอน = เจ้าของ/ครูของรอบ · คำขอขยายอายุ = เจ้าของ/ครูผู้ขอ)
  *   + ฟังก์ชัน teach_session_schedule/done/cancel · teach_note_save · teach_payment_refund/fix · teach_enroll_fix/close/reopen · teach_extend_request/decide · teach_enroll_extend · teach_gcal_link/unlink
  *   TEACH.pay / money / notes / ext / sessions = ตารางจริงของฐานปลอม (RPC เขียนลงนี้ แล้ว recalc ตัวนับของ enrollment_overview ให้) · เทสต์ดักคำสั่งเขียนด้วย CALLS (op:'rpc')
+ * P1b (หน้าครู teacher.html) เพิ่ม: rpc teach_my_students (สำเนากติกา 047: เฉพาะนักเรียนของครูผู้เรียก · ผู้เยาว์ = ผู้ปกครองแทนช่องทางของเด็ก · ไม่มีอีเมล/ที่อยู่/เงิน) ·
+ *   บัญชีครูล้วนเพิ่ม alldayz (u-alldayz = ครู t6 · ไม่มีแถว admins) · class_sessions: ครูเห็นรอบที่ตัวเองสอน + รอบของนักเรียนตัวเอง · TEACH.contacts = LINE/IG ของนักเรียน (ข้อมูลสมมติ)
  * ตัวควบคุมจากเทสต์: TEACH.seed() ใส่ข้อมูลตั้งต้น (สัมพัทธ์กับวันนี้ เวลาไทย) · TEACH.fail = { select, rpc } · TEACH.missing (ยังไม่รัน 047)
  *   TEACH.gate = Promise ที่ค้างคำตอบของ enrollment_overview · TEACH.subs = ตัวฟัง Realtime [{ name, table, cb }] · TEACH.status = { ชื่อช่อง: ตัวฟังสถานะ }
  *   TEACH.fireRt(table) ยิง Realtime · TEACH.loads = จำนวนครั้งที่ enrollment_overview ถูกอ่าน
@@ -21,7 +23,7 @@ const TEACH = { rows: [], profiles: [], sessions: [], ext: [], subs: [], status:
   FAKE.customers.push(...[['c1', 'สมชาย ใจดี'], ['c2', 'มานี มีนา'], ['c3', 'วีระ ชูใจ'], ['c4', 'ปิติ สุขสันต์'], ['c5', 'ชูใจ รักเรียน'], ['c6', 'นภา ฟ้าใส'],
     ['c7', 'ดวงดาว เด็กน้อย'], ['c8', 'John Smith'], ['c9', '<img src=x onerror="window.__xss=1">ชื่อแปลก'], ['c10', 'อารี ปิดคอร์ส'], ['c11', 'จบแล้ว คนเก่ง']]
     .map(([id, full_name]) => ({ id, full_name, phone: '0800000000', line_id: null, email: null, note: null, tags: [], created_at: '2026-01-01T00:00:00Z', created_by: 'u1', admins: { full_name: 'TiBass' } })));
-  const TID = { u1: 't1', u3: 't2', 'u-maniac': 't3' };           // บัญชี → ครู
+  const TID = { u1: 't1', u3: 't2', 'u-maniac': 't3', 'u-alldayz': 't6' };           // บัญชี → ครู
   const NAME = { t1: 'Tibass', t2: 'Nutty', t3: 'Maniac', t4: 'Zlex' };
   const clone = o => JSON.parse(JSON.stringify(o));
   const E = m => ({ data: null, error: { message: m } });
@@ -66,7 +68,9 @@ const TEACH = { rows: [], profiles: [], sessions: [], ext: [], subs: [], status:
       // ชื่อแปลก (XSS) ของผู้ใช้ — ต้องเป็นข้อความ
       R('e-xss', { customer_id: 'c9', course_title: '<b onmouseover=window.__xss=2>คอร์สแปลก</b>', teacher_name: '<i>ครู</i>', teacher_id: 't4', state: 'active', started_on: day(-10), expires_on: day(80), effective_expiry: day(80), sessions_done: 1, sessions_used: 1, sessions_remaining: 5 }),
     ];
-    TEACH.profiles = [{ customer_id: 'c7', nickname: 'น้องดาว', is_minor: true }, { customer_id: 'c1', nickname: 'ชาย', is_minor: false }];
+    TEACH.profiles = [{ customer_id: 'c7', nickname: 'น้องดาว', is_minor: true, guardian_name: 'คุณแม่ของดาว', guardian_contact: 'mom-dao-line', guardian_contact_kind: 'line' },
+      { customer_id: 'c1', nickname: 'ชาย', is_minor: false }];
+    TEACH.contacts = { c1: { line: 'somchai.line', ig: 'somchai_ig' }, c3: { line: 'wee.line', ig: 'wee_ig' }, c7: { line: 'child-line-must-not-show', ig: 'child_ig_must_not_show' } };
     TEACH.ext = [
       { id: 'x1', enrollment_id: 'e-soon', requested_by: 't2', requested_until: day(35), reason: 'นักเรียนป่วยหลายสัปดาห์', status: 'pending', decision_note: null, approved_until: null, decided_at: null, created_at: new Date(Date.now() - 86400000).toISOString() },
       { id: 'x2', enrollment_id: 'e-expired', requested_by: 't2', requested_until: day(20), reason: 'ติดสอบ', status: 'pending', decision_note: null, approved_until: null, decided_at: null, created_at: new Date(Date.now() - 2 * 86400000).toISOString() },
@@ -125,7 +129,7 @@ const TEACH = { rows: [], profiles: [], sessions: [], ext: [], subs: [], status:
       const team = isTeam(me), tid = myTid(me), owner = (FAKE.admins.find(a => a.id === me) || {}).role === 'owner';
       let rows;
       if (table === 'enrollment_overview') rows = TEACH.rows.filter(r => team || (tid && r.teacher_id === tid));
-      else if (table === 'class_sessions') rows = (snapSess || TEACH.sessions).filter(s => team || (tid && s.teacher_id === tid));
+      else if (table === 'class_sessions') rows = (snapSess || TEACH.sessions).filter(s => team || (tid && (s.teacher_id === tid || (TEACH.rows.find(r => r.id === s.enrollment_id) || {}).teacher_id === tid)));
       else if (table === 'student_profiles') rows = team ? TEACH.profiles : [];
       else if (table === 'enrollment_extension_requests') rows = owner ? TEACH.ext : TEACH.ext.filter(x => tid && x.requested_by === tid);
       else if (table === 'enrollment_money' || table === 'enrollment_payments') {
@@ -269,6 +273,22 @@ const TEACH = { rows: [], profiles: [], sessions: [], ext: [], subs: [], status:
       return OK({ ok: true, duplicate: false, paid_in_full: e.paid_in_full, payment_count: e.payment_count });
     },
   };
+  // ── P1b ──
+  Object.assign(RPC, {
+    teach_my_students(me) {
+      const t = myTid(me);
+      if (!t) return OK([]);
+      return OK(TEACH.rows.filter(r => r.teacher_id === t).map(r => {
+        const c = FAKE.customers.find(x => x.id === r.customer_id) || {}, p = TEACH.profiles.find(x => x.customer_id === r.customer_id) || {}, k = (TEACH.contacts || {})[r.customer_id] || {};
+        const minor = !!p.is_minor;
+        return { enrollment_id: r.id, customer_id: r.customer_id, student_name: c.full_name, nickname: p.nickname || null, is_minor: minor,
+          contact_line: minor ? null : (k.line || null), contact_ig: minor ? null : (k.ig || null), contact_phone: minor ? null : (c.phone || null),
+          guardian_name: minor ? (p.guardian_name || null) : null, guardian_contact: minor ? (p.guardian_contact || null) : null, guardian_contact_kind: minor ? (p.guardian_contact_kind || null) : null,
+          course_title: r.course_title, teach_lang: r.teach_lang, state: r.state, sessions_total: r.sessions_total, sessions_used: r.sessions_used, sessions_done: r.sessions_done,
+          sessions_remaining: r.sessions_remaining, started_on: r.started_on, effective_expiry: r.effective_expiry, next_session_at: r.next_session_at };
+      }));
+    },
+  });
   // ── ก้อน C ──
   function recalc(e) {
     const ss = TEACH.sessions.filter(x => x.enrollment_id === e.id), ps = TEACH.pay.filter(p => p.enrollment_id === e.id);
@@ -494,7 +514,7 @@ const TEACH = { rows: [], profiles: [], sessions: [], ext: [], subs: [], status:
   const plain = (client, table, rowsFn, onInsert) => {
     const st = { op: 'select', notCol: null, order: null };
     const q = {
-      select() { return q; }, order() { return q; }, limit() { return q; }, eq() { return q; }, contains() { return q; }, or() { return q; }, ilike() { return q; },
+      select() { return q; }, order() { return q; }, limit() { return q; }, eq(c, v) { st.eqs = (st.eqs || []).concat([[c, v]]); return q; }, contains() { return q; }, or() { return q; }, ilike() { return q; },
       not(c) { st.notCol = c; return q; },
       insert(p) { st.op = 'insert'; st.payload = p; return q; },
       async single() { const r = await run(); return { data: (r.data || [])[0] || null, error: r.error }; },
@@ -506,7 +526,7 @@ const TEACH = { rows: [], profiles: [], sessions: [], ext: [], subs: [], status:
       if (TEACH.fail['from_' + table]) return E(TEACH.fail['from_' + table]);
       if (TEACH.missing) return E('relation "public.' + table + '" does not exist');
       if (st.op === 'insert') return onInsert ? onInsert(st.payload, client) : E('permission denied for table ' + table);
-      return OK(clone(rowsFn(st)));
+      return OK(clone(rowsFn(st)).filter(r => (st.eqs || []).every(([c, v]) => r[c] === v)));
     }
     return q;
   };
@@ -531,11 +551,12 @@ const TEACH = { rows: [], profiles: [], sessions: [], ext: [], subs: [], status:
     c.from = t => TEACH_TABLES.indexOf(t) >= 0 ? builder(c, t) : (B_TABLES[t] ? B_TABLES[t](c) : from(t));
     c.rpc = async (fn, args) => {
       if (RPC[fn]) {
-        CALLS.push({ op: 'rpc', fn, args: clone(args || {}), who: who(c) });
+        const caller = who(c);                         // ตัวตนของผู้เรียก ณ ตอนส่งคำขอ (ไม่ใช่ตอนตอบ — สลับบัญชีกลางทางไม่เปลี่ยนผลที่ฐานตอบ)
+        CALLS.push({ op: 'rpc', fn, args: clone(args || {}), who: caller });
         if (TEACH.gateRpc) await TEACH.gateRpc;
         if (TEACH.fail['rpc_' + fn]) return E(TEACH.fail['rpc_' + fn]);
         if (TEACH.missing) return E('Could not find the function public.' + fn + ' in the schema cache');
-        return RPC[fn](who(c), args || {});
+        return RPC[fn](caller, args || {});
       }
       if (fn !== 'my_teacher_id') return rpc(fn, args);
       CALLS.push({ op: 'rpc', fn, args, who: who(c) });
@@ -545,8 +566,8 @@ const TEACH = { rows: [], profiles: [], sessions: [], ext: [], subs: [], status:
     // บัญชีที่ไม่มีแถว admins: ครูล้วน (maniac) / คนทั่วไป (ghost) — ของจริงล็อกอินผ่านแต่ไม่มีสิทธิ์อะไร
     c.auth.signInWithPassword = async function (a) {
       const em = String((a && a.email) || '').toLowerCase();
-      if (em.startsWith('maniac') || em.startsWith('ghost')) {
-        const id = em.startsWith('maniac') ? 'u-maniac' : 'u-ghost';
+      if (em.startsWith('maniac') || em.startsWith('ghost') || em.startsWith('alldayz')) {
+        const id = em.startsWith('maniac') ? 'u-maniac' : em.startsWith('alldayz') ? 'u-alldayz' : 'u-ghost';
         c.session = { user: { id }, access_token: 'at-' + id, refresh_token: 'rt-' + id };
         setTimeout(() => c.cbs.forEach(cb => cb('SIGNED_IN', c.session)));
         return { data: { session: c.session }, error: null };

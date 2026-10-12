@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#111111">
+<meta name="robots" content="noindex">
+<title>DJ LAB SIAM — หน้าครู</title>
+<style>
+  :root {
+    --bg: #F4F2EC;
+    --surface: #FFFFFF;
+    --surface2: #ECE9E0;
+    --black: #111111;
+    --red: #CC001A;
+    --text: #111111;
+    --text2: #4A4740;
+    --line: #D9D5CA;
+    --line-strong: #111111;
+    --ok: #17692E;
+    --ok-soft: #E3F1E7;
+    --warn-soft: #FFF1C7;
+    --head: #E3DFD5;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 "Noto Sans Thai", "Segoe UI", -apple-system, system-ui, sans-serif; min-height: 100vh; min-height: 100dvh; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  .top { position: sticky; top: 0; z-index: 20; background: var(--black); color: #fff; border-bottom: 3px solid var(--red); padding: 10px 16px; padding-top: calc(10px + env(safe-area-inset-top)); display: flex; align-items: center; gap: 12px; }
+  .top .logo { font-weight: 800; letter-spacing: .5px; }
+  .top .logo b { background: var(--red); padding: 2px 8px; margin-right: 8px; }
+  .top .who { margin-left: auto; font-size: 14px; text-align: right; overflow-wrap: anywhere; }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 16px 16px 48px; }
+  .btn { min-height: 44px; padding: 0 16px; border: 1px solid var(--line-strong); background: var(--surface); font-weight: 600; cursor: pointer; border-radius: 0; }
+  .btn:disabled { color: #6E6B64; background: var(--surface2); cursor: not-allowed; }
+  .btn-primary { background: var(--black); color: #fff; }
+  .btn-primary:disabled { color: #fff; background: #6E6B64; }
+  .btn-danger { border-color: var(--red); color: var(--red); }
+  .btn-sm { min-height: 44px; padding: 0 12px; font-size: 14px; }
+  .btn-ghost { border-color: transparent; background: transparent; color: inherit; }
+  .top .btn { background: transparent; color: #fff; border-color: #fff; }
+  .field { margin-bottom: 12px; }
+  .lbl { display: block; font-weight: 600; margin-bottom: 4px; font-size: 14px; }
+  .input { width: 100%; min-height: 44px; padding: 8px 10px; border: 1px solid var(--line-strong); background: var(--surface); font-size: 16px; border-radius: 0; }
+  textarea.input { min-height: 96px; }
+  .hint { font-size: 14px; color: var(--text2); margin-top: 4px; }
+  .wk-red { color: var(--red); font-weight: 700; }
+  .alert { padding: 10px 14px; border: 1px solid var(--line-strong); background: var(--surface); margin-bottom: 14px; font-size: 14px; overflow-wrap: anywhere; }
+  .alert-red { border-color: var(--red); }
+  .alert-warn { background: var(--warn-soft); }
+  .alert-ok { border-color: var(--ok); color: var(--ok); background: var(--ok-soft); font-weight: 600; }
+  .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-bottom: 14px; }
+  .stat { background: var(--surface); border: 1px solid var(--line); padding: 8px 10px; }
+  .stat-v { font-size: 26px; font-weight: 800; line-height: 1.1; }
+  .stat-l { font-size: 14px; color: var(--text2); }
+  .tabs { display: flex; gap: 0; margin-bottom: 14px; border: 1px solid var(--line-strong); background: var(--surface); }
+  .tabs button { flex: 1; min-height: 44px; border: 0; background: var(--surface); font-weight: 700; cursor: pointer; }
+  .tabs button + button { border-left: 1px solid var(--line-strong); }
+  .tabs button[aria-selected="true"] { background: var(--black); color: #fff; }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; align-items: center; }
+  .bar .grow { flex: 1 1 200px; }
+  .card { background: var(--surface); border: 1px solid var(--line); padding: 12px 14px; margin-bottom: 10px; overflow-wrap: anywhere; }
+  .card.click { cursor: pointer; }
+  .card.click:hover { background: #FBFAF6; }
+  .card:focus-visible { outline: 2px solid var(--black); outline-offset: 1px; }
+  .name { font-size: 17px; font-weight: 700; }
+  .sub { font-size: 14px; color: var(--text2); }
+  .pills { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+  .st { display: inline-block; font-size: 14px; font-weight: 600; padding: 0 8px; border: 1px solid var(--line-strong); background: var(--surface); }
+  .st-ok { border-color: var(--ok); color: var(--ok); }
+  .st-warn { background: var(--warn-soft); }
+  .grp { margin: 18px 0 8px; font-size: 16px; font-weight: 800; border-bottom: 2px solid var(--black); padding-bottom: 4px; }
+  .grp .n { font-weight: 600; color: var(--text2); font-size: 14px; }
+  .prog { display: inline-block; width: 64px; height: 10px; border: 1px solid var(--black); background: var(--surface); vertical-align: middle; }
+  .prog i { display: block; height: 100%; background: var(--black); }
+  .sec { margin-bottom: 20px; }
+  .sec h2 { font-size: 17px; margin: 0 0 8px; }
+  .dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 14px; margin: 0; font-size: 15px; }
+  .dl dt { color: var(--text2); }
+  .dl dd { margin: 0; overflow-wrap: anywhere; }
+  .acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+  .form { border: 1px solid var(--line-strong); background: var(--surface2); padding: 12px; margin-top: 10px; }
+  .form h3 { margin: 0 0 10px; font-size: 16px; }
+  .note { margin-top: 8px; padding: 8px 10px; border-left: 3px solid var(--black); background: var(--surface2); white-space: pre-wrap; }
+  .empty { padding: 18px 0; color: var(--text2); text-align: center; }
+  .login { max-width: 420px; margin: 40px auto; background: var(--surface); border: 1px solid var(--line-strong); padding: 20px; }
+  .login h1 { font-size: 20px; margin: 0 0 12px; }
+  .back { margin-bottom: 12px; }
+  @media (max-width: 520px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (prefers-reduced-motion: no-preference) { .card { transition: background .15s; } }
+</style>
+</head>
+<body>
+<header class="top">
+  <span class="logo"><b>DJ LAB</b>หน้าครู</span>
+  <span class="who" id="who"></span>
+  <button class="btn btn-sm" id="logoutBtn" type="button" hidden>ออกจากระบบ</button>
+</header>
+<main class="wrap" id="app" aria-live="polite"><div class="empty">กำลังโหลด…</div></main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+// ===========================================================================
+// หน้าครู (P1b · migration 047) — สำหรับครูที่ "ไม่มีแถวใน admins" (เช่น Alldayz · Maniac) เข้าคอนโซลร้านไม่ได้ แต่ต้องดูนักเรียน/รอบเรียนของตัวเอง
+//   ใช้บัญชี login เดิม (session ชุดเดียวกับ desk.html) · ครูคนไหนก็ได้ที่ my_teacher_id() ไม่ว่าง ใช้หน้านี้ได้ (รวม Tibass/Nutty ที่เป็นพนักงานด้วย)
+//   สิทธิ์ตัวจริงอยู่ที่ฐาน (RLS + ฟังก์ชัน security definer ของ 047) — หน้านี้ "ไม่ดึง" และ "ไม่วาด" ส่วนที่ไม่ใช่ของครู:
+//     ไม่มี ยอดชำระ/ราคา/สลิป · ไม่มีลูกค้า/สมาชิก/บิล/สต็อก/นักเรียนของครูคนอื่น · ไม่มีอีเมล/ที่อยู่ · เบอร์โทรเห็นแค่ 4 ตัวท้าย (ติดต่อทาง LINE/IG หรือผู้ปกครอง)
+//     ไม่มี ปิดคอร์ส/ขยายอายุเอง/แก้ราคา/แก้ข้อมูลการลงเรียน — ขอขยายอายุได้ทางคำขอ (เจ้าของตัดสิน) เท่านั้น
+//   อ่านผ่าน: rpc my_teacher_id · rpc teach_my_students · class_sessions · session_notes · enrollment_extension_requests · teachers (ชื่อตัวเอง)
+//   เขียนผ่าน: teach_session_done · teach_session_cancel · teach_session_schedule · teach_note_save · teach_extend_request
+// ⚠️ ข้อความจากผู้ใช้/ฐาน (ชื่อ · ชื่อเล่น · LINE · IG · ผู้ปกครอง · เหตุผล · บันทึกการสอน) = escapeHtml เสมอ · ห้าม console.log ข้อมูลนักเรียน
+// ⚠️ ออกจากระบบ/สลับบัญชี → reset() ล้างข้อมูลทั้งหมด · ผลโหลดที่มาช้าถูกทิ้ง (uid + tok)
+// ⚠️ ตัวแปรฐานข้อมูลชื่อ db เท่านั้น (ห้ามชื่อ supabase)
+// ===========================================================================
+function showFatalError(msg) {
+  let box = document.getElementById('fatalError');
+  if (!box) {
+    box = document.createElement('div');
+    box.id = 'fatalError';
+    box.setAttribute('role', 'alert');
+    box.style.cssText = 'position:fixed;left:0;right:0;top:0;z-index:99999;background:#CC001A;color:#fff;font:15px/1.5 sans-serif;padding:12px 40px 12px 16px;white-space:pre-wrap;word-break:break-word;max-height:45vh;overflow:auto;';
+    const close = document.createElement('button');
+    close.textContent = '✕';
+    close.setAttribute('aria-label', 'ปิดข้อความ');
+    close.style.cssText = 'position:absolute;top:6px;right:8px;background:transparent;border:none;color:#fff;font-size:19px;padding:4px 8px;cursor:pointer;';
+    close.addEventListener('click', () => box.remove());
+    box.appendChild(close);
+    document.body.appendChild(box);
+  }
+  let t = box.querySelector('.msg');
+  if (!t) { t = document.createElement('div'); t.className = 'msg'; box.appendChild(t); }
+  t.textContent = msg;
+}
+window.addEventListener('error', e => showFatalError('เกิดข้อผิดพลาดในหน้านี้: ' + e.message));
+window.addEventListener('unhandledrejection', e => showFatalError('เกิดข้อผิดพลาด: ' + ((e.reason && e.reason.message) || e.reason)));
+
+const SUPABASE_URL = 'https://vvtefgjseihadsmvuntd.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ2dGVmZ2pzZWloYWRzbXZ1bnRkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU2OTM5ODUsImV4cCI6MjEwMTI2OTk4NX0.tgRD7_5hZuUG4zvajnIbe-tuNPNqELURSHIYtnh-MyM';
+if (!window.supabase || !window.supabase.createClient) {
+  showFatalError('โหลดไลบรารีระบบไม่สำเร็จ — ตรวจอินเทอร์เน็ตแล้วรีเฟรชหน้า');
+  throw new Error('supabase-js not loaded');
+}
+const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const NO_TABLE = /does not exist|schema cache|Could not find the function|PGRST20[24]|42P01|42883/i;
+const SOON_DAYS = 14, WEEK_DAYS = 7, LATE_DAYS = 3;
+const STATE_TXT = { waiting_payment: 'รอชำระ', queued: 'รอคิว', active: 'กำลังเรียน', expired: 'หมดอายุ', completed: 'จบ (ใช้สิทธิ์ครบ)', closed: 'ปิดแล้ว' };
+const BY_TXT = { student: 'นักเรียน', teacher: 'ครู', shop: 'ร้าน' };
+const KIND_TXT = { line: 'LINE', ig: 'Instagram', phone: 'โทรศัพท์' };
+const WARN_TXT = {
+  over_sessions: 'นัดรอบนี้เกินจำนวนครั้งของคอร์ส (ใช้สิทธิ์ + นัดไว้ครบแล้ว) — ระบบบันทึกนัดให้แล้ว ตรวจดูว่าถูกต้อง',
+  after_expiry: 'วันที่นัดอยู่หลังวันหมดอายุของคอร์ส — ระบบบันทึกนัดให้แล้ว หากต้องการเรียนต่อให้ขอขยายอายุ',
+};
+
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const todayBkk = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' });
+const ymdOf = iso => new Date(iso).toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' });
+const hmOf = iso => new Date(iso).toLocaleTimeString('en-GB', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit', hour12: false });
+const fmtDate = ymd => { const d = new Date(String(ymd).slice(0, 10) + 'T12:00:00+07:00'); return isNaN(d) ? '-' : d.toLocaleDateString('th-TH', { timeZone: 'Asia/Bangkok', day: 'numeric', month: 'short', year: '2-digit' }); };
+const whenOf = iso => { const d = new Date(iso); return isNaN(d) ? '-' : d.toLocaleString('th-TH', { timeZone: 'Asia/Bangkok', weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false }); };
+function daysTo(ymd) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(ymd || ''));
+  if (!m) return null;
+  const t = todayBkk().split('-').map(Number);
+  return Math.round((Date.UTC(+m[1], +m[2] - 1, +m[3]) - Date.UTC(t[0], t[1] - 1, t[2])) / 86400000);
+}
+const num = v => { const s = String(v == null ? '' : v).replace(/[,\s]/g, ''); if (s === '') return null; const n = Number(s); return Number.isFinite(n) ? n : NaN; };
+function errText(e) {
+  const m = String((e && e.message) || '');
+  if (/[ก-๙]/.test(m)) return m;                                                       // ข้อความไทยของฟังก์ชันฐาน (ไม่มียอด/เบอร์)
+  if ((e && e.code === '42501') || /row-level security|permission denied/i.test(m)) return 'ไม่มีสิทธิ์ทำรายการนี้';
+  if (NO_TABLE.test(m)) return 'ยังไม่ได้ติดตั้งระบบคอร์สเรียนในฐานข้อมูล';
+  return 'ฐานข้อมูลตอบกลับผิดปกติ' + (e && e.code ? ' (รหัส ' + e.code + ')' : '');
+}
+const uuid = () => (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now()) + Math.random();
+
+// ── สถานะ ──
+function blank() {
+  return { uid: null, tid: null, me: '', phase: 'boot', students: [], sess: [], reqs: [], notes: new Map(), loaded: false, missing: false, error: '',
+           tab: 'students', q: '', tok: 0, rt: null, openId: null, det: null, loginErr: '', loginBusy: false };
+}
+let st = blank();
+let channel = null, hiddenAt = 0;
+
+const $app = document.getElementById('app');
+const sessOf = id => st.sess.filter(s => s.enrollment_id === id);
+const stuOf = id => st.students.find(r => r.enrollment_id === id) || null;
+const dispName = r => r.student_name + (r.nickname ? ' (' + r.nickname + ')' : '');
+const sessKey = s => s.starts_at || (s.held_on ? s.held_on + 'T00:00:00+07:00' : '');
+
+// ── เข้าสู่ระบบ ──
+async function onSession(session) {
+  const uid = session && session.user ? session.user.id : null;
+  if (uid && uid === st.uid && st.phase !== 'login') return;
+  reset();
+  if (!uid) { st.phase = 'login'; render(); return; }
+  st.uid = uid;
+  st.phase = 'check';
+  render();
+  const { data, error } = await db.rpc('my_teacher_id');
+  if (uid !== st.uid) return;
+  if (error) {
+    console.error('[Teacher me]', error.code || '');
+    if (NO_TABLE.test(error.message || '')) st.missing = true; else showFatalError('ตรวจสิทธิ์ครูไม่สำเร็จ: ' + errText(error));
+    st.phase = 'notTeacher';
+    render();
+    return;
+  }
+  if (!data) { st.phase = 'notTeacher'; render(); return; }
+  st.tid = data;
+  st.phase = 'main';
+  render();
+  loadAll();
+  subscribe();
+}
+function reset() {
+  clearTimeout(st.rt);
+  if (channel) { try { db.removeChannel(channel); } catch (e) { /* ช่องปิดไปแล้ว */ } channel = null; }
+  st = blank();
+  document.getElementById('who').textContent = '';
+  document.getElementById('logoutBtn').hidden = true;
+  $app.innerHTML = '';
+}
+
+// ── โหลด ──
+async function loadAll() {
+  if (!st.uid || !st.tid) return;
+  const uid = st.uid, tok = ++st.tok;
+  const [ms, cs, rq, me] = await Promise.all([
+    db.rpc('teach_my_students'),
+    db.from('class_sessions').select('id, enrollment_id, teacher_id, status, starts_at, ends_at, held_on, hours, room, cancel_by, late_cancel, cancel_reason').order('starts_at', { ascending: true }).limit(1000),
+    db.from('enrollment_extension_requests').select('id, enrollment_id, requested_until, reason, status, decision_note, approved_until, created_at').order('created_at', { ascending: false }),
+    db.from('teachers').select('display_name').eq('id', st.tid),
+  ]);
+  if (uid !== st.uid || tok !== st.tok) return;                       // สลับบัญชี/ออกจากระบบ/โหลดซ้อน — ทิ้งผล
+  st.loaded = true;
+  const bad = ms.error || cs.error || rq.error;
+  if (bad) {
+    console.error('[Teacher load]', bad.code || '');
+    st.students = []; st.sess = []; st.reqs = [];
+    st.missing = NO_TABLE.test(bad.message || '');
+    st.error = st.missing ? '' : 'โหลดข้อมูลไม่สำเร็จ: ' + errText(bad);
+    if (st.error) showFatalError(st.error);
+  } else {
+    st.missing = false; st.error = '';
+    // ลดข้อมูลที่ถือไว้: เบอร์โทรเก็บแค่ 4 ตัวท้าย (ไม่แสดง/ไม่เก็บเบอร์เต็ม)
+    st.students = (ms.data || []).map(r => {
+      const p = String(r.contact_phone || '').replace(/\D/g, '');
+      const o = Object.assign({}, r, { phone4: p.length >= 4 ? p.slice(-4) : '' });
+      delete o.contact_phone;
+      return o;
+    });
+    st.sess = cs.data || [];
+    st.reqs = rq.data || [];
+  }
+  if (!me.error && me.data && me.data[0]) st.me = me.data[0].display_name || '';
+  document.getElementById('who').textContent = st.me ? 'ครู ' + st.me : '';
+  document.getElementById('logoutBtn').hidden = false;
+  if (st.det) await loadNotes(st.det.id, true);
+  render();
+}
+async function loadNotes(eid, silent) {
+  const d = st.det;
+  if (!d || d.id !== eid) return;
+  const ids = sessOf(eid).map(s => s.id);
+  if (!ids.length) { d.notesLoaded = true; return; }
+  const uid = st.uid;
+  const { data, error } = await db.from('session_notes').select('session_id, note').in('session_id', ids);
+  if (uid !== st.uid || st.det !== d) return;
+  if (error) { console.error('[Teacher notes]', error.code || ''); d.err = 'โหลดบันทึกการสอนไม่สำเร็จ: ' + errText(error); }
+  else { ids.forEach(i => st.notes.delete(i)); (data || []).forEach(n => st.notes.set(n.session_id, n.note)); }
+  d.notesLoaded = true;
+  if (!silent) render();
+}
+function scheduleReload() {
+  if (!st.uid || !st.loaded) return;
+  clearTimeout(st.rt);
+  st.rt = setTimeout(() => { st.rt = null; loadAll(); }, 400);
+}
+function subscribe() {
+  try {
+    const rtWatch = () => (status) => { if (status === 'SUBSCRIBED') scheduleReload(); };
+    channel = db.channel('teacher-page');
+    ['class_sessions', 'enrollments', 'enrollment_extension_requests'].forEach(t => {
+      channel = channel.on('postgres_changes', { event: '*', schema: 'public', table: t }, scheduleReload);
+    });
+    channel.subscribe(rtWatch());
+  } catch (e) { console.error('[Teacher rt]', e && e.code || ''); }
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { hiddenAt = Date.now(); return; }
+  if (hiddenAt && Date.now() - hiddenAt >= 5000) scheduleReload();
+  hiddenAt = 0;
+});
+window.addEventListener('online', scheduleReload);
+
+// ── วาด ──
+function loginHtml() {
+  return '<form class="login" id="loginForm" autocomplete="on"><h1>เข้าสู่ระบบ — หน้าครู</h1>' +
+    '<div class="field"><label class="lbl" for="lgEmail">อีเมล</label><input id="lgEmail" class="input" type="email" autocomplete="username" required></div>' +
+    '<div class="field"><label class="lbl" for="lgPass">รหัสผ่าน</label><input id="lgPass" class="input" type="password" autocomplete="current-password" required></div>' +
+    (st.loginErr ? '<div class="alert alert-red wk-red" id="loginErr" role="alert">' + esc(st.loginErr) + '</div>' : '') +
+    '<button class="btn btn-primary" id="loginBtn" type="submit"' + (st.loginBusy ? ' disabled' : '') + '>' + (st.loginBusy ? 'กำลังเข้าสู่ระบบ…' : 'เข้าสู่ระบบ') + '</button>' +
+    '<p class="hint">ใช้อีเมลและรหัสผ่านเดียวกับที่เจ้าของร้านให้ไว้</p></form>';
+}
+function notTeacherHtml() {
+  return '<div class="card" id="notTeacher">' + (st.missing
+    ? '<div class="alert alert-warn">ยังไม่ได้ติดตั้งระบบคอร์สเรียนในฐานข้อมูล — แจ้งเจ้าของร้าน</div>'
+    : '<div class="name">บัญชีนี้ยังไม่ได้ผูกกับครู</div><p>หน้านี้สำหรับอาจารย์ผู้สอน — แจ้งเจ้าของร้านให้ผูกบัญชีนี้กับชื่อครูก่อน</p>') +
+    '<div class="acts"><a class="btn" href="desk.html">เข้าคอนโซลร้าน (ทีมงาน)</a></div></div>';
+}
+function stateOf(r) { return STATE_TXT[r.state] || ''; }
+function expiryHtml(r) {
+  if (!r.effective_expiry) return '<span class="sub">ยังไม่เริ่มเรียน</span>';
+  const d = daysTo(r.effective_expiry), date = fmtDate(r.effective_expiry);
+  if (r.state === 'expired') return '<span class="wk-red">หมดอายุแล้ว เหลือ ' + Number(r.sessions_remaining) + ' ครั้ง</span> <span class="sub">(' + date + ')</span>';
+  if (r.state === 'active' && d !== null && d <= SOON_DAYS) return '<span class="wk-red">ใกล้หมดอายุ (' + (d <= 0 ? 'วันนี้' : d + ' วัน') + ')</span> <span class="sub">(' + date + ')</span>';
+  return 'หมดอายุ ' + date;
+}
+function cardHtml(r) {
+  const used = Number(r.sessions_used) || 0, done = Number(r.sessions_done) || 0, tot = Number(r.sessions_total) || 0;
+  const pct = tot ? Math.min(100, Math.round(used / tot * 100)) : 0;
+  return '<article class="card click" tabindex="0" role="button" data-eid="' + esc(r.enrollment_id) + '" aria-label="เปิดรายละเอียด ' + esc(r.student_name) + '">' +
+    '<div class="name">' + esc(r.student_name) + (r.nickname ? ' <span class="sub">(' + esc(r.nickname) + ')</span>' : '') + '</div>' +
+    '<div class="pills">' + (stateOf(r) ? '<span class="st">' + stateOf(r) + '</span>' : '') + (r.is_minor ? '<span class="st st-warn">ผู้เยาว์</span>' : '') +
+      (r.teach_lang === 'en' ? '<span class="st">สอนภาษาอังกฤษ</span>' : '') + '</div>' +
+    '<div>' + esc(r.course_title) + '</div>' +
+    '<div class="sub"><span class="prog" aria-hidden="true"><i style="width:' + pct + '%"></i></span> เรียนแล้ว <strong>' + done + '/' + tot + '</strong> ครั้ง' +
+      (used > done ? ' · ใช้สิทธิ์ ' + used + ' ครั้ง (รวมไม่มา/แจ้งช้า)' : '') + ' · เหลือ ' + Number(r.sessions_remaining) + ' ครั้ง</div>' +
+    '<div class="sub">' + expiryHtml(r) + (r.next_session_at ? ' · ครั้งถัดไป ' + esc(whenOf(r.next_session_at)) : '') + '</div></article>';
+}
+function visibleStudents() {
+  const q = st.q.trim().toLowerCase();
+  return st.students.filter(r => !q || [r.student_name, r.nickname, r.course_title].some(s => String(s || '').toLowerCase().includes(q)));
+}
+function statsHtml() {
+  const now = Date.now(), wk = now + WEEK_DAYS * 86400000;
+  const act = st.students.filter(r => r.state === 'active'), queued = st.students.filter(r => r.state === 'queued');
+  const soon = st.students.filter(r => { const d = daysTo(r.effective_expiry); return (r.state === 'active' || r.state === 'expired') && d !== null && d <= SOON_DAYS; });
+  const week = st.sess.filter(s => s.status === 'scheduled' && Date.parse(s.starts_at) >= now && Date.parse(s.starts_at) <= wk);
+  const c = (v, l, red) => '<div class="stat"><div class="stat-v' + (red && v > 0 ? ' wk-red' : '') + '">' + v + '</div><div class="stat-l">' + l + '</div></div>';
+  return '<div class="stats">' + c(act.length, 'กำลังเรียน') + c(queued.length, 'รอคิว') + c(soon.length, 'ใกล้หมดอายุ/หมดอายุ', true) + c(week.length, 'รอบใน ' + WEEK_DAYS + ' วัน') + '</div>';
+}
+function studentsHtml() {
+  const vis = visibleStudents();
+  const order = ['active', 'queued', 'waiting_payment', 'expired', 'completed', 'closed'];
+  const titles = { active: 'กำลังเรียน', queued: 'รอคิว (ชำระแล้ว ยังไม่เริ่ม)', waiting_payment: 'รอชำระ', expired: 'หมดอายุ', completed: 'จบ (ใช้สิทธิ์ครบ)', closed: 'ปิดแล้ว' };
+  let h = '<div class="bar"><input id="q" class="input grow" type="search" autocomplete="off" placeholder="ค้นหาชื่อนักเรียน ชื่อเล่น หรือคอร์ส" aria-label="ค้นหานักเรียน" value="' + esc(st.q) + '"></div>';
+  if (!st.students.length) return h + '<div class="empty" id="noStudents">ยังไม่มีนักเรียนที่ลงเรียนกับครู ' + esc(st.me) + '</div>';
+  order.forEach(k => {
+    const rows = vis.filter(r => r.state === k);
+    if (!rows.length) return;
+    rows.sort((a, b) => String(a.effective_expiry || '9999').localeCompare(String(b.effective_expiry || '9999')) || String(a.student_name).localeCompare(String(b.student_name), 'th'));
+    h += '<h2 class="grp">' + titles[k] + ' <span class="n">' + rows.length + ' คน</span></h2>' + rows.map(cardHtml).join('');
+  });
+  return vis.length ? h : h + '<div class="empty">ไม่พบนักเรียนที่ตรงกับคำค้น</div>';
+}
+function scheduleHtml() {
+  const now = Date.now(), wk = now + WEEK_DAYS * 86400000;
+  const rows = st.sess.filter(s => s.status === 'scheduled' && stuOf(s.enrollment_id)).sort((a, b) => String(a.starts_at).localeCompare(String(b.starts_at)));
+  const late = rows.filter(s => Date.parse(s.starts_at) < now), week = rows.filter(s => { const t = Date.parse(s.starts_at); return t >= now && t <= wk; });
+  const later = rows.filter(s => Date.parse(s.starts_at) > wk);
+  const row = s => {
+    const r = stuOf(s.enrollment_id), over = Date.parse(s.starts_at) < now;
+    return '<article class="card click" tabindex="0" role="button" data-eid="' + esc(s.enrollment_id) + '" data-sid="' + esc(s.id) + '">' +
+      '<div class="name">' + esc(whenOf(s.starts_at)) + '–' + esc(hmOf(s.ends_at)) + '</div>' +
+      '<div>' + esc(dispName(r)) + ' · ' + esc(r.course_title) + (s.room ? ' · ห้อง ' + esc(s.room) : '') + '</div>' +
+      (over ? '<div class="wk-red">เลยเวลานัดแล้ว ยังไม่ได้ทำเครื่องหมาย</div>' : '') + '</article>';
+  };
+  const g = (t, a, e) => '<h2 class="grp">' + t + ' <span class="n">' + a.length + ' รอบ</span></h2>' + (a.length ? a.map(row).join('') : '<div class="empty">' + e + '</div>');
+  return (late.length ? g('เลยเวลานัดแล้ว ยังไม่ได้ทำเครื่องหมาย', late, '') : '') + g('สัปดาห์นี้ (' + WEEK_DAYS + ' วันข้างหน้า)', week, 'ไม่มีรอบที่นัดไว้ใน ' + WEEK_DAYS + ' วันข้างหน้า') + g('ที่จะถึง', later, 'ไม่มีรอบที่นัดไว้ไกลกว่านั้น');
+}
+
+// ── แผงรายละเอียดนักเรียน ──
+function detBlank(id) { return { id, open: null, fv: {}, busy: '', err: '', ok: '', warn: [], notesLoaded: false }; }
+const fvv = k => (st.det && st.det.fv[k] != null) ? String(st.det.fv[k]) : '';
+const inp = (k, label, o) => { o = o || {}; return '<div class="field"><label class="lbl" for="f_' + k + '">' + label + '</label><input id="f_' + k + '" class="input" data-f="' + k + '" type="' + (o.type || 'text') + '"' +
+  (o.inputmode ? ' inputmode="' + o.inputmode + '"' : '') + (o.max ? ' max="' + esc(o.max) + '"' : '') + (o.min ? ' min="' + esc(o.min) + '"' : '') + (o.maxlength ? ' maxlength="' + o.maxlength + '"' : '') +
+  ' value="' + esc(fvv(k)) + '">' + (o.hint ? '<div class="hint">' + o.hint + '</div>' : '') + '</div>'; };
+const sel = (k, label, opts) => '<div class="field"><label class="lbl" for="f_' + k + '">' + label + '</label><select id="f_' + k + '" class="input" data-f="' + k + '" data-struct="1">' +
+  opts.map(([v, t]) => '<option value="' + esc(v) + '"' + (String(v) === fvv(k) ? ' selected' : '') + '>' + esc(t) + '</option>').join('') + '</select></div>';
+const ta = (k, label, o) => { o = o || {}; return '<div class="field"><label class="lbl" for="f_' + k + '">' + label + '</label><textarea id="f_' + k + '" class="input" data-f="' + k + '" rows="' + (o.rows || 4) + '"' +
+  (o.maxlength ? ' maxlength="' + o.maxlength + '"' : '') + '>' + esc(fvv(k)) + '</textarea>' + (o.hint ? '<div class="hint">' + o.hint + '</div>' : '') + '</div>'; };
+const btn = (act, label, o) => { o = o || {}; return '<button class="btn' + (o.primary ? ' btn-primary' : '') + (o.danger ? ' btn-danger' : '') + ' btn-sm" type="button" data-act="' + act + '"' +
+  (o.k ? ' data-k="' + o.k + '"' : '') + (o.sid ? ' data-sid="' + esc(o.sid) + '"' : '') + (st.det && st.det.busy ? ' disabled' : '') + '>' + label + '</button>'; };
+const formBar = (k, label, danger) => '<div class="acts">' + btn('submit', st.det.busy === k ? 'กำลังบันทึก…' : label, { primary: !danger, danger, k }) + btn('close-form', 'ยกเลิก') + '</div>';
+
+function lateOf(startsIso, notifiedYmd) {          // กติกาเดียวกับ teach_is_late_cancel ใน 047 (วันปฏิทินไทย · < 3 วัน = ช้า) — ไว้แสดงตัวอย่างก่อนกด ฐานเป็นผู้ตัดสินจริง
+  if (!startsIso || !notifiedYmd) return true;
+  const a = ymdOf(startsIso).split('-').map(Number), b = notifiedYmd.split('-').map(Number);
+  return Math.round((Date.UTC(a[0], a[1] - 1, a[2]) - Date.UTC(b[0], b[1] - 1, b[2])) / 86400000) < LATE_DAYS;
+}
+function cancelPreview(s, fv) {
+  if (fv.as === 'no_show') return '<span class="wk-red">ไม่มาเรียน = นับเป็นครั้งที่ใช้ไปเสมอ</span>';
+  if (fv.by !== 'student') return '<span class="sub">ครู/ร้านยกเลิก = ไม่นับเป็นครั้งที่ใช้ไป</span>';
+  return lateOf(s.starts_at, fv.notified)
+    ? '<span class="wk-red">แจ้งช้ากว่า ' + LATE_DAYS + ' วันก่อนวันนัด (หรือหลังเวลานัด) — นับเป็นครั้งที่ใช้ไป</span>'
+    : '<span class="sub">แจ้งล่วงหน้าอย่างน้อย ' + LATE_DAYS + ' วัน — ไม่นับเป็นครั้งที่ใช้ไป</span>';
+}
+function contactHtml(r) {
+  if (r.is_minor) {
+    return '<dl class="dl" id="contact"><dt>ผู้เยาว์</dt><dd>ติดต่อผ่านผู้ปกครองเท่านั้น</dd>' +
+      '<dt>ผู้ปกครอง</dt><dd>' + esc(r.guardian_name || '—') + '</dd>' +
+      '<dt>ช่องทาง</dt><dd>' + esc(KIND_TXT[r.guardian_contact_kind] || '') + ' ' + esc(r.guardian_contact || '—') + '</dd></dl>';
+  }
+  return '<dl class="dl" id="contact"><dt>LINE</dt><dd>' + esc(r.contact_line || '—') + '</dd><dt>Instagram</dt><dd>' + esc(r.contact_ig || '—') + '</dd>' +
+    '<dt>โทรศัพท์</dt><dd>' + (r.phone4 ? '•••-•••-' + esc(r.phone4) : '—') + ' <span class="sub">(เห็นแค่ 4 ตัวท้าย — ติดต่อทาง LINE/IG ก่อน)</span></dd></dl>';
+}
+function sessRowHtml(r, s) {
+  const d = st.det, here = d.open && d.fv.sid === s.id;
+  let state, when;
+  if (s.status === 'scheduled') {
+    const over = Date.parse(s.starts_at) < Date.now();
+    state = '<span class="st st-warn">นัดไว้</span>';
+    when = esc(whenOf(s.starts_at)) + '–' + esc(hmOf(s.ends_at)) + (over ? ' <span class="wk-red">เลยเวลานัดแล้ว ยังไม่ได้ทำเครื่องหมาย</span>' : '');
+  } else if (s.status === 'done') {
+    state = '<span class="st st-ok">สอนแล้ว</span>';
+    when = esc(fmtDate(s.held_on)) + ' · ' + Number(s.hours) + ' ชม.';
+  } else if (s.status === 'no_show') {
+    state = '<span class="st">ไม่มา</span>';
+    when = (s.starts_at ? esc(whenOf(s.starts_at)) : '') + ' <span class="wk-red">นับเป็นครั้งที่ใช้ไป</span>';
+  } else {
+    state = '<span class="st">ยกเลิก (' + esc(BY_TXT[s.cancel_by] || '') + ')</span>';
+    when = (s.starts_at ? esc(whenOf(s.starts_at)) : '') + (s.late_cancel ? ' <span class="wk-red">แจ้งช้า — นับเป็นครั้งที่ใช้ไป</span>' : s.cancel_by === 'student' ? ' <span class="sub">แจ้งล่วงหน้า — ไม่นับเป็นครั้งที่ใช้ไป</span>' : '');
+  }
+  let h = '<div class="card" data-sid="' + esc(s.id) + '"><div class="pills">' + state + '</div><div>' + when + '</div>' +
+    '<div class="sub">' + (s.room ? 'ห้อง ' + esc(s.room) : '') + (s.teacher_id !== st.tid ? ' · สอนโดยครูท่านอื่น' : '') + '</div>' +
+    (s.cancel_reason ? '<div class="sub">เหตุผล: ' + esc(s.cancel_reason) + '</div>' : '');
+  if (st.notes.has(s.id) && !(here && d.open === 'note')) h += '<div class="note" data-note="' + esc(s.id) + '"><span class="sub">บันทึกการสอน</span><br>' + esc(st.notes.get(s.id)) + '</div>';
+  if (here && d.open === 'done') {
+    h += '<div class="form" id="formDone"><h3>ทำเครื่องหมายสอนแล้ว</h3>' + inp('date', 'วันที่สอน', { type: 'date', max: todayBkk() }) +
+      inp('hours', 'ชั่วโมงที่สอนจริง (เว้นว่าง = ' + Number(s.hours) + ' ชม. ตามที่นัด)', { inputmode: 'decimal' }) +
+      '<div class="hint">ครั้งแรกที่สอนแล้ว ระบบตั้งวันเริ่มเรียนและวันหมดอายุให้เอง</div>' + formBar('done', 'ยืนยันสอนแล้ว') + '</div>';
+  } else if (here && d.open === 'cancel') {
+    h += '<div class="form" id="formCancel"><h3>ยกเลิก / ไม่มา</h3>' +
+      sel('as', 'เกิดอะไรขึ้น', [['cancelled', 'ยกเลิกรอบนี้'], ['no_show', 'นักเรียนไม่มาเรียน']]) +
+      (d.fv.as === 'cancelled' ? sel('by', 'ใครยกเลิก', [['student', 'นักเรียน'], ['teacher', 'ครู'], ['shop', 'ร้าน']]) : '') +
+      (d.fv.as === 'cancelled' && d.fv.by === 'student' ? inp('notified', 'นักเรียนแจ้งเมื่อวันที่', { type: 'date', max: todayBkk() }) : '') +
+      inp('reason', 'เหตุผล (ไม่เกิน 300 ตัวอักษร · เว้นว่างได้)', { maxlength: 300 }) +
+      '<div id="cancelPrev" role="status">' + cancelPreview(s, d.fv) + '</div>' + formBar('cancel', 'ยืนยัน', true) + '</div>';
+  } else if (here && d.open === 'note') {
+    h += '<div class="form" id="formNote"><h3>บันทึกการสอน</h3>' +
+      ta('text', 'บันทึก (ไม่เกิน 4,000 ตัวอักษร · เว้นว่าง = ลบบันทึก)', { rows: 5, maxlength: 4000, hint: 'เห็นเฉพาะเจ้าของร้านและครูของนักเรียนคนนี้ — พนักงาน/ผู้ดูแลคนอื่นไม่เห็น' }) +
+      formBar('note', 'บันทึก') + '</div>';
+  } else {
+    let a = '';
+    if (s.status === 'scheduled') a += btn('open', 'ทำเครื่องหมายสอนแล้ว', { k: 'done', sid: s.id }) + btn('open', 'ยกเลิก / ไม่มา', { k: 'cancel', sid: s.id });
+    a += btn('open', st.notes.has(s.id) ? 'แก้บันทึกการสอน' : 'บันทึกการสอน', { k: 'note', sid: s.id });
+    h += '<div class="acts">' + a + '</div>';
+  }
+  return h + '</div>';
+}
+function detailHtml() {
+  const d = st.det, r = stuOf(d.id);
+  if (!r) return '<div class="back"><button class="btn" type="button" data-act="back">← กลับ</button></div><div class="empty">ไม่พบนักเรียนคนนี้ (อาจย้ายไปครูท่านอื่นแล้ว)</div>';
+  const closed = r.state === 'closed';
+  const myReqs = st.reqs.filter(q => q.enrollment_id === d.id), pending = myReqs.find(q => q.status === 'pending');
+  let h = '<div class="back"><button class="btn" type="button" data-act="back"' + (d.busy ? ' disabled' : '') + '>← นักเรียนของฉัน</button></div>';
+  if (d.ok) h += '<div class="alert alert-ok" id="detOk" role="status">' + esc(d.ok) + '</div>';
+  if (d.err) h += '<div class="alert alert-red wk-red" id="detErr" role="alert">' + esc(d.err) + '</div>';
+  if (d.warn.length) h += '<div class="alert alert-red" id="detWarn" role="alert">' + d.warn.map(w => '<div class="wk-red">' + esc(w) + '</div>').join('') + '</div>';
+  h += '<section class="sec" id="head"><div class="name">' + esc(r.student_name) + (r.nickname ? ' <span class="sub">(' + esc(r.nickname) + ')</span>' : '') + '</div>' +
+    '<div class="pills">' + (stateOf(r) ? '<span class="st">' + stateOf(r) + '</span>' : '') + (r.is_minor ? '<span class="st st-warn">ผู้เยาว์</span>' : '') + '</div>' +
+    '<div>' + esc(r.course_title) + '</div>' +
+    '<dl class="dl"><dt>เรียนแล้ว</dt><dd><strong>' + Number(r.sessions_done) + '/' + Number(r.sessions_total) + '</strong> ครั้ง' + (Number(r.sessions_used) > Number(r.sessions_done) ? ' <span class="sub">(ใช้สิทธิ์ ' + Number(r.sessions_used) + ' ครั้ง)</span>' : '') + '</dd>' +
+    '<dt>เหลือ</dt><dd>' + Number(r.sessions_remaining) + ' ครั้ง</dd>' +
+    '<dt>วันเริ่ม</dt><dd>' + (r.started_on ? esc(fmtDate(r.started_on)) : '<span class="sub">ยังไม่เริ่มเรียน</span>') + '</dd>' +
+    '<dt>อายุคอร์ส</dt><dd>' + expiryHtml(r) + '</dd></dl></section>';
+  h += '<section class="sec"><h2>ข้อมูลติดต่อ</h2>' + contactHtml(r) + '</section>';
+  const ss = sessOf(d.id).slice().sort((a, b) => sessKey(a).localeCompare(sessKey(b)));
+  h += '<section class="sec" id="sessions"><h2>รอบเรียน <span class="sub">' + ss.length + ' รอบ</span></h2>' +
+    (ss.length ? ss.map(s => sessRowHtml(r, s)).join('') : '<div class="empty">ยังไม่มีรอบเรียน</div>');
+  if (!closed) {
+    h += d.open === 'sched'
+      ? '<div class="form" id="formSched"><h3>นัดรอบเรียน</h3>' + inp('date', 'วันที่', { type: 'date' }) + inp('start', 'เวลาเริ่ม', { type: 'time' }) + inp('end', 'เวลาจบ', { type: 'time' }) +
+        inp('room', 'ห้อง (ไม่เกิน 40 ตัวอักษร · เว้นว่างได้)', { maxlength: 40 }) +
+        '<div class="hint">ครูมีนัดซ้อนกัน = ระบบปฏิเสธ · เกินจำนวนครั้ง/เกินวันหมดอายุ = เตือนแต่บันทึกให้</div>' + formBar('sched', 'บันทึกนัด') + '</div>'
+      : '<div class="acts">' + btn('open', '+ นัดรอบเรียน', { k: 'sched' }) + '</div>';
+  } else h += '<div class="hint">คอร์สนี้ปิดแล้ว — นัดรอบใหม่ไม่ได้</div>';
+  h += '</section>';
+  h += '<section class="sec" id="ext"><h2>ขอขยายอายุคอร์ส</h2>';
+  if (closed) h += '<div class="hint">คอร์สนี้ปิดแล้ว — ขอขยายอายุไม่ได้</div>';
+  else if (!r.effective_expiry) h += '<div class="hint">ยังไม่เริ่มเรียน (ยังไม่มีวันหมดอายุ) — ขอขยายอายุไม่ได้</div>';
+  else if (pending) h += '<div class="alert alert-warn" id="extPending">คำขอรอเจ้าของร้านตัดสิน: ขอถึง ' + esc(fmtDate(pending.requested_until)) + ' — เหตุผล: ' + esc(pending.reason) + '</div>';
+  else if (d.open === 'ext') {
+    h += '<div class="form" id="formExt"><h3>ขอขยายอายุ</h3>' + inp('until', 'ขอขยายถึงวันที่', { type: 'date', min: r.effective_expiry }) +
+      ta('reason', 'เหตุผล (ไม่เกิน 500 ตัวอักษร)', { rows: 3, maxlength: 500, hint: 'เจ้าของร้านเป็นผู้ตัดสิน — เหตุผลนี้เห็นเฉพาะเจ้าของและครูผู้ขอ' }) + formBar('ext', 'ส่งคำขอ') + '</div>';
+  } else h += '<div class="acts">' + btn('open', 'ขอขยายอายุ', { k: 'ext' }) + '</div><div class="hint">ครูไม่ขยายเองได้ — ส่งคำขอให้เจ้าของร้านตัดสิน</div>';
+  const past = myReqs.filter(q => q.status !== 'pending');
+  if (past.length) h += '<div class="sub" style="margin-top:10px;">ประวัติคำขอ</div>' + past.map(q => {
+    const t = q.status === 'approved' ? 'อนุมัติถึง ' + fmtDate(q.approved_until) : 'ปฏิเสธ';
+    return '<div class="card"><strong>' + t + '</strong> · ขอถึง ' + esc(fmtDate(q.requested_until)) + '<div class="sub">เหตุผล: ' + esc(q.reason) + '</div>' +
+      (q.decision_note ? '<div class="sub">หมายเหตุเจ้าของ: ' + esc(q.decision_note) + '</div>' : '') + '</div>';
+  }).join('');
+  return h + '</section>';
+}
+function mainHtml() {
+  let h = '';
+  if (st.missing) h += '<div class="alert alert-warn" id="missing">ยังไม่ได้ติดตั้งระบบคอร์สเรียนในฐานข้อมูล — แจ้งเจ้าของร้าน</div>';
+  if (st.error) h += '<div class="alert alert-red wk-red" role="alert">' + esc(st.error) + '</div>';
+  if (st.det) return h + detailHtml();
+  h += statsHtml();
+  h += '<div class="bar"><div class="tabs grow" role="tablist" id="tabs">' +
+    '<button type="button" role="tab" data-tab="students" aria-selected="' + (st.tab === 'students') + '">นักเรียนของฉัน</button>' +
+    '<button type="button" role="tab" data-tab="schedule" aria-selected="' + (st.tab === 'schedule') + '">ตารางสอน</button></div>' +
+    '<button class="btn" id="reload" type="button">↻ รีเฟรช</button></div>';
+  return h + (st.tab === 'schedule' ? scheduleHtml() : studentsHtml());
+}
+function render() {
+  if (st.phase === 'login') { $app.innerHTML = loginHtml(); return; }
+  if (st.phase === 'check' || st.phase === 'boot') { $app.innerHTML = '<div class="empty">กำลังตรวจสอบสิทธิ์…</div>'; return; }
+  if (st.phase === 'notTeacher') { $app.innerHTML = notTeacherHtml(); document.getElementById('logoutBtn').hidden = false; return; }
+  if (!st.loaded) { $app.innerHTML = '<div class="empty">กำลังโหลดข้อมูลนักเรียน…</div>'; return; }
+  const act = document.activeElement;
+  const keep = act && $app.contains(act) && act.id ? { id: act.id, s: act.selectionStart, e: act.selectionEnd } : null;
+  const y = window.scrollY;
+  $app.innerHTML = mainHtml();
+  if (keep) {
+    const el = document.getElementById(keep.id);
+    if (el) { try { el.focus({ preventScroll: true }); if (keep.s != null) el.setSelectionRange(keep.s, keep.e); } catch (e) { /* ชนิด input ที่ไม่รองรับ selection */ } }
+  }
+  window.scrollTo(0, y);
+}
+
+// ── ทำงาน ──
+function openStudent(eid, sid) {
+  if (!stuOf(eid)) return;
+  st.det = detBlank(eid);
+  render();
+  window.scrollTo(0, 0);
+  loadNotes(eid, false);
+  if (sid) { const el = $app.querySelector('[data-sid="' + sid.replace(/"/g, '') + '"]'); if (el) el.scrollIntoView({ block: 'center' }); }
+}
+function openForm(k, sid) {
+  const d = st.det, s = sid ? sessOf(d.id).find(x => x.id === sid) : null, today = todayBkk();
+  d.open = k; d.err = ''; d.ok = ''; d.warn = []; d.fv = { sid: sid || '' };
+  if (k === 'done') { const y = s && s.starts_at ? ymdOf(s.starts_at) : today; Object.assign(d.fv, { date: y > today ? today : y, hours: '' }); }
+  else if (k === 'cancel') Object.assign(d.fv, { as: 'cancelled', by: 'student', notified: today, reason: '' });
+  else if (k === 'note') Object.assign(d.fv, { text: st.notes.get(sid) || '' });
+  else if (k === 'sched') Object.assign(d.fv, { date: '', start: '', end: '', room: '' });
+  else if (k === 'ext') Object.assign(d.fv, { until: '', reason: '' });
+  render();
+}
+function failMsg(msg) { const d = st.det; d.err = msg; d.ok = ''; d.warn = []; render(); }
+async function run(label, fn) {
+  const d = st.det;
+  if (!d || d.busy) return;
+  const uid = st.uid;
+  d.busy = label; d.err = ''; d.ok = ''; d.warn = [];
+  render();
+  try {
+    const res = await fn();
+    if (uid !== st.uid || st.det !== d) return;
+    d.busy = ''; d.ok = (res && res.ok) || ''; d.warn = (res && res.warn) || []; d.open = null; d.fv = {};
+    render();
+    loadAll();
+  } catch (e) {
+    if (uid !== st.uid || st.det !== d) return;
+    console.error('[Teacher action]', label, e && e.code || '');
+    d.busy = ''; d.err = 'ไม่สำเร็จ: ' + errText(e);
+    render();
+  }
+}
+const rpc = async (fn, args) => { const { data, error } = await db.rpc(fn, args); if (error) throw error; return data; };
+const ts = (ymd, hm) => ymd + 'T' + hm + ':00+07:00';
+
+function submit(k) {
+  const d = st.det, fv = d.fv, today = todayBkk();
+  if (k === 'done') {
+    const h = num(fv.hours);
+    if (!fv.date) return failMsg('ใส่วันที่สอน');
+    if (fv.date > today) return failMsg('วันที่สอนต้องไม่เกินวันนี้');
+    if (h !== null && (Number.isNaN(h) || h <= 0 || h > 12)) return failMsg('ชั่วโมงต้องมากกว่า 0 และไม่เกิน 12');
+    return run('done', async () => { await rpc('teach_session_done', { p_session: fv.sid, p_held_on: fv.date, p_hours: h }); return { ok: 'ทำเครื่องหมายสอนแล้ว ✓' }; });
+  }
+  if (k === 'cancel') {
+    if (fv.as === 'cancelled' && fv.by === 'student' && !fv.notified) return failMsg('ใส่วันที่นักเรียนแจ้ง');
+    if (fv.as === 'cancelled' && fv.by === 'student' && fv.notified > today) return failMsg('วันที่แจ้งต้องไม่เกินวันนี้');
+    if (String(fv.reason).length > 300) return failMsg('เหตุผลยาวเกิน 300 ตัวอักษร');
+    return run('cancel', async () => {
+      const res = await rpc('teach_session_cancel', { p_session: fv.sid, p_as: fv.as, p_by: fv.as === 'cancelled' ? fv.by : null,
+        p_notified_at: fv.as === 'cancelled' && fv.by === 'student' && fv.notified !== today ? ts(fv.notified, '12:00') : null, p_reason: String(fv.reason).trim() || null });
+      return { ok: (fv.as === 'no_show' ? 'บันทึกว่านักเรียนไม่มา' : 'ยกเลิกรอบแล้ว') + (res && res.counted ? ' — นับเป็นครั้งที่ใช้ไป' : ' — ไม่นับเป็นครั้งที่ใช้ไป') };
+    });
+  }
+  if (k === 'note') {
+    if (String(fv.text).length > 4000) return failMsg('บันทึกยาวเกิน 4,000 ตัวอักษร');
+    return run('note', async () => {
+      const saved = await rpc('teach_note_save', { p_session: fv.sid, p_note: String(fv.text) });
+      return { ok: saved ? 'บันทึกการสอนแล้ว ✓' : 'ลบบันทึกการสอนแล้ว' };
+    });
+  }
+  if (k === 'sched') {
+    if (!fv.date || !fv.start || !fv.end) return failMsg('ใส่วันที่ เวลาเริ่ม และเวลาจบ');
+    if (fv.end <= fv.start) return failMsg('เวลาจบต้องหลังเวลาเริ่ม');
+    return run('sched', async () => {
+      const res = await rpc('teach_session_schedule', { p_enrollment: d.id, p_teacher: st.tid, p_starts: ts(fv.date, fv.start), p_ends: ts(fv.date, fv.end), p_room: String(fv.room).trim() || null, p_hours: null });
+      return { ok: 'นัดรอบเรียนแล้ว ✓', warn: ((res && res.warnings) || []).map(w => WARN_TXT[w] || ('คำเตือนจากระบบ (รหัส ' + String(w).slice(0, 40) + ')')) };
+    });
+  }
+  if (k === 'ext') {
+    const r = stuOf(d.id);
+    if (!fv.until) return failMsg('ใส่วันที่ที่ขอขยายถึง');
+    if (!String(fv.reason).trim()) return failMsg('ใส่เหตุผลที่ขอขยายอายุ');
+    if (String(fv.reason).length > 500) return failMsg('เหตุผลยาวเกิน 500 ตัวอักษร');
+    if (r && r.effective_expiry && fv.until <= r.effective_expiry) return failMsg('วันที่ขอต้องเกินวันหมดอายุปัจจุบัน');
+    return run('ext', async () => { await rpc('teach_extend_request', { p_enrollment: d.id, p_until: fv.until, p_reason: String(fv.reason).trim() }); return { ok: 'ส่งคำขอขยายอายุแล้ว — รอเจ้าของร้านตัดสิน' }; });
+  }
+}
+
+// ── ตัวฟังเหตุการณ์ (ตัวเดียวที่ #app) ──
+$app.addEventListener('click', e => {
+  const b = e.target.closest('[data-act]');
+  if (b) {
+    const d = st.det, a = b.dataset.act;
+    if (a === 'back') { st.det = null; render(); return; }
+    if (!d || d.busy) return;
+    if (a === 'open') openForm(b.dataset.k, b.dataset.sid || '');
+    else if (a === 'close-form') { d.open = null; d.fv = {}; d.err = ''; render(); }
+    else if (a === 'submit') submit(b.dataset.k);
+    return;
+  }
+  const tab = e.target.closest('#tabs [data-tab]');
+  if (tab) { st.tab = tab.dataset.tab; render(); return; }
+  if (e.target.closest('#reload')) { loadAll(); return; }
+  const card = e.target.closest('.card.click[data-eid]');
+  if (card && !st.det) openStudent(card.dataset.eid, card.dataset.sid || '');
+});
+$app.addEventListener('keydown', e => {
+  if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.card.click[data-eid]') && !st.det) { e.preventDefault(); openStudent(e.target.dataset.eid, e.target.dataset.sid || ''); }
+});
+$app.addEventListener('input', e => {
+  const t = e.target;
+  if (t.id === 'q') { st.q = t.value; const pos = t.selectionStart; render(); const q = document.getElementById('q'); if (q) { q.focus(); try { q.setSelectionRange(pos, pos); } catch (x) { /* search input */ } } return; }
+  if (!st.det || !t.dataset.f) return;
+  st.det.fv[t.dataset.f] = t.type === 'checkbox' ? t.checked : t.value;
+  if (st.det.open === 'cancel' && t.dataset.f === 'notified') {      // ตัวอย่างผลแจ้งช้า: แก้เฉพาะกล่องข้อความ ไม่วาดทั้งหน้า (กันปุ่มหายตอนกดระหว่างโฟกัสช่อง)
+    const s = sessOf(st.det.id).find(x => x.id === st.det.fv.sid), pv = document.getElementById('cancelPrev');
+    if (s && pv) pv.innerHTML = cancelPreview(s, st.det.fv);
+  }
+});
+$app.addEventListener('change', e => {
+  const t = e.target;
+  if (!st.det || !t.dataset.f) return;
+  st.det.fv[t.dataset.f] = t.value;
+  if (t.dataset.struct) render();                                      // เลือกตัวเลือกที่ทำให้ฟอร์มเปลี่ยนรูป (ยกเลิก/ไม่มา · ใครยกเลิก)
+});
+$app.addEventListener('submit', async e => {
+  if (e.target.id !== 'loginForm') return;
+  e.preventDefault();
+  if (st.loginBusy) return;
+  const email = document.getElementById('lgEmail').value.trim(), password = document.getElementById('lgPass').value;
+  if (!email || !password) return;
+  st.loginBusy = true; st.loginErr = ''; render();
+  document.getElementById('lgEmail').value = email;
+  const { error } = await db.auth.signInWithPassword({ email, password });
+  st.loginBusy = false;
+  if (error) { st.loginErr = 'เข้าสู่ระบบไม่สำเร็จ — ตรวจอีเมลและรหัสผ่านอีกครั้ง'; render(); }
+});
+document.getElementById('logoutBtn').addEventListener('click', async () => {
+  const uid = st.uid;
+  await db.auth.signOut();
+  if (uid === st.uid) { reset(); st.phase = 'login'; render(); }
+});
+
+db.auth.onAuthStateChange((event, session) => {
+  if (event === 'TOKEN_REFRESHED') return;
+  setTimeout(() => onSession(event === 'SIGNED_OUT' ? null : session), 0);   // ไม่เรียกฐานข้อมูลในตัวฟังโดยตรง (กันค้างตอนสลับ session)
+});
+(async () => {
+  const { data } = await db.auth.getSession();
+  await onSession(data && data.session);
+})();
+</script>
+</body>
+</html>
