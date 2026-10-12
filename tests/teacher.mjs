@@ -115,14 +115,14 @@ async function runTests() {
   // ── ข้อมูลติดต่อ ──
   await ostu('e-month');
   const ct = $('contact').textContent;
-  ok('นักเรียนผู้ใหญ่: เห็น LINE · Instagram · เบอร์โทรเห็นแค่ 4 ตัวท้าย', /wee[.]line/.test(ct) && /wee_ig/.test(ct) && /•••-•••-5678/.test(ct), ct);
-  ok('เบอร์เต็ม/เลขเต็มไม่อยู่ใน DOM เลย (ทั้งข้อความและ HTML)', !/0812345678|081-234-5678|081 234 5678|812345678/.test(html()) && !/[0-9]{9,}/.test(html().replace(/[0-9a-f]{8}-[0-9a-f-]{27}/gi, '')), '');
+  ok('นักเรียนผู้ใหญ่: เห็น LINE · Instagram · เบอร์โทรเต็ม (เจ้าของตัดสิน 12 ต.ค. 69) ไม่ปิดบังเลข', /wee[.]line/.test(ct) && /wee_ig/.test(ct) && /0812345678/.test(ct) && !/•••/.test(ct), ct);
   ok('ไม่มีอีเมล/ที่อยู่/หมายเหตุพนักงาน ในหน้า', !/@|ที่อยู่/.test(txt().replace(/[0-9a-z_.]+@x/gi, '')) );
   dact('back'); await settle(100);
+  ok('หน้ารายการ/การ์ดไม่แสดงเบอร์ของใคร (เบอร์อยู่เฉพาะแผงติดต่อของนักเรียนที่เปิด)', !/0812345678|0800000000/.test($('app').textContent), '');
   await ostu('e-m2');
   const ct2 = $('contact').textContent;
   ok('ผู้เยาว์: เห็นผู้ปกครอง + ช่องทางของผู้ปกครอง · ไม่เห็น LINE/IG/เบอร์ของตัวเด็ก', /คุณแม่ของดาว/.test(ct2) && /LINE/.test(ct2) && /mom-dao-line/.test(ct2) && /ติดต่อผ่านผู้ปกครอง/.test(ct2)
-    && !/child-line-must-not-show|child_ig_must_not_show/.test(html()) && !/•••/.test(ct2), ct2);
+    && !/child-line-must-not-show|child_ig_must_not_show/.test(html()) && !/0800000000/.test(html()) && !/โทรศัพท์/.test(ct2), ct2);
   dact('back'); await settle(100);
   L('RESULT:' + (fail ? 'FAIL' : 'PASS') + ' pass=' + pass + ' fail=' + fail);
 }

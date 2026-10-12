@@ -104,7 +104,8 @@
 // หน้าครู (P1b · migration 047) — สำหรับครูที่ "ไม่มีแถวใน admins" (เช่น Alldayz · Maniac) เข้าคอนโซลร้านไม่ได้ แต่ต้องดูนักเรียน/รอบเรียนของตัวเอง
 //   ใช้บัญชี login เดิม (session ชุดเดียวกับ desk.html) · ครูคนไหนก็ได้ที่ my_teacher_id() ไม่ว่าง ใช้หน้านี้ได้ (รวม Tibass/Nutty ที่เป็นพนักงานด้วย)
 //   สิทธิ์ตัวจริงอยู่ที่ฐาน (RLS + ฟังก์ชัน security definer ของ 047) — หน้านี้ "ไม่ดึง" และ "ไม่วาด" ส่วนที่ไม่ใช่ของครู:
-//     ไม่มี ยอดชำระ/ราคา/สลิป · ไม่มีลูกค้า/สมาชิก/บิล/สต็อก/นักเรียนของครูคนอื่น · ไม่มีอีเมล/ที่อยู่ · เบอร์โทรเห็นแค่ 4 ตัวท้าย (ติดต่อทาง LINE/IG หรือผู้ปกครอง)
+//     ไม่มี ยอดชำระ/ราคา/สลิป · ไม่มีลูกค้า/สมาชิก/บิล/สต็อก/นักเรียนของครูคนอื่น · ไม่มีอีเมล/ที่อยู่
+//     เบอร์โทรของนักเรียนผู้ใหญ่แสดงเต็ม (เจ้าของตัดสิน 12 ต.ค. 69 ตามมติ 7 ต.ค.) · ผู้เยาว์ = ผู้ปกครองแทน (ฟังก์ชันฐานไม่คืนช่องทางของเด็ก)
 //     ไม่มี ปิดคอร์ส/ขยายอายุเอง/แก้ราคา/แก้ข้อมูลการลงเรียน — ขอขยายอายุได้ทางคำขอ (เจ้าของตัดสิน) เท่านั้น
 //   อ่านผ่าน: rpc my_teacher_id · rpc teach_my_students · class_sessions · session_notes · enrollment_extension_requests · teachers (ชื่อตัวเอง)
 //   เขียนผ่าน: teach_session_done · teach_session_cancel · teach_session_schedule · teach_note_save · teach_extend_request
@@ -243,13 +244,7 @@ async function loadAll() {
     if (st.error) showFatalError(st.error);
   } else {
     st.missing = false; st.error = '';
-    // ลดข้อมูลที่ถือไว้: เบอร์โทรเก็บแค่ 4 ตัวท้าย (ไม่แสดง/ไม่เก็บเบอร์เต็ม)
-    st.students = (ms.data || []).map(r => {
-      const p = String(r.contact_phone || '').replace(/\D/g, '');
-      const o = Object.assign({}, r, { phone4: p.length >= 4 ? p.slice(-4) : '' });
-      delete o.contact_phone;
-      return o;
-    });
+    st.students = ms.data || [];       // ผู้เยาว์: ฟังก์ชันฐานคืน LINE/IG/เบอร์ของเด็กเป็น null อยู่แล้ว (ผู้ปกครองแทน)
     st.sess = cs.data || [];
     st.reqs = rq.data || [];
   }
@@ -404,7 +399,7 @@ function contactHtml(r) {
       '<dt>ช่องทาง</dt><dd>' + esc(KIND_TXT[r.guardian_contact_kind] || '') + ' ' + esc(r.guardian_contact || '—') + '</dd></dl>';
   }
   return '<dl class="dl" id="contact"><dt>LINE</dt><dd>' + esc(r.contact_line || '—') + '</dd><dt>Instagram</dt><dd>' + esc(r.contact_ig || '—') + '</dd>' +
-    '<dt>โทรศัพท์</dt><dd>' + (r.phone4 ? '•••-•••-' + esc(r.phone4) : '—') + ' <span class="sub">(เห็นแค่ 4 ตัวท้าย — ติดต่อทาง LINE/IG ก่อน)</span></dd></dl>';
+    '<dt>โทรศัพท์</dt><dd>' + esc(r.contact_phone || '—') + '</dd></dl>';
 }
 function sessRowHtml(r, s) {
   const d = st.det, here = d.open && d.fv.sid === s.id;
