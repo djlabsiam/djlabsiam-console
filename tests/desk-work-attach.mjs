@@ -716,8 +716,13 @@ async function runTests() {
   // ── กระดานข้อความ ──
   WORK.seed(); seedLib(); attSeq = 0; WORK.has059 = true;
   WORK.lib.push(F('FE1', { category: 'video', file_name: 'ep1.mp4', folder_path: 'End credit/2026/ep1' }));
+  // ตัวกรองชนิดเป้าหมายของใบงาน: แถวแนบของกระดาน/คำขอที่ id บังเอิญตรงกับใบงาน ต้องไม่ปนเข้าไฟล์แนบของใบงาน (uuid ไม่ชนจริง — ล็อกไว้กันตัวกรองหลุด)
+  { const tid = WORK.tasks[0].id;
+    work.att.push({ id: 'collide-1', file_id: 'L1', target_kind: 'board', target_id: tid, ctx: 'brief', attached_by: 'u1', attached_at: new Date().toISOString(), file: null });
+    ok('แถวแนบชนิด board ที่ target_id ตรงกับใบงาน: ไม่ขึ้นเป็นไฟล์แนบของใบงาน (workAttOf) แต่ยังนับเป็นของกระดาน (workAttFor)', workAttOf(tid, 'brief').length === 0 && workAttFor('board', tid).length === 1);
+    work.att.pop(); }
   const bdetail = () => $('detailBody');
-  const bBtn = (act, key) => bdetail().querySelector('[data-act="' + act + '"]' + (key ? '[' + key + ']' : ''));
+  const bBtn =(act, key) => bdetail().querySelector('[data-act="' + act + '"]' + (key ? '[' + key + ']' : ''));
   const fakeBoard = title => FAKE.board_messages.find(m => m.title === title);
   await login('nui'); await sleep(300);
   showSection('board'); await sleep(300);
@@ -754,9 +759,16 @@ async function runTests() {
   ok('บันทึกการแก้พร้อมแนบ L2: transfer_attach kind board ที่ข้อความเดิม (L2 อย่างเดียว) · ตารางขึ้น 📎 3', lastRpc('transfer_attach').args.p_target === bm.id && lastRpc('transfer_attach').args.p_files.join() === 'L2' && /📎 3/.test($('boardRows').textContent));
   // ถอด
   await openBoardMsg(bm.id); await sleep(500);
-  const rmB = bdetail().querySelector('[data-act="att-rm"][data-aid]');
+  const rmB = bdetail().querySelector('[data-act="att-rm"][data-aid]'), rmAid = rmB.dataset.aid;
   rmB.click(); await sleep(150); $('confirmOkBtn').click(); await sleep(700);
   ok('ถอดไฟล์แนบของข้อความ: transfer_detach · กระดานโหลดใหม่ (📎 ลดลง) · ไฟล์ในคลังไม่ถูกลบ', rpcs('transfer_detach').length >= 1 && /📎 2/.test($('boardRows').textContent) && WORK.lib.some(f => f.id === 'L1' && f.status === 'ready'));
+  ok('ถอดแล้ว แผงรายละเอียดข้อความที่เปิดอยู่ถูกวาดใหม่: แถวที่ถอดหายไป (ไม่ค้างให้กดซ้ำ)', !!bdetail().querySelector('[data-act="att-add"]') && !bdetail().querySelector('[data-aid="' + rmAid + '"]'));
+  // มีคนแนบเพิ่มระหว่างที่หน้ากระดานเปิดอยู่: โหลดงานใหม่ (กลับมาที่แท็บ/ซิงก์) ตารางต้องเห็น 📎 เพิ่ม ไม่ต้องรีเฟรชกระดานเอง
+  const clipOf = () => Number((($('boardRows').textContent.match(/📎 (\\d+)/) || [])[1]) || 0);
+  const clip0 = clipOf();
+  await db.rpc('transfer_attach', { p_kind: 'board', p_target: bm.id, p_ctx: '', p_files: ['L3'] });
+  await loadWork(); await sleep(300);
+  ok('โหลดงานใหม่ระหว่างอยู่หน้ากระดาน: ตารางกระดานนับ 📎 ที่มีคนแนบเพิ่ม (เดิม ' + clip0 + ')', clip0 > 0 && clipOf() === clip0 + 1, $('boardRows').textContent.slice(0, 120));
   // กดบันทึกซ้ำระหว่างแนบ: ปุ่มปิด — ข้อความถูกสร้างครั้งเดียว
   openBoardForm(null); await sleep(150);
   await openPicker('bfPick'); pickClick('L2'); $('workPickGo').click(); await sleep(150);
@@ -768,6 +780,12 @@ async function runTests() {
   $('bfSaveBtn').click(); await sleep(80);
   WORK.gate = null; relBF(); await sleep(800);
   ok('กดบันทึกซ้ำระหว่างรอแนบ: ปุ่มถูกปิด · board_messages ถูก insert ครั้งเดียว (ไม่ได้ข้อความซ้ำ)', dis && CALLS.filter(c => c.op === 'insert' && c.table === 'board_messages').length === nIns0 + 1 && FAKE.board_messages.filter(m => m.title === 'กดบันทึกซ้ำ').length === 1);
+  // ข้อความที่มีแต่ไฟล์เดี่ยว (ไม่มีโฟลเดอร์ลิงก์สดที่ทำให้แผงถูกวาดซ้ำอยู่แล้ว): ถอดแล้วแผงรายละเอียดต้องวาดใหม่เอง
+  const bmD = fakeBoard('กดบันทึกซ้ำ');
+  await openBoardMsg(bmD.id); await sleep(500);
+  const rmD = bdetail().querySelector('[data-act="att-rm"][data-aid]'), rmDid = rmD ? rmD.dataset.aid : '';
+  rmD.click(); await sleep(150); $('confirmOkBtn').click(); await sleep(700);
+  ok('ข้อความที่มีแต่ไฟล์เดี่ยว: ถอดแล้ว transfer_detach · แผงรายละเอียดที่เปิดอยู่วาดใหม่ แถวที่ถอดหายไป · ตารางไม่มี 📎 ของข้อความนั้น', !!rmDid && !bdetail().querySelector('[data-aid="' + rmDid + '"]') && !!bdetail().querySelector('[data-act="att-add"]') && workAttFor('board', bmD.id).length === 0);
   // แนบล้มบางส่วนตอนเขียนข้อความ
   openBoardForm(null); await sleep(150);
   await openPicker('bfPick'); pickClick('L3'); folderTab(); await sleep(100); pickFolder('End credit/2026'); $('workPickGo').click(); await sleep(150);
@@ -779,9 +797,21 @@ async function runTests() {
   const bm2 = fakeBoard('ข้อความโฟลเดอร์ล้ม');
   ok('โฟลเดอร์แนบล้ม: ข้อความถูกบันทึกแล้ว · ฟอร์มปิด (กันข้อความซ้ำ) · แถบแดง "บันทึกข้อความแล้ว แต่แนบไฟล์/โฟลเดอร์จากคลังไม่สำเร็จ" + เหตุผล + แนบซ้ำได้ · ไฟล์ที่แนบสำเร็จอยู่ครบ',
     !!bm2 && !dlgOpen('boardDialog') && /บันทึกข้อความแล้ว แต่แนบไฟล์\\/โฟลเดอร์จากคลังไม่สำเร็จ: .*ฐานข้อมูลแนบโฟลเดอร์ล่ม/.test(fatalText()) && /ซ้ำได้/.test(fatalText()) && WORK.att.some(a => a.target_kind === 'board' && a.target_id === bm2.id), fatalText());
+  ok('โฟลเดอร์แนบล้ม: toast ยืนยันการบันทึกแต่ไม่อ้างว่า "แนบไฟล์/โฟลเดอร์" สำเร็จ (บอกความล้มเหลวทางแถบแดงแทน)', /บันทึกข้อความแล้ว/.test(toast()) && !/แนบไฟล์|แนบโฟลเดอร์|· แนบ/.test(toast()), toast());
   clearFatal();
   doLogout(); await sleep(400);
 
+  // เจ้าของและผู้ดูแลที่ไม่ใช่ผู้เขียน: แนบเพิ่ม/ถอดไฟล์ของข้อความคนอื่นได้ (คนเขียน · เจ้าของ · ผู้ดูแล)
+  for (const who of ['tibass', 'fah']) {
+    await login(who); await sleep(300);
+    showSection('board'); await sleep(300);
+    await openBoardMsg(bm.id); await sleep(600);
+    ok(who + ' (ไม่ใช่ผู้เขียนข้อความ): มีปุ่มแนบเพิ่ม · ถอดไฟล์ · ถอดโฟลเดอร์ ของข้อความของ Nui', !!bBtn('att-add', 'data-kind="board"') && !!bBtn('att-rm') && !!bBtn('att-frm'));
+    workAttAdd(bm.id, '', 'board'); await sleep(200);
+    ok(who + ': เรียกแนบตรง ๆ ได้ — เปิดตัวเลือกไฟล์ ไม่ขึ้นข้อความห้าม', dlgOpen('workPickDlg') && !/ไม่ได้แล้ว/.test(toast()));
+    closeAll(); await sleep(100);
+    doLogout(); await sleep(400);
+  }
   // ผู้อ่านที่ไม่ใช่ผู้เขียน/ผู้ดูแล: เห็นไฟล์ เปิดได้ แต่ไม่มีปุ่มแนบ/ถอด
   await login('zen'); await sleep(300);
   showSection('board'); await sleep(300);
