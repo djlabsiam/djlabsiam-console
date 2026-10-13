@@ -319,6 +319,7 @@ async function runTests() {
   const sub1 = CALLS.findIndex((c, i) => i >= i0 && c.op === 'rpc' && c.fn === 'work_submit'), att1 = CALLS.findIndex((c, i) => i >= i0 && c.op === 'rpc' && c.fn === 'transfer_attach');
   ok('ส่งงานสำเร็จแล้วค่อยแนบ: work_submit ก่อน → transfer_attach ctx "submit:1" (ส่งครั้งแรก) ของใบ a4 ไฟล์ L2 · ฐานมีไฟล์แนบ · ผู้แนบ = Zen',
     sub1 >= 0 && att1 > sub1 && lastRpc('transfer_attach').args.p_target === 'a4' && lastRpc('transfer_attach').args.p_ctx === 'submit:1' && lastRpc('transfer_attach').args.p_files.join() === 'L2' && WORK.att.some(a => a.target_id === 'a4' && a.ctx === 'submit:1' && a.file_id === 'L2' && a.attached_by === 'u2') && taskOnServer('a4').status === 'submitted', JSON.stringify(lastRpc('transfer_attach').args));
+  ok('ก่อน 059: work_submit ไม่ได้รับ p_transfer_files (ฐานเดิมไม่มีพารามิเตอร์นี้) — ไฟล์คลังแนบหลังส่ง', !('p_transfer_files' in lastRpc('work_submit').args), JSON.stringify(lastRpc('work_submit').args));
   ok('ส่งแล้ว: หน้าต่างปิด · ข้อความบอกว่าแนบไฟล์จากคลัง 1 ไฟล์ · ไม่มีแถบแดง', !dlgOpen('workSubDialog') && /ส่งงานแล้ว — แนบไฟล์จากคลัง 1 ไฟล์/.test(toast()) && fatalText() === '', toast());
   // ส่งครั้งที่ 2 (a2: ถูกส่งกลับแก้ ส่งมาแล้ว 1 ครั้ง)
   mineCard('a2').click(); await sleep(200);
@@ -401,6 +402,59 @@ async function runTests() {
   await login('nui'); showSection('tasks'); await sleep(300);
   await openForm();
   ok('บัญชีถัดไปเปิดฟอร์มใหม่: ไม่เห็นไฟล์ที่คนก่อนเลือกไว้', stagedNames('workfFiles').length === 0 && workForm.files.length === 0);
+  closeAll(); await sleep(100);
+
+  // ── 6. หลังรัน 059: ไฟล์จากคลังนับเป็นหลักฐานส่งงาน + ไปพร้อมการส่ง (transaction เดียว) ──
+  doLogout(); await sleep(400);
+  WORK.seed(); seedLib(); attSeq = 0; WORK.has059 = true;
+  A('L2', 'a5', 'submit:1', 'u2'); A('L1', 'a5', 'brief', 'u4');
+  await login('zen'); showSection('tasks'); await sleep(300);
+  ok('ล็อกอินแล้วอ่านตาราง transfer_folder_attachments ได้ → ถือว่ารัน 059 แล้ว (ตรวจจากการอ่านตาราง ไม่ใช่เดา) · ไม่มีแถบแดง', CALLS.some(c => c.op === 'select' && c.table === 'transfer_folder_attachments') && work.f059 === true && fatalText() === '');
+  mineCard('a1').click(); await sleep(200);
+  ok('หลัง 059: ข้อความในช่อง "ไฟล์จากคลังไฟล์" เปลี่ยนเป็น "นับเป็นหลักฐานส่งงานได้" — ข้อความแดง "ไม่นับเป็นหลักฐาน" ถูกถอด · คำแนะนำบอก "ลิงก์ รูป หรือไฟล์จากคลัง"',
+    /นับเป็นหลักฐานส่งงานได้/.test(txt('workSubLibHint')) && !/ไม่นับเป็นหลักฐาน/.test(txt('workSubLibField')) && !$('workSubLibField').querySelector('.wk-red') && /ไฟล์จากคลังอย่างน้อย 1 อย่าง/.test(txt('workSubLinkHint')), txt('workSubLibHint'));
+  ok('ยังไม่มีหลักฐาน: ปุ่มส่งปิด · บอกว่าขาด "ลิงก์ไฟล์ รูป หรือไฟล์จากคลัง"', $('workSubGo').disabled && /ลิงก์ไฟล์ รูป หรือไฟล์จากคลัง/.test(txt('workSubNeed')), txt('workSubNeed'));
+  await openPicker('workSubLibPick'); pickClick('L2'); $('workPickGo').click(); await sleep(150);
+  ok('เลือกไฟล์คลัง (ไม่ถาวร) อย่างเดียว: ปุ่มส่งเปิดทันที (นับเป็นหลักฐาน) · ไม่บอกว่าขาดอะไร', !$('workSubGo').disabled && txt('workSubNeed') === '', txt('workSubNeed'));
+  ok('ไฟล์ไม่ถาวรที่เป็นหลักฐาน: เตือนแดงตัวหนา "ไฟล์นี้จะหมดอายุ … หลักฐานจะเปิดไม่ได้หลังวันนั้น ตั้งเป็นไฟล์ถาวรในคลังถ้าต้องเก็บ"', isRed($('workSubFiles').querySelector('.wk-red')) && /ไฟล์นี้จะหมดอายุ/.test(txt('workSubFiles')) && /หลักฐานจะเปิดไม่ได้หลังวันนั้น/.test(txt('workSubFiles')) && /ตั้งเป็นไฟล์ถาวรในคลังถ้าต้องเก็บ/.test(txt('workSubFiles')));
+  $('workSubFiles').querySelector('[data-act="stg-rm"]').click();
+  ok('เอาไฟล์ออก: ปุ่มส่งกลับมาปิด (คำนวณใหม่ทันที ไม่ค้างสถานะเดิม)', $('workSubGo').disabled && /ไฟล์จากคลัง/.test(txt('workSubNeed')));
+  await openPicker('workSubLibPick'); pickClick('L3'); $('workPickGo').click(); await sleep(150);
+  ok('เลือกไฟล์ถาวร: ปุ่มส่งเปิด · ไม่มีคำเตือนหมดอายุ (ถาวรไม่หมด) แต่ยังมีป้าย "ถาวร · Asset"', !$('workSubGo').disabled && $('workSubFiles').querySelectorAll('.wk-red').length === 0 && /ถาวร · Asset/.test(txt('workSubFiles')));
+  const nAttP = rpcs('transfer_attach').length;
+  $('workSubGo').click(); await sleep(800);
+  const sp = lastRpc('work_submit');
+  ok('ส่ง: work_submit ได้ p_transfer_files = [L3] · ไม่มีลิงก์/รูป · ไม่เรียก transfer_attach แยก (แนบใน transaction เดียวกับการส่ง)', !!sp && sp.args.p_task === 'a1' && JSON.stringify(sp.args.p_transfer_files) === '["L3"]' && sp.args.p_links.length === 0 && sp.args.p_image_paths.length === 0 && rpcs('transfer_attach').length === nAttP, JSON.stringify(sp && sp.args));
+  ok('ส่งสำเร็จ: ใบเป็น "รอตรวจ" · ฐานมีไฟล์แนบ submit:1 โดย Zen · หน้าต่างปิด · ข้อความ "แนบไฟล์จากคลัง 1 ไฟล์" · ไม่มีแถบแดง', taskOnServer('a1').status === 'submitted' && WORK.att.some(a => a.target_id === 'a1' && a.ctx === 'submit:1' && a.file_id === 'L3' && a.attached_by === 'u2') && !dlgOpen('workSubDialog') && /แนบไฟล์จากคลัง 1 ไฟล์/.test(toast()) && fatalText() === '', toast());
+  // ขั้นสุดท้ายที่มีช่องทาง: ไฟล์คลังไม่แทนลิงก์โพสต์
+  mineCard('a4').click(); await sleep(200);
+  await openPicker('workSubLibPick'); pickClick('L3'); $('workPickGo').click(); await sleep(150);
+  ok('งานโพสต์ขั้นเดียวที่มีช่อง Facebook: ไฟล์คลังอย่างเดียวยังส่งไม่ได้ — ต้องลิงก์โพสต์ Facebook (กฎเดิมไม่เปลี่ยน)', $('workSubGo').disabled && /ลิงก์ Facebook/.test(txt('workSubNeed')), txt('workSubNeed'));
+  setVal('workSubC-facebook', 'https://www.facebook.com/PioneerDjLabSiam/posts/9');
+  ok('ใส่ลิงก์ครบ + ไฟล์คลัง: ส่งได้', !$('workSubGo').disabled);
+  closeAll(); await sleep(100);
+  // งานชนิดอื่น ๆ: ไฟล์คลังอย่างเดียว (ไม่มีข้อความ)
+  WORK.tasks.push({ id: 'oth1', title: 'งานทั่วไปของ Zen', detail: '', kind: 'other', channels: [], ref_links: [], assignee_id: 'u2', created_by: 'u4', due_at: null, status: 'open', phase: 'final', batch_id: null, submitted_at: null, closed_at: null, created_at: iso(NOW - 5 * H), updated_at: iso(NOW - H) });
+  await loadWork(); await sleep(200);
+  mineCard('oth1').click(); await sleep(200);
+  const othBefore = $('workSubGo').disabled;
+  await openPicker('workSubLibPick'); pickClick('L3'); $('workPickGo').click(); await sleep(150);
+  ok('งานชนิด "อื่น ๆ" ยังไม่มีอะไร: ปุ่มส่งปิด · เลือกไฟล์คลังอย่างเดียว (ไม่มีข้อความ) → เปิด', othBefore && !$('workSubGo').disabled);
+  closeAll(); await sleep(100);
+  // ส่งไม่สำเร็จที่ฐาน (ไฟล์หมดอายุระหว่างเลือก): atomic — ไม่ส่ง ไม่แนบ ไฟล์ที่เลือกค้างให้แก้
+  mineCard('a2').click(); await sleep(200);
+  await openPicker('workSubLibPick'); pickClick('L2'); $('workPickGo').click(); await sleep(150);
+  WORK.lib.find(f => f.id === 'L2').expires_at = iso(NOW - H);
+  const nAttQ = WORK.att.length;
+  $('workSubGo').click(); await sleep(700);
+  ok('ไฟล์หมดอายุระหว่างเลือกกับกดส่ง: ฐานปฏิเสธทั้งก้อน — หน้าต่างยังเปิด · บอกเหตุผลของฐาน · ใบยัง "ส่งกลับแก้" · ไม่มีไฟล์แนบเพิ่ม · ไฟล์ที่เลือกยังอยู่', dlgOpen('workSubDialog') && /ส่งงานไม่สำเร็จ: มีไฟล์จากคลังที่ไม่พบ ถูกลบ หรือหมดอายุแล้ว/.test(txt('workSubErr')) && taskOnServer('a2').status === 'changes' && WORK.att.length === nAttQ && stagedNames('workSubFiles').length === 1, txt('workSubErr'));
+  closeAll(); await sleep(100);
+  // รายละเอียดงาน: ไฟล์ที่ผู้รับแนบ (submit:N) เตือนหมดอายุแบบหลักฐาน
+  WORK.lib.find(f => f.id === 'L2').expires_at = iso(NOW + 5 * D);
+  await loadWork(); await sleep(200);
+  workOpenDetail('a5'); await sleep(300);
+  ok('รายละเอียดงาน: ไฟล์ที่ผู้รับแนบตอนส่ง (ไม่ถาวร) เตือนแดงตัวหนา "หลักฐานจะเปิดไม่ได้หลังวันนั้น" (หลัง 059 นับเป็นหลักฐาน)', !!detRow('ภาพสินค้า FLX4.png') && /หลักฐานจะเปิดไม่ได้หลังวันนั้น/.test(detRow('ภาพสินค้า FLX4.png').textContent) && isRed(detRow('ภาพสินค้า FLX4.png').querySelector('.wk-red')));
+  ok('ไฟล์ของผู้สั่ง (brief) ไม่ใช่หลักฐาน: ไม่ขึ้นคำเตือน "หลักฐานจะเปิดไม่ได้" (เตือนเฉพาะไฟล์ที่ผู้รับแนบตอนส่ง)', !!detRow('รีวิว HDJ-CUE1.mp4') && !/หลักฐานจะเปิดไม่ได้/.test(detRow('รีวิว HDJ-CUE1.mp4').textContent));
   closeAll(); await sleep(100);
 
   done();

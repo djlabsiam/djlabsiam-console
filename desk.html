@@ -2888,7 +2888,7 @@
     <div class="field" id="workSubLibField"><span class="lbl">ไฟล์จากคลังไฟล์ <span class="hint" style="margin:0;">ไม่บังคับ · สูงสุด 20 ไฟล์</span></span>
       <div id="workSubFiles"></div>
       <button type="button" class="btn" id="workSubLibPick">+ แนบจากคลังไฟล์</button>
-      <div class="hint"><strong class="wk-red">ไฟล์จากคลังไม่นับเป็นหลักฐานแทนลิงก์หรือรูป</strong> — งานรูป/วิดีโอ/โพสต์ ยังต้องมีลิงก์หรือรูปอย่างน้อย 1 อย่างตอนส่ง (ฐานข้อมูลตรวจ) · ไฟล์จากคลังแนบเพิ่มให้ผู้ตรวจเปิดดูได้ · แนบหลังส่งงานสำเร็จ</div></div>
+      <div class="hint" id="workSubLibHint"></div></div>
     <div class="field"><label class="lbl" for="workSubNote">ข้อความถึงผู้ตรวจ <span class="hint" style="margin:0;">ไม่บังคับ</span></label>
       <textarea class="input" id="workSubNote" rows="3" maxlength="1000"></textarea></div>
     <div class="alert alert-plain"><strong class="wk-red">ส่งแล้วแก้เองไม่ได้</strong> — ถ้าส่งผิด ผู้ตรวจจะส่งกลับให้แก้ · งานที่ส่งหลังกำหนดจะติดป้าย <strong class="wk-red">"ส่งช้า"</strong> ให้เห็น ไม่ใช่การปิดกั้น</div>
@@ -15740,7 +15740,7 @@ const WORK_BUCKET = 'work-evidence';
 const WORK_SOON_MS = 3 * 3600000;      // "ใกล้ถึงกำหนด" = เหลือไม่ถึง 3 ชม. (ค่าตั้งต้นข้อ 8)
 const WORK_MAX_IMG = 6;
 
-function workBlank() { return { loaded: false, missing: false, error: '', tasks: [], events: [], reqs: [], people: [], att: [], attMissing: false, attErr: '', tab: 'mine', sel: null, reqSel: null, reqBox: '', filter: 'all', doneOpen: false, signed: {}, rt: null }; }
+function workBlank() { return { loaded: false, missing: false, error: '', tasks: [], events: [], reqs: [], people: [], att: [], attMissing: false, attErr: '', fatt: [], f059: false, tab: 'mine', sel: null, reqSel: null, reqBox: '', filter: 'all', doneOpen: false, signed: {}, rt: null }; }
 let work = workBlank();
 let workSub = null;       // หน้าต่างส่งงาน: { id, imgs: [{ blob, url }], busy }
 let workForm = null;      // หน้าต่างสั่งงาน/แก้: { id|null, kind, channels:Set, busy }
@@ -15836,12 +15836,13 @@ const workReqPendingForMe = () => work.reqs.filter(r => r.status === 'pending' &
 async function loadWork() {
   if (!currentUserId) return;
   const uid = currentUserId;
-  const [t, e, q, p, at] = await Promise.all([
+  const [t, e, q, p, at, fa] = await Promise.all([
     db.from('work_tasks').select(WORK_COLS).order('created_at', { ascending: false }).limit(500),
     db.from('work_task_events').select(WORK_EV_COLS).order('created_at', { ascending: false }).limit(3000),     // ใหม่สุดก่อนแล้วกลับด้านทีหลัง — ถ้าเกินเพดาน ตัดของเก่าทิ้ง ไม่ใช่ของใหม่
     db.from('work_requests').select(WORK_REQ_COLS).order('created_at', { ascending: false }).limit(500),
     db.from('admins').select('id, full_name, role, is_active').order('full_name'),
     workAttQuery(),
+    workFAttQuery(),
   ]);
   if (uid !== currentUserId) return;                       // สลับบัญชี/ออกจากระบบระหว่างโหลด — ทิ้งผล ไม่เอามาแสดง
   const before = work.loaded ? { ids: new Set(work.tasks.map(x => x.id)), status: new Map(work.tasks.map(x => [x.id, x.status])),
@@ -15860,6 +15861,7 @@ async function loadWork() {
   }
   if (p.error) console.error('[Work people]', p.error); else work.people = p.data || [];
   workAttApply(at);
+  workFAttApply(fa);
   workNotify(before);
   renderWork();
 }
@@ -16268,7 +16270,10 @@ function workSubOpen(id) {
   document.getElementById('workSubFileField').hidden = post;
   document.getElementById('workSubImgField').hidden = post;
   document.getElementById('workSubLibField').hidden = post || work.attMissing;          // ขั้นลิงก์โพสต์ส่งแต่ลิงก์ · ยังไม่รัน 053 = ไม่มีปุ่มแนบจากคลัง
-  document.getElementById('workSubLinkHint').textContent = content ? 'แนบลิงก์หรือรูปอย่างน้อย 1 อย่าง' : 'ไม่บังคับ';
+  document.getElementById('workSubLinkHint').textContent = content ? (work.f059 ? 'แนบลิงก์ รูป หรือไฟล์จากคลังอย่างน้อย 1 อย่าง' : 'แนบลิงก์หรือรูปอย่างน้อย 1 อย่าง') : 'ไม่บังคับ';
+  document.getElementById('workSubLibHint').innerHTML = work.f059
+    ? '<strong>ไฟล์จากคลังนับเป็นหลักฐานส่งงานได้</strong> — ส่งด้วยไฟล์จากคลังอย่างเดียวได้ (ถ้างานสั่งให้ลงโซเชียลในขั้นสุดท้าย ยังต้องมีลิงก์โพสต์ครบทุกช่อง) · ไฟล์ที่ไม่ใช่ไฟล์ถาวรเปิดไม่ได้เมื่อครบ 30 วัน · แนบไปพร้อมการส่งงานในครั้งเดียว'
+    : '<strong class="wk-red">ไฟล์จากคลังไม่นับเป็นหลักฐานแทนลิงก์หรือรูป</strong> — งานรูป/วิดีโอ/โพสต์ ยังต้องมีลิงก์หรือรูปอย่างน้อย 1 อย่างตอนส่ง (ฐานข้อมูลตรวจ) · ไฟล์จากคลังแนบเพิ่มให้ผู้ตรวจเปิดดูได้ · แนบหลังส่งงานสำเร็จ';
   document.getElementById('workSubLinkHint').classList.toggle('wk-red', content);
   document.getElementById('workSubReq').hidden = isOwner();
   document.getElementById('workSubTask').innerHTML = '<div class="wk-top">' + workPills(t) + '<span class="wk-due">' + (t.due_at ? 'กำหนด ' + escapeHtml(workWhen(t.due_at)) : 'ไม่มีกำหนด') + '</span></div>' +
@@ -16302,8 +16307,8 @@ function workSubCheck() {
   const other = document.getElementById('workSubLink').value.trim();
   if (other && !document.getElementById('workSubFileField').hidden) { if (workLinkOk(other, null)) links.push({ url: other }); else need.push('แก้ลิงก์ไฟล์ (ต้องขึ้นต้น https://)'); }
   const note = document.getElementById('workSubNote').value.trim();
-  const hasEv = links.length > 0 || workSub.imgs.length > 0;
-  if (!hasEv && !need.length && (t.kind !== 'other' || !note)) need.push(t.kind === 'other' ? 'ข้อความหรือหลักฐาน' : t.phase === 'content' ? 'ลิงก์ไฟล์หรือรูป' : 'ลิงก์หรือรูป');
+  const hasEv = links.length > 0 || workSub.imgs.length > 0 || (work.f059 && workSub.files.length > 0);       // ไฟล์คลังนับเป็นหลักฐานเฉพาะหลัง 059 (ฐานเดิมไม่นับ)
+  if (!hasEv && !need.length && (t.kind !== 'other' || !note)) need.push(t.kind === 'other' ? 'ข้อความหรือหลักฐาน' : t.phase === 'content' ? (work.f059 ? 'ลิงก์ไฟล์ รูป หรือไฟล์จากคลัง' : 'ลิงก์ไฟล์หรือรูป') : (work.f059 ? 'ลิงก์ รูป หรือไฟล์จากคลัง' : 'ลิงก์หรือรูป'));
   return { ok: need.length === 0, links, need, note };
 }
 function workSubRender() {
@@ -16330,7 +16335,7 @@ async function workSubmit() {
   if (!s || s.busy) return;
   const chk = workSubCheck();
   if (!chk.ok) { workSubRender(); return; }
-  const uid = currentUserId, uploaded = [], t = workTask(s.id), wasContent = !!t && t.phase === 'content', libIds = s.files.map(x => x.id);
+  const uid = currentUserId, uploaded = [], t = workTask(s.id), wasContent = !!t && t.phase === 'content', libIds = s.files.map(x => x.id), sentWithFiles = work.f059 && libIds.length > 0;
   s.busy = true; btn.disabled = true; err.hidden = true;
   try {
     for (const im of s.imgs) {
@@ -16340,7 +16345,7 @@ async function workSubmit() {
       if (up.error) throw new Error('อัปโหลดรูปไม่สำเร็จ: ' + up.error.message);
       uploaded.push(path);
     }
-    const { error } = await db.rpc('work_submit', { p_task: s.id, p_note: chk.note || null, p_links: chk.links, p_image_paths: uploaded });
+    const { error } = await db.rpc('work_submit', { p_task: s.id, p_note: chk.note || null, p_links: chk.links, p_image_paths: uploaded, ...(work.f059 && libIds.length ? { p_transfer_files: libIds } : {}) });      // หลัง 059 ไฟล์คลังไปพร้อมส่งงาน (ฐานนับเป็นหลักฐาน + แนบ submit:N ใน transaction เดียว)
     if (error) throw new Error(error.message);
   } catch (e) {
     console.error('[Work submit]', e);
@@ -16353,7 +16358,8 @@ async function workSubmit() {
   workSubFree(); workSub = null;
   document.getElementById('workSubDialog').close();
   showToast(wasContent ? '✅ ส่งไฟล์แล้ว — รอผู้ตรวจ' : '✅ ส่งงานแล้ว — รอผู้ตรวจ');
-  if (libIds.length) await workAttachAfterSubmit(s.id, libIds);          // ส่งสำเร็จแล้วค่อยแนบ — แนบล้ม = บอกตรง ๆ ว่าส่งไปแล้ว แนบซ้ำได้จากรายละเอียดงาน
+  if (libIds.length && sentWithFiles) showToast('✅ ส่งงานแล้ว — แนบไฟล์จากคลัง ' + libIds.length + ' ไฟล์');
+  else if (libIds.length) await workAttachAfterSubmit(s.id, libIds);          // ก่อน 059: ส่งสำเร็จแล้วค่อยแนบ — แนบล้ม = บอกตรง ๆ ว่าส่งไปแล้ว แนบซ้ำได้จากรายละเอียดงาน
   await loadWork();
 }
 
@@ -16498,6 +16504,18 @@ function workAttApply(r) {
   }
   work.att = r.data || []; work.attMissing = false; work.attErr = '';
 }
+// ลิงก์โฟลเดอร์สด + ส่วนที่ 2 ของ 059 (work_submit รับไฟล์คลังเป็นหลักฐาน) — ตรวจว่า 059 รันแล้วด้วย "อ่านตารางได้" (รันไฟล์เดียวกัน) ไม่ใช่เดา:
+// อ่านได้ = work.f059 true → ไฟล์จากคลังนับเป็นหลักฐานส่งงาน + ส่งไปกับ work_submit ใน transaction เดียว · อ่านไม่ได้ = พฤติกรรมเดิมของ 053 (แนบหลังส่ง ไม่นับเป็นหลักฐาน)
+const WORK_FATT_COLS = 'id, folder_path, target_id, ctx, attached_by, attached_at';
+const workFAttQuery = () => db.from('transfer_folder_attachments').select(WORK_FATT_COLS).eq('target_kind', 'task').order('attached_at', { ascending: true }).limit(500);
+function workFAttApply(r) {
+  if (r.error) {
+    work.fatt = []; work.f059 = false;
+    if (!trIsMissing(r.error)) console.error('[Work folder att load]', r.error);
+    return;
+  }
+  work.fatt = r.data || []; work.f059 = true;
+}
 const workAttOf = (taskId, ctx) => work.att.filter(a => a.target_id === taskId && a.ctx === ctx);
 const workAttRounds = taskId => [...new Set(work.att.filter(a => a.target_id === taskId && /^submit:[0-9]{1,3}$/.test(a.ctx)).map(a => Number(a.ctx.slice(7))))].sort((x, y) => x - y);
 const workAttLive = t => !!t && t.status !== 'cancelled' && !work.attMissing;             // ใบที่ยกเลิกแล้วแนบเพิ่มไม่ได้ (ฐานบังคับ)
@@ -16517,10 +16535,12 @@ function workAttState(a) {
   return { ok: true };
 }
 // อายุไฟล์: ถาวร / เหลือกี่วัน · ไม่ถาวรแล้วจะหมดอายุก่อนกำหนดส่งงาน = แดงตัวหนา (เตือน ไม่บล็อก)
-function workAttLifeHtml(f, dueIso) {
+function workAttLifeHtml(f, dueIso, evidence) {
   if (!f) return '';
   const life = trLeft(f);
   const pill = f.is_permanent ? '<span class="st st-ok">ถาวร · Asset</span>' : life ? '<span class="st ' + life.cls + '">' + escapeHtml(life.t) + '</span>' : '';
+  // ไฟล์ที่เป็นหลักฐานส่งงาน (หลัง 059): ไม่ถาวร = เปิดไม่ได้หลังครบ 30 วัน — บอกวันที่ + ทางแก้ (แดงตัวหนา)
+  if (evidence && !f.is_permanent) return pill + '<div class="wk-red">ไฟล์นี้จะหมดอายุ ' + escapeHtml(workDt(f.expires_at)) + ' — หลักฐานจะเปิดไม่ได้หลังวันนั้น ตั้งเป็นไฟล์ถาวรในคลังถ้าต้องเก็บ</div>';
   const warn = !f.is_permanent && dueIso && Date.parse(f.expires_at) < Date.parse(dueIso)
     ? '<div class="wk-red">หมดอายุก่อนกำหนดส่งงาน (' + escapeHtml(workDt(f.expires_at)) + ') — ผู้รับเปิดไม่ได้หลังจากนั้น ให้เจ้าของตั้งเป็นไฟล์ถาวรถ้าต้องการให้อยู่นาน</div>' : '';
   return pill + warn;
@@ -16532,7 +16552,7 @@ function workAttRowHtml(a, t) {
   if (workAttCanDetach(a, t)) b.push('<button type="button" class="btn btn-sm btn-danger" data-act="att-rm" data-aid="' + escapeHtml(a.id) + '">ถอดออก</button>');
   return '<div class="wk-link"><div><strong>' + escapeHtml(f ? f.file_name : 'ไฟล์ที่ไม่พร้อมใช้งาน') + '</strong>' +
     '<div class="wk-url">' + (f ? escapeHtml(trCatName(f.category)) + ' · ' + trSize(f.size_bytes) + ' · ' : '') + 'แนบโดย ' + escapeHtml(workName(a.attached_by)) + ' · ' + escapeHtml(workDt(a.attached_at)) + '</div>' +
-    (s.ok ? workAttLifeHtml(f, t.due_at) : '<div class="wk-red">' + escapeHtml(s.text) + '</div>') + '</div><div class="wk-attbtns">' + b.join('') + '</div></div>';
+    (s.ok ? workAttLifeHtml(f, t.due_at, work.f059 && /^submit:/.test(a.ctx)) : '<div class="wk-red">' + escapeHtml(s.text) + '</div>') + '</div><div class="wk-attbtns">' + b.join('') + '</div></div>';
 }
 function workAttHtml(t) {
   if (work.attMissing) return '';
@@ -16636,8 +16656,8 @@ async function workAttachAfterSubmit(taskId, fileIds) {
   showToast('✅ ส่งงานแล้ว — แนบไฟล์จากคลัง ' + (Number(r.data) || fileIds.length) + ' ไฟล์');
 }
 // รายการไฟล์ที่เลือกไว้ในฟอร์ม (ยังไม่แนบจริง — แนบหลังสั่ง/ส่งงานสำเร็จ)
-function workStageHtml(files, dueIso) {
-  return files.map((f, i) => '<div class="wk-link"><div><strong>' + escapeHtml(f.file_name) + '</strong><div class="wk-url">' + escapeHtml(trCatName(f.category)) + ' · ' + trSize(f.size_bytes) + '</div>' + workAttLifeHtml(f, dueIso) + '</div>' +
+function workStageHtml(files, dueIso, evidence) {
+  return files.map((f, i) => '<div class="wk-link"><div><strong>' + escapeHtml(f.file_name) + '</strong><div class="wk-url">' + escapeHtml(trCatName(f.category)) + ' · ' + trSize(f.size_bytes) + '</div>' + workAttLifeHtml(f, dueIso, evidence) + '</div>' +
     '<div class="wk-attbtns"><button type="button" class="btn btn-sm" data-act="stg-rm" data-i="' + i + '">เอาออก</button></div></div>').join('');
 }
 function workFormFilesRender() {
@@ -16649,8 +16669,9 @@ function workFormFilesRender() {
 function workSubFilesRender() {
   const s = workSub, t = s && workTask(s.id);
   if (!s) return;
-  document.getElementById('workSubFiles').innerHTML = workStageHtml(s.files, t && t.due_at);
+  document.getElementById('workSubFiles').innerHTML = workStageHtml(s.files, t && t.due_at, work.f059);
   document.getElementById('workSubLibPick').disabled = s.files.length >= WORK_ATT_MAX;
+  workSubRender();                    // ไฟล์คลังเป็นหลักฐานได้ (หลัง 059) — เปลี่ยนรายการแล้วต้องคำนวณปุ่มส่ง/ข้อความที่ขาดใหม่
 }
 // ตัวเลือกไฟล์จากคลัง (หน้าต่างเดียว ใช้ร่วม 3 ที่) — opts: { taken:Set<file id ที่แนบอยู่แล้ว>, have:จำนวนที่แนบอยู่แล้ว, onDone(files) → null | ข้อความผิดพลาด (หน้าต่างยังเปิด) }
 async function workPickOpen(opts) {
