@@ -245,7 +245,7 @@ async function runTests() {
   closeAll(); await sleep(80); workOpenDetail('a5'); await sleep(300);
   // แนบเพิ่มจากรายละเอียด: ของที่แนบแล้วเลือกซ้ำไม่ได้ · ฐานปฏิเสธบอกในหน้าต่าง
   detBtn('att-add', 'data-which="brief"').click(); await sleep(250);
-  ok('แนบเพิ่มจากรายละเอียด: ตัวเลือกเปิด · ไฟล์ที่แนบแล้ว (L1) เป็น "แนบแล้ว" เลือกไม่ได้ · ข้อความ "แนบไว้แล้ว 1"', dlgOpen('workPickDlg') && pickBox('L1').disabled && /แนบไว้แล้ว 1/.test(txt('workPickMsg')));
+  ok('แนบเพิ่มจากรายละเอียด: ตัวเลือกเปิด · ไฟล์ที่แนบแล้ว (L1) เป็น "แนบแล้ว" เลือกไม่ได้ · ข้อความ "แนบไว้แล้ว 1" · (ก่อน 059) ไม่มีแท็บโฟลเดอร์', dlgOpen('workPickDlg') && pickBox('L1').disabled && /แนบไว้แล้ว 1/.test(txt('workPickMsg')) && $('workPickMode').hidden === true);
   pickClick('L3'); WORK.fail.rpc_transfer_attach = 'มีไฟล์ที่ไม่พบ ถูกลบ หรือหมดอายุแล้ว — เลือกใหม่จากคลังไฟล์';
   $('workPickGo').click(); await sleep(400);
   ok('ฐานปฏิเสธ: ตัวเลือกยังเปิด · บอกเหตุผลของฐานในหน้าต่าง · ไม่ขึ้นข้อความสำเร็จ · ที่เลือกไว้ไม่หาย · ปุ่มกลับมากดได้', dlgOpen('workPickDlg') && !$('workPickErr').hidden && /ถูกลบ หรือหมดอายุแล้ว/.test(txt('workPickErr')) && pickBox('L3').checked && !$('workPickGo').disabled && !/✅ แนบไฟล์แล้ว/.test(toast()));
@@ -412,7 +412,7 @@ async function runTests() {
   ok('ล็อกอินแล้วอ่านตาราง transfer_folder_attachments ได้ → ถือว่ารัน 059 แล้ว (ตรวจจากการอ่านตาราง ไม่ใช่เดา) · ไม่มีแถบแดง', CALLS.some(c => c.op === 'select' && c.table === 'transfer_folder_attachments') && work.f059 === true && fatalText() === '');
   mineCard('a1').click(); await sleep(200);
   ok('หลัง 059: ข้อความในช่อง "ไฟล์จากคลังไฟล์" เปลี่ยนเป็น "นับเป็นหลักฐานส่งงานได้" — ข้อความแดง "ไม่นับเป็นหลักฐาน" ถูกถอด · คำแนะนำบอก "ลิงก์ รูป หรือไฟล์จากคลัง"',
-    /นับเป็นหลักฐานส่งงานได้/.test(txt('workSubLibHint')) && !/ไม่นับเป็นหลักฐาน/.test(txt('workSubLibField')) && !$('workSubLibField').querySelector('.wk-red') && /ไฟล์จากคลังอย่างน้อย 1 อย่าง/.test(txt('workSubLinkHint')), txt('workSubLibHint'));
+    /นับเป็นหลักฐานส่งงานได้/.test(txt('workSubLibHint')) && !/ไฟล์จากคลังไม่นับเป็นหลักฐาน/.test(txt('workSubLibField')) && !$('workSubLibField').querySelector('.wk-red') && /ไฟล์จากคลังอย่างน้อย 1 อย่าง/.test(txt('workSubLinkHint')), txt('workSubLibHint'));
   ok('ยังไม่มีหลักฐาน: ปุ่มส่งปิด · บอกว่าขาด "ลิงก์ไฟล์ รูป หรือไฟล์จากคลัง"', $('workSubGo').disabled && /ลิงก์ไฟล์ รูป หรือไฟล์จากคลัง/.test(txt('workSubNeed')), txt('workSubNeed'));
   await openPicker('workSubLibPick'); pickClick('L2'); $('workPickGo').click(); await sleep(150);
   ok('เลือกไฟล์คลัง (ไม่ถาวร) อย่างเดียว: ปุ่มส่งเปิดทันที (นับเป็นหลักฐาน) · ไม่บอกว่าขาดอะไร', !$('workSubGo').disabled && txt('workSubNeed') === '', txt('workSubNeed'));
@@ -456,6 +456,175 @@ async function runTests() {
   ok('รายละเอียดงาน: ไฟล์ที่ผู้รับแนบตอนส่ง (ไม่ถาวร) เตือนแดงตัวหนา "หลักฐานจะเปิดไม่ได้หลังวันนั้น" (หลัง 059 นับเป็นหลักฐาน)', !!detRow('ภาพสินค้า FLX4.png') && /หลักฐานจะเปิดไม่ได้หลังวันนั้น/.test(detRow('ภาพสินค้า FLX4.png').textContent) && isRed(detRow('ภาพสินค้า FLX4.png').querySelector('.wk-red')));
   ok('ไฟล์ของผู้สั่ง (brief) ไม่ใช่หลักฐาน: ไม่ขึ้นคำเตือน "หลักฐานจะเปิดไม่ได้" (เตือนเฉพาะไฟล์ที่ผู้รับแนบตอนส่ง)', !!detRow('รีวิว HDJ-CUE1.mp4') && !/หลักฐานจะเปิดไม่ได้/.test(detRow('รีวิว HDJ-CUE1.mp4').textContent));
   closeAll(); await sleep(100);
+
+  // ── 7. โฟลเดอร์ลิงก์สด (059) ──────────────────────────────────────────
+  doLogout(); await sleep(400);
+  WORK.seed(); seedLib(); attSeq = 0; WORK.has059 = true;
+  WORK.lib.push(F('FE1', { category: 'video', file_name: 'ep1.mp4', folder_path: 'End credit/2026/ep1' }), F('FE2', { category: 'doc', file_name: 'ราก.pdf', folder_path: 'End credit' }),
+    F('FP1', { category: 'doc', file_name: 'โปร.pdf', folder_path: 'Promo', is_permanent: true, expires_at: iso(NOW - D) }),
+    F('FX1', { category: 'photo', file_name: XSS, folder_path: '<b>X</b>' }));
+  WORK.markers.push({ id: 'mk1', path: 'Empty folder', created_by: 'u2', created_at: iso(NOW - D) });
+  const folderBox = path => document.querySelector('#workPickList input[value="' + path + '"]');
+  const folderTab = () => document.querySelector('#workPickMode button[data-mode="folder"]').click();
+  const pickFolder = path => folderBox(path).click();
+  const liveRed = () => isRed($('workPickLive').querySelector('.wk-red')) && /ลิงก์สด/.test(txt('workPickLive')) && /ผู้รับเห็นไฟล์ใหม่ด้วย/.test(txt('workPickLive'));
+  await login('tibass'); showSection('tasks'); await sleep(300);
+  await openForm();
+  await openPicker('workfPick');
+  ok('รัน 059 แล้ว: ตัวเลือกมีแท็บ "ไฟล์ | โฟลเดอร์ (ลิงก์สด)" · เริ่มที่แท็บไฟล์ · ยังไม่ขึ้นคำเตือนลิงก์สด', !$('workPickMode').hidden && document.querySelector('#workPickMode button[data-mode="file"]').getAttribute('aria-pressed') === 'true' && $('workPickLive').hidden);
+  folderTab(); await sleep(100);
+  ok('แท็บโฟลเดอร์: ขึ้นคำเตือนแดงตัวหนา "ลิงก์สด — ไฟล์ที่เพิ่ม/ลบในโฟลเดอร์นี้ภายหลังเปลี่ยนตามทันที ผู้รับเห็นไฟล์ใหม่ด้วย"', !$('workPickLive').hidden && liveRed(), txt('workPickLive'));
+  const fp = [...document.querySelectorAll('#workPickList input')].map(i => i.value);
+  ok('รายการโฟลเดอร์: รวมทุกชั้นบนของพาธไฟล์ + ตัวหมายโฟลเดอร์ว่าง (Empty folder) · ไม่มีไฟล์ที่หมดอายุ/ลบ (Old stuff ไม่มี)', ['End credit', 'End credit/2026', 'End credit/2026/ep1', 'Promo', 'Empty folder'].every(p => fp.includes(p)), fp.join('|'));
+  const lblOf = path => flat(folderBox(path).closest('label').textContent);
+  ok('จำนวนไฟล์นับรวมโฟลเดอร์ย่อย: End credit = 3 · End credit/2026 = 2 · ep1 = 1 · Empty folder = "โฟลเดอร์ว่าง"', /3 ไฟล์/.test(lblOf('End credit')) && /2 ไฟล์/.test(lblOf('End credit/2026')) && /1 ไฟล์/.test(lblOf('End credit/2026/ep1')) && /โฟลเดอร์ว่าง/.test(lblOf('Empty folder')), [lblOf('End credit'), lblOf('End credit/2026'), lblOf('Empty folder')].join(' | '));
+  ok('ชื่อโฟลเดอร์ที่เป็นแท็ก HTML แสดงเป็นข้อความ (ไม่สร้างองค์ประกอบ)', fp.includes('<b>X</b>') && !document.querySelector('#workPickList b') && window.__xss === undefined);
+  setVal('workPickQ', 'ep1');
+  ok('ค้นหา "ep1" ในแท็บโฟลเดอร์: เหลือโฟลเดอร์ ep1', [...document.querySelectorAll('#workPickList input')].map(i => i.value).join() === 'End credit/2026/ep1');
+  setVal('workPickQ', '');
+  pickFolder('End credit/2026'); pickFolder('Empty folder');
+  ok('เลือก 2 โฟลเดอร์: ข้อความ "เลือกแล้ว 0 ไฟล์ · 2 โฟลเดอร์" · ปุ่มแนบเปิด', /เลือกแล้ว 0 ไฟล์ · 2 โฟลเดอร์/.test(txt('workPickMsg')) && !$('workPickGo').disabled, txt('workPickMsg'));
+  document.querySelector('#workPickMode button[data-mode="file"]').click(); await sleep(100);
+  pickClick('L2');
+  ok('สลับกลับแท็บไฟล์: ที่เลือกไว้ทั้งสองแท็บยังอยู่ (1 ไฟล์ · 2 โฟลเดอร์)', /เลือกแล้ว 1 ไฟล์ · 2 โฟลเดอร์/.test(txt('workPickMsg')) && $('workPickLive').hidden, txt('workPickMsg'));
+  $('workPickGo').click(); await sleep(150);
+  ok('ในฟอร์มสั่งงาน: รายการที่เลือกไว้มีทั้งไฟล์ (1) และโฟลเดอร์ (2) · โฟลเดอร์ขึ้น "ลิงก์สด" + คำเตือนแดงตัวหนาทุกโฟลเดอร์ · จำนวนไฟล์ ณ ตอนนี้',
+    $('workfFiles').querySelectorAll('.wk-fold').length === 2 && $('workfFiles').querySelectorAll('.wk-red').length === 2 && [...$('workfFiles').querySelectorAll('.wk-fold .wk-red')].every(isRed) && /ลิงก์สด — ไฟล์ที่เพิ่ม\\/ลบในโฟลเดอร์นี้ภายหลังเปลี่ยนตามทันที/.test(txt('workfFiles')) && /2 ไฟล์ ณ ตอนนี้/.test(txt('workfFiles')) && /โฟลเดอร์ว่าง/.test(txt('workfFiles')), txt('workfFiles').slice(0, 200));
+  ok('ยังไม่แนบจริง: ยังไม่เรียก transfer_attach / transfer_attach_folder (ใบงานยังไม่ถูกสร้าง)', rpcs('transfer_attach_folder').length === 0);
+  await openPicker('workfPick'); folderTab(); await sleep(100);
+  ok('เปิดตัวเลือกซ้ำ: โฟลเดอร์ที่เก็บไว้แล้วเป็น "แนบแล้ว" เลือกซ้ำไม่ได้ (ไม่สนตัวพิมพ์)', folderBox('End credit/2026').disabled && folderBox('Empty folder').disabled && /แนบแล้ว/.test(lblOf('End credit/2026')) && !folderBox('Promo').disabled);
+  $('workPickCancel').click(); await sleep(100);
+  // ลบโฟลเดอร์ที่เก็บไว้ (ตำแหน่ง 2 ของโฟลเดอร์ ตรวจว่าลบถูกตัว)
+  $('workfFiles').querySelector('[data-act="stg-frm"][data-i="1"]').click();
+  ok('เอาโฟลเดอร์ออกตามตำแหน่ง: ลบ "Empty folder" (ตำแหน่งที่ 2) เหลือ End credit/2026', $('workfFiles').querySelectorAll('.wk-fold').length === 1 && /End credit\\/2026/.test(txt('workfFiles')) && !/Empty folder/.test(txt('workfFiles')));
+  await openPicker('workfPick'); folderTab(); await sleep(100); pickFolder('Empty folder'); pickFolder('Promo'); $('workPickGo').click(); await sleep(150);
+  ok('เพิ่มกลับ: มี 3 โฟลเดอร์ (End credit/2026 · Empty folder · Promo)', $('workfFiles').querySelectorAll('.wk-fold').length === 3);
+  setVal('workfTitle', 'งานแนบโฟลเดอร์'); pickPerson('Nui'); pickPerson('Pran');
+  const nFA = rpcs('transfer_attach_folder').length;
+  $('workfSave').click(); await sleep(900);
+  const madeF = WORK.tasks.filter(t => t.title === 'งานแนบโฟลเดอร์');
+  const fa = rpcs('transfer_attach_folder').slice(nFA);
+  ok('สั่ง 2 ใบ × 3 โฟลเดอร์: transfer_attach_folder 6 ครั้ง (ใบละ 3 · ctx brief · kind task · พาธตรง) · ฐานมีลิงก์โฟลเดอร์ 6 แถว · ไฟล์เดี่ยว 1 ไฟล์ต่อใบด้วย',
+    madeF.length === 2 && fa.length === 6 && fa.every(c => c.args.p_kind === 'task' && c.args.p_ctx === 'brief' && madeF.some(t => t.id === c.args.p_target)) && WORK.fatt.length === 6 && ['End credit/2026', 'Empty folder', 'Promo'].every(p => fa.some(c => c.args.p_path === p)) && WORK.att.filter(a => madeF.some(t => t.id === a.target_id)).length === 2, fa.map(c => c.args.p_path).join());
+  ok('ข้อความ: "แนบไฟล์ 1 ไฟล์ · แนบโฟลเดอร์ 3 โฟลเดอร์" · ฟอร์มปิด · ไม่มีแถบแดง', /แนบไฟล์ 1 ไฟล์ · แนบโฟลเดอร์ 3 โฟลเดอร์/.test(toast()) && !dlgOpen('workFormDialog') && fatalText() === '', toast());
+  // แนบล้มบางโฟลเดอร์ของบางใบ
+  await openForm(); await openPicker('workfPick'); folderTab(); await sleep(100); pickFolder('Promo'); pickFolder('Empty folder'); $('workPickGo').click(); await sleep(150);
+  setVal('workfTitle', 'งานโฟลเดอร์ล้ม'); pickPerson('Nui'); pickPerson('Pran');
+  const origF = WORK.rpc.transfer_attach_folder; let nf2 = 0;
+  WORK.rpc.transfer_attach_folder = (me, a) => (a.p_path === 'Empty folder' && ++nf2 === 2 ? { data: null, error: { message: 'โฟลเดอร์ "Empty folder" ไม่มีไฟล์ที่ใช้ได้อยู่เลย' } } : origF(me, a));
+  $('workfSave').click(); await sleep(900);
+  WORK.rpc.transfer_attach_folder = origF;
+  const madeG = WORK.tasks.filter(t => t.title === 'งานโฟลเดอร์ล้ม');
+  ok('โฟลเดอร์หนึ่งของใบหนึ่งแนบล้ม: สร้างครบ 2 ใบ · แถบแดงบอก "แนบไฟล์/โฟลเดอร์จากคลังไม่สำเร็จ 1 ใบ" + ชื่อโฟลเดอร์ + เหตุผล + แนบซ้ำได้ · ไม่ขึ้น "แนบโฟลเดอร์ 2 โฟลเดอร์"',
+    madeG.length === 2 && /แต่แนบไฟล์\\/โฟลเดอร์จากคลังไม่สำเร็จ 1 ใบ/.test(fatalText()) && /โฟลเดอร์ "Empty folder"/.test(fatalText()) && /ซ้ำได้/.test(fatalText()) && !/แนบโฟลเดอร์ 2 โฟลเดอร์/.test(toast()), fatalText());
+  clearFatal();
+
+  // รายละเอียดงาน: ไฟล์สด
+  tab('assign'); await frames();
+  const tF = madeF[0].id;
+  workOpenDetail(tF); await sleep(500);
+  const fr = n => [...document.querySelectorAll('#workDlgBody .wk-fold')].find(x => x.querySelector('strong').textContent === n);
+  ok('รายละเอียดงาน: ส่วน "ไฟล์แนบจากคลังไฟล์ · ผู้สั่ง" มีโฟลเดอร์ 3 อัน · แต่ละอันขึ้น "ลิงก์สด" + จำนวนไฟล์จริง ณ ตอนนี้', !!fr('End credit/2026') && !!fr('Empty folder') && !!fr('Promo') && /ลิงก์สด/.test(fr('Promo').textContent) && /2 ไฟล์ ณ ตอนนี้/.test(fr('End credit/2026').textContent) && /1 ไฟล์ ณ ตอนนี้/.test(fr('Promo').textContent), fr('End credit/2026') && flat(fr('End credit/2026').textContent));
+  ok('โฟลเดอร์ที่ไม่มีไฟล์ (มีแต่ตัวหมาย): ขึ้น "โฟลเดอร์นี้ไม่มีไฟล์แล้ว" ไม่ใช่ error แดง', /โฟลเดอร์นี้ไม่มีไฟล์แล้ว/.test(fr('Empty folder').textContent) && !fr('Empty folder').querySelector('.alert-red'));
+  ok('เรียกอ่านไฟล์สดด้วย transfer_folder_files ครั้งเดียวต่อรอบ (ส่งรหัสลิงก์ของใบนี้) · ไม่อ่านตาราง transfer_files เองเพื่อสร้างรายการ', lastRpc('transfer_folder_files').args.p_att.length === 3);
+  const detOpen = fr('End credit/2026').querySelector('details');
+  detOpen.open = true; detOpen.dispatchEvent(new Event('toggle')); await sleep(50);
+  ok('ไฟล์ในโฟลเดอร์ (ขยายดู): ep1.mp4 + เปิด.mp4 + ปิด.mp4? (End credit/2026 รวมย่อย 2 ไฟล์: รีวิว HDJ-CUE1.mp4 + ep1.mp4) · มีปุ่มเปิดดู/ดาวน์โหลด', /รีวิว HDJ-CUE1\.mp4/.test(fr('End credit/2026').textContent) && /ep1\.mp4/.test(fr('End credit/2026').textContent) && !!fr('End credit/2026').querySelector('[data-act="att-dl"]'));
+  const nOpen0 = WORK.opens.length;
+  fr('End credit/2026').querySelector('[data-act="att-dl"]').click(); await sleep(400);
+  ok('ดาวน์โหลดไฟล์ในโฟลเดอร์: ผ่าน transfer_open เสมอ (บันทึกประวัติ) · ลิงก์ 60 วินาที', WORK.opens.length === nOpen0 + 1 && WORK.opens[WORK.opens.length - 1].purpose === 'download' && WORK.tsigned[WORK.tsigned.length - 1].secs === 60, JSON.stringify(WORK.opens[WORK.opens.length - 1]));
+  // สด: ไฟล์ใหม่ตามมาเอง · หมดอายุหายเอง
+  WORK.lib.push(F('FE3', { category: 'video', file_name: 'ใหม่ทีหลัง.mp4', folder_path: 'End credit/2026/ep2' }));
+  closeAll(); await sleep(80); workOpenDetail(tF); await sleep(500);
+  ok('ไฟล์ที่อัปเข้าโฟลเดอร์ทีหลัง (End credit/2026/ep2) ตามมาเอง: จำนวนเพิ่มเป็น 3 ไฟล์ ณ ตอนนี้ (ลิงก์สด — ไม่ใช่ snapshot)', /3 ไฟล์ ณ ตอนนี้/.test(fr('End credit/2026').textContent) && /ใหม่ทีหลัง\.mp4/.test(fr('End credit/2026').textContent));
+  ok('รายการที่ขยายไว้ยังขยายอยู่หลังวาดใหม่ (จำสถานะเปิด)', fr('End credit/2026').querySelector('details').open === true);
+  WORK.lib.find(f => f.id === 'FE3').expires_at = iso(NOW - H);
+  closeAll(); await sleep(80); workOpenDetail(tF); await sleep(500);
+  ok('ไฟล์ที่หมดอายุ (ไม่ถาวร) หายเอง: กลับเป็น 2 ไฟล์', /2 ไฟล์ ณ ตอนนี้/.test(fr('End credit/2026').textContent) && !/ใหม่ทีหลัง/.test(fr('End credit/2026').textContent));
+  WORK.lib.filter(f => (f.folder_path || '').indexOf('Promo') === 0).forEach(f => { f.status = 'deleted'; });
+  closeAll(); await sleep(80); workOpenDetail(tF); await sleep(500);
+  ok('โฟลเดอร์ที่ไฟล์ถูกลบหมด (Promo): ขึ้น "โฟลเดอร์นี้ไม่มีไฟล์แล้ว" ลิงก์ยังอยู่ (ไม่ error)', /โฟลเดอร์นี้ไม่มีไฟล์แล้ว/.test(fr('Promo').textContent) && !!fr('Promo').querySelector('[data-act="att-frm"]'));
+  // ถอด
+  fr('Promo').querySelector('[data-act="att-frm"]').click(); await sleep(150);
+  ok('ถอดลิงก์โฟลเดอร์: ถามยืนยัน — ชื่อโฟลเดอร์ · แดงตัวหนา "โฟลเดอร์และไฟล์ในคลังไฟล์ไม่ถูกลบ" · ยังไม่เรียกฐาน', dlgOpen('confirmDialog') && /Promo/.test(txt('confirmBody')) && isRed($('confirmBody').querySelector('.wk-red')) && /ไม่ถูกลบ/.test(txt('confirmBody')) && rpcs('transfer_detach_folder').length === 0);
+  const nLib = WORK.lib.length;
+  $('confirmOkBtn').click(); await sleep(600);
+  ok('ถอดสำเร็จ: transfer_detach_folder ได้ id ลิงก์ · แถวหาย · ไฟล์/โฟลเดอร์ในคลังไม่ถูกแตะ', rpcs('transfer_detach_folder').length === 1 && !fr('Promo') && WORK.lib.length === nLib && /ถอดลิงก์โฟลเดอร์แล้ว/.test(toast()));
+  fr('End credit/2026').querySelector('[data-act="att-frm"]').click(); await sleep(150);
+  WORK.fail.rpc_transfer_detach_folder = 'ฐานข้อมูลล่ม';
+  $('confirmOkBtn').click(); await sleep(500);
+  ok('ถอดลิงก์โฟลเดอร์แล้วฐานล้ม: แถบแดงบอกตามจริง · ลิงก์ยังอยู่', /ถอดลิงก์โฟลเดอร์ไม่สำเร็จ: ฐานข้อมูลล่ม/.test(fatalText()) && WORK.fatt.some(x => x.folder_path === 'End credit/2026' && x.target_id === tF));
+  clearFatal(); delete WORK.fail.rpc_transfer_detach_folder;
+  closeAll(); await sleep(80); workOpenDetail(tF); await sleep(500);
+  // แนบเพิ่มจากรายละเอียด + เพดาน 5
+  detBtn('att-add', 'data-which="brief"').click(); await sleep(300); folderTab(); await sleep(100);
+  ok('แนบเพิ่มจากรายละเอียด: แท็บโฟลเดอร์ · โฟลเดอร์ที่แนบอยู่แล้ว (End credit/2026 · Empty folder) เป็น "แนบแล้ว" · ข้อความ "โฟลเดอร์ได้อีก 3"', folderBox('End credit/2026').disabled && folderBox('Empty folder').disabled && /โฟลเดอร์ได้อีก 3/.test(txt('workPickMsg')), txt('workPickMsg'));
+  pickFolder('End credit'); $('workPickGo').click(); await sleep(600);
+  ok('แนบโฟลเดอร์ "End credit" ทันที: transfer_attach_folder ctx brief ของใบนี้ · ปิดตัวเลือก · ข้อความ "แนบโฟลเดอร์แล้ว 1 โฟลเดอร์" · ขึ้นในรายละเอียด', lastRpc('transfer_attach_folder').args.p_target === tF && lastRpc('transfer_attach_folder').args.p_ctx === 'brief' && lastRpc('transfer_attach_folder').args.p_path === 'End credit' && !dlgOpen('workPickDlg') && /แนบโฟลเดอร์แล้ว 1 โฟลเดอร์/.test(toast()) && !!fr('End credit'));
+  WORK.fatt.push({ id: 'fz1', folder_path: 'Promo', target_kind: 'task', target_id: tF, ctx: 'brief', attached_by: 'u1', attached_at: iso(NOW) }, { id: 'fz2', folder_path: 'Zeta', target_kind: 'task', target_id: tF, ctx: 'brief', attached_by: 'u1', attached_at: iso(NOW) });
+  await loadWork(); await sleep(300);
+  detBtn('att-add', 'data-which="brief"').click(); await sleep(300); folderTab(); await sleep(100);
+  ok('ครบ 5 โฟลเดอร์ (End credit/2026 · Empty folder · End credit · Promo · Zeta): ข้อความ "โฟลเดอร์ได้อีก 0" · ทุกช่องที่ยังไม่แนบเลือกไม่ได้', /โฟลเดอร์ได้อีก 0/.test(txt('workPickMsg')) && folderBox('End credit/2026/ep1').disabled, txt('workPickMsg'));
+  closeAll(); await sleep(100);
+  // ฐานปฏิเสธโฟลเดอร์ (เช่นโฟลเดอร์ถูกลบก่อนกดแนบ) → ตัวเลือกยังเปิด บอกเหตุผล
+  WORK.fatt = WORK.fatt.filter(a => a.id !== 'fz1' && a.id !== 'fz2');
+  await loadWork(); await sleep(200);
+  workOpenDetail(tF); await sleep(300);
+  WORK.lib.filter(f => (f.folder_path || '').indexOf('Promo') === 0).forEach(f => { f.status = 'ready'; });          // กู้ไฟล์ Promo ให้โฟลเดอร์ขึ้นในตัวเลือก แล้วค่อยลบก่อนกดแนบ
+  detBtn('att-add', 'data-which="brief"').click(); await sleep(300); folderTab(); await sleep(100);
+  pickFolder('Promo');
+  WORK.lib.filter(f => (f.folder_path || '').indexOf('Promo') === 0).forEach(f => { f.status = 'deleted'; });
+  $('workPickGo').click(); await sleep(500);
+  ok('โฟลเดอร์ไม่มีไฟล์ใช้ได้แล้วตอนกดแนบ (ฐานปฏิเสธ): ตัวเลือกยังเปิด · บอกเหตุผล "ไม่มีไฟล์ที่ใช้ได้อยู่เลย" · ไม่ขึ้นข้อความสำเร็จ', dlgOpen('workPickDlg') && /โฟลเดอร์ "Promo"/.test(txt('workPickErr')) && /ไม่มีไฟล์ที่ใช้ได้อยู่เลย/.test(txt('workPickErr')) && !WORK.fatt.some(x => x.folder_path === 'Promo' && x.target_id === tF), txt('workPickErr'));
+  closeAll(); await sleep(100);
+  // โฟลเดอร์ใหญ่เกิน 300 ไฟล์
+  for (let i = 0; i < 305; i++) WORK.lib.push(F('BK' + i, { category: 'doc', file_name: 'bulk-' + String(i).padStart(3, '0') + '.pdf', folder_path: 'Bulk' }));
+  WORK.fatt.push({ id: 'fb', folder_path: 'Bulk', target_kind: 'task', target_id: tF, ctx: 'brief', attached_by: 'u1', attached_at: iso(NOW) });
+  await loadWork(); await sleep(300);
+  closeAll(); await sleep(80); workOpenDetail(tF); await sleep(600);
+  ok('โฟลเดอร์ใหญ่ 305 ไฟล์: ขึ้น "305 ไฟล์ ณ ตอนนี้" + แดงตัวหนา "แสดง 300 จาก 305 ไฟล์ — ดูทั้งหมดที่หน้า โอนไฟล์" (บอกตรง ๆ)', /305 ไฟล์ ณ ตอนนี้/.test(fr('Bulk').textContent) && /แสดง 300 จาก 305 ไฟล์/.test(fr('Bulk').textContent) && isRed(fr('Bulk').querySelector('.wk-red')), fr('Bulk') && flat(fr('Bulk').textContent).slice(0, 160));
+  closeAll(); await sleep(100);
+  doLogout(); await sleep(400);
+
+  // ฟอร์มส่งงาน (Zen): แนบโฟลเดอร์ได้ — ไม่นับเป็นหลักฐาน · แนบหลังส่งสำเร็จ ctx submit:N
+  WORK.seed(); seedLib(); attSeq = 0; WORK.has059 = true;
+  WORK.lib.push(F('FE1', { category: 'video', file_name: 'ep1.mp4', folder_path: 'End credit/2026/ep1' }), F('FX1', { category: 'photo', file_name: 'x.png', folder_path: '<b>X</b>' }));
+  await login('zen'); showSection('tasks'); await sleep(300);
+  mineCard('a4').click(); await sleep(200);
+  ok('ฟอร์มส่งงาน: ข้อความบอก "แนบโฟลเดอร์ (ลิงก์สด) ได้ที่แท็บ โฟลเดอร์ แต่ไม่นับเป็นหลักฐาน"', /แท็บ "โฟลเดอร์"/.test(txt('workSubLibHint')) && /ไม่นับเป็นหลักฐาน/.test(txt('workSubLibHint')), txt('workSubLibHint'));
+  const nFS = rpcs('transfer_attach_folder').length;
+  await openPicker('workSubLibPick'); folderTab(); await sleep(100); pickFolder('<b>X</b>'); pickFolder('End credit/2026'); $('workPickGo').click(); await sleep(150);
+  ok('โฟลเดอร์ในฟอร์มส่งงาน: เก็บไว้ 2 · ขึ้นลิงก์สด + คำเตือนแดงตัวหนา · ชื่อที่เป็นแท็ก HTML แสดงเป็นข้อความ · ยังไม่เรียกฐาน', $('workSubFiles').querySelectorAll('.wk-fold').length === 2 && isRed($('workSubFiles').querySelector('.wk-fold .wk-red')) && !$('workSubFiles').querySelector('b') && rpcs('transfer_attach_folder').length === nFS);
+  $('workSubFiles').querySelector('[data-act="stg-frm"][data-i="0"]').click();
+  ok('เอาโฟลเดอร์ออกตามตำแหน่ง (ตัวแรก = <b>X</b>): เหลือ End credit/2026', $('workSubFiles').querySelectorAll('.wk-fold').length === 1 && txt('workSubFiles').indexOf('End credit/2026') >= 0 && txt('workSubFiles').indexOf('<b>X') < 0);
+  ok('โฟลเดอร์ไม่นับเป็นหลักฐาน: งานโพสต์ Facebook มีแต่โฟลเดอร์ + ยังไม่ใส่ลิงก์ → ปุ่มส่งปิด', $('workSubGo').disabled && /ลิงก์ Facebook/.test(txt('workSubNeed')), txt('workSubNeed'));
+  setVal('workSubC-facebook', 'https://www.facebook.com/PioneerDjLabSiam/posts/321');
+  const nFB = rpcs('transfer_attach_folder').length;
+  $('workSubGo').click(); await sleep(900);
+  const fb = rpcs('transfer_attach_folder').slice(nFB);
+  ok('ส่งงานแล้วแนบโฟลเดอร์: work_submit ก่อน → transfer_attach_folder ctx "submit:1" ใบ a4 พาธ "End credit/2026" · ฐานมีลิงก์ · ข้อความ "ส่งงานแล้ว — แนบโฟลเดอร์ 1 โฟลเดอร์"', fb.length === 1 && fb[0].args.p_ctx === 'submit:1' && fb[0].args.p_target === 'a4' && fb[0].args.p_path === 'End credit/2026' && WORK.fatt.some(a => a.target_id === 'a4' && a.ctx === 'submit:1') && /แนบโฟลเดอร์ 1 โฟลเดอร์/.test(toast()) && taskOnServer('a4').status === 'submitted', toast());
+  // ผู้รับถอดลิงก์ของผู้สั่งไม่ได้
+  WORK.fatt.push({ id: 'fq', folder_path: 'End credit', target_kind: 'task', target_id: 'a5', ctx: 'brief', attached_by: 'u4', attached_at: iso(NOW) });
+  await loadWork(); await sleep(300);
+  closeAll(); await sleep(80); workOpenDetail('a5'); await sleep(500);
+  ok('ผู้รับ (Zen) เห็นโฟลเดอร์ของผู้สั่ง แต่ไม่มีปุ่มถอด/แนบของผู้สั่ง (ตามสิทธิ์ฐาน)', !!document.querySelector('#workDlgBody .wk-fold') && !document.querySelector('#workDlgBody [data-act="att-frm"]') && !detBtn('att-add', 'data-which="brief"'));
+  closeAll(); await sleep(100);
+  doLogout(); await sleep(400);
+
+  // ก่อนรัน 059 / ยังไม่รัน 052 / ออกจากระบบ
+  WORK.seed(); seedLib(); attSeq = 0; WORK.has059 = false;
+  await login('tibass'); showSection('tasks'); await sleep(300);
+  await openForm(); await openPicker('workfPick');
+  ok('ยังไม่รัน 059: ตัวเลือกไม่มีแท็บโฟลเดอร์ · คำแนะนำเรื่องโฟลเดอร์ในฟอร์มว่าง', $('workPickMode').hidden === true && $('workfFoldHint').textContent === '');
+  closeAll(); await sleep(100); doLogout(); await sleep(400);
+  WORK.seed(); seedLib(); attSeq = 0; WORK.has059 = true; WORK.noMark = true;
+  await login('tibass'); showSection('tasks'); await sleep(300);
+  await openForm(); await openPicker('workfPick'); folderTab(); await sleep(150);
+  ok('ยังไม่รัน 052 (ไม่มีตารางตัวหมาย): แท็บโฟลเดอร์ใช้ได้ตามปกติจากพาธไฟล์ · ไม่ขึ้นข้อความผิดพลาด', $('workPickErr').hidden && !!folderBox('End credit/2026') && !folderBox('Empty folder'));
+  pickFolder('End credit/2026'); $('workPickGo').click(); await sleep(150);
+  ok('(ตั้งต้น) มีโฟลเดอร์ที่เลือกไว้ในฟอร์ม', $('workfFiles').querySelectorAll('.wk-fold').length === 1);
+  doLogout(); await sleep(500);
+  ok('ออกจากระบบ: รายการที่เลือกไว้ (รวมโฟลเดอร์) ล้างหมด · ข้อมูลไฟล์สด/ลิงก์โฟลเดอร์ที่โหลดไว้หาย', $('workfFiles').innerHTML === '' && work.fatt.length === 0 && Object.keys(work.ff).length === 0);
 
   done();
 }
