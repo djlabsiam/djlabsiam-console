@@ -13,7 +13,8 @@
  * ผู้ใช้ (ล็อกอินด้วยชื่อขึ้นต้น): tibass=เจ้าของ(u1) · nui/fah=ผู้ดูแล(u4/u5) · zen/nutty/pran=พนักงาน(u2/u3/u6) · ghost=พนักงานที่ถูกปิด(u7)
  */
 export const WORK_MOCK = `<script>
-const WORK = { tasks: [], events: [], reqs: [], files: new Map(), uploads: [], signed: [], subs: [], fail: {}, missing: false, noReq: false, gate: null, seq: 0, tick: 0 };
+const WORK = { tasks: [], events: [], reqs: [], files: new Map(), uploads: [], signed: [], subs: [], fail: {}, missing: false, noReq: false, gate: null, seq: 0, tick: 0,
+  att: [], lib: [], opens: [], tsigned: [], noAtt: false, noFolder: false };
 (function () {
   FAKE.admins.push({ id: 'u4', full_name: 'Nui', role: 'admin', is_active: true }, { id: 'u5', full_name: 'Fah', role: 'admin', is_active: true },
     { id: 'u6', full_name: 'Pran', role: 'staff', is_active: true }, { id: 'u7', full_name: 'Ghost', role: 'staff', is_active: false });
@@ -51,6 +52,7 @@ const WORK = { tasks: [], events: [], reqs: [], files: new Map(), uploads: [], s
     submitted_at: null, closed_at: null, created_at: ago(30), updated_at: ago(2) }, o);
   WORK.seed = () => {
     WORK.tasks = []; WORK.events = []; WORK.reqs = []; WORK.files = new Map(); WORK.uploads = []; WORK.signed = []; WORK.fail = {}; WORK.missing = false; WORK.noReq = false; WORK.gate = null; WORK.signGate = null;
+    WORK.att = []; WORK.lib = []; WORK.opens = []; WORK.tsigned = []; WORK.noAtt = false; WORK.noFolder = false;
     const T = (id, o) => { const t = mkTask(id, o); WORK.tasks.push(t); ev(t, 'created', t.created_by, '', { created_at: t.created_at }); return t; };
     const submitted = (t, note, links, imgs, phase, h) => { t.status = 'submitted'; t.submitted_at = ago(h || 1); ev(t, 'submitted', t.assignee_id, note, { links: links || [], image_paths: imgs || [], phase: phase || t.phase, created_at: ago(h || 1) }); };
     // ใบของ Zen (พนักงาน)
@@ -87,13 +89,48 @@ const WORK = { tasks: [], events: [], reqs: [], files: new Map(), uploads: [], s
     R('q6', { requester_id: 'u2', to_group: 'admin', body: 'ขอให้ช่วยตรวจรูปปกช่อง YouTube ก่อนส่ง', status: 'approved', decided_by: 'u5', decision_note: 'เดี๋ยวเข้าไปดูให้ที่ใบงาน', closed_at: ago(40), created_at: ago(48) });
   };
 
+  // ── ไฟล์แนบจากคลังโอนไฟล์ (migration 053 — ตัวจริงมีชุดเทสต์ SQL ของตัวเอง) ──
+  //   transfer_attachments: เห็นเมื่อเป็นทีมงานและเห็นใบงานนั้นอยู่ · file = ข้อมูลไฟล์ที่ join (null = ไฟล์ถูกลบ/ไม่มีสิทธิ์เห็น = lib.hidden)
+  //   WORK.lib = แถว transfer_files ที่ทีมงานเห็น (status/expires_at/is_permanent/folder_path) · WORK.noAtt = ยังไม่รัน 053 · WORK.noFolder = ยังไม่รัน 051 (ไม่มี folder_path)
+  const libAlive = f => !!f && f.status === 'ready' && (f.is_permanent || Date.parse(f.expires_at) > Date.now());
+  const libFile = id => { const f = WORK.lib.find(x => x.id === id); return f && !f.hidden ? { id: f.id, category: f.category, file_name: f.file_name, size_bytes: f.size_bytes, status: f.status, is_permanent: f.is_permanent, expires_at: f.expires_at } : null; };
+  function transferRows(table, st, who) {
+    const MISSING = { data: null, error: { code: 'PGRST205', message: "Could not find the table 'public." + table + "' in the schema cache" } };
+    if (!role(who)) return OK([]);
+    let rows;
+    if (table === 'transfer_attachments') {
+      if (WORK.noAtt) return MISSING;
+      if (WORK.fail.att) return E(WORK.fail.att);
+      rows = WORK.att.filter(a => { const t = WORK.tasks.find(x => x.id === a.target_id); return !!t && taskVisible(who, t); });
+      st.eqs.forEach(([c, v]) => { rows = rows.filter(r => r[c] === v); });
+      rows = rows.map(a => Object.assign(clone(a), { file: libFile(a.file_id) }));
+    } else {
+      if (WORK.fail.lib) return E(WORK.fail.lib);
+      if (WORK.noFolder && st.cols.indexOf('folder_path') >= 0) return { data: null, error: { code: '42703', message: 'column transfer_files.folder_path does not exist' } };
+      rows = WORK.lib.filter(f => !f.hidden);
+      st.eqs.forEach(([c, v]) => { rows = rows.filter(r => r[c] === v); });
+      rows = rows.map(f => { const o = Object.assign(clone(f), { uploader: { full_name: nameOf(f.uploaded_by) } }); if (st.cols.indexOf('folder_path') < 0) delete o.folder_path; return o; });
+    }
+    if (st.order) rows.sort((a, b) => String(a[st.order.c]).localeCompare(String(b[st.order.c])) * (st.order.asc ? 1 : -1));
+    if (st.limit != null) rows = rows.slice(0, st.limit);
+    return OK(rows);
+  }
+  // สำเนาของ transfer_attach_ok (053) — ใบที่ยกเลิกแล้วแนบ/ถอดเพิ่มไม่ได้ · brief = ผู้สั่ง/เจ้าของ/ผู้ดูแล(ใบของพนักงาน) · submit:N = ผู้รับ/เจ้าของ
+  function attachOk(me, t, ctx) {
+    if (!t || t.status === 'cancelled') return false;
+    const m = role(me);
+    if (ctx === 'brief') return t.created_by === me || m === 'owner' || (m === 'admin' && role(t.assignee_id) === 'staff');
+    if (/^submit:[0-9]{1,3}$/.test(ctx)) return t.assignee_id === me || m === 'owner';
+    return false;
+  }
+
   // ── เบราว์เซอร์อ่านได้อย่างเดียว ──
   function builder(client, table) {
-    const st = { op: 'select', order: null, limit: null, payload: null };
+    const st = { op: 'select', order: null, limit: null, payload: null, cols: '', eqs: [] };
     const me = () => client.session && client.session.user.id;
     const q = {
-      select() { return q; }, order(c, o) { st.order = { c, asc: !(o && o.ascending === false) }; return q; }, limit(n) { st.limit = n; return q; },
-      insert(p) { st.op = 'insert'; st.payload = p; return q; }, update(p) { st.op = 'update'; st.payload = p; return q; }, delete() { st.op = 'delete'; return q; }, eq() { return q; },
+      select(c) { if (typeof c === 'string') st.cols = c; return q; }, order(c, o) { st.order = { c, asc: !(o && o.ascending === false) }; return q; }, limit(n) { st.limit = n; return q; },
+      insert(p) { st.op = 'insert'; st.payload = p; return q; }, update(p) { st.op = 'update'; st.payload = p; return q; }, delete() { st.op = 'delete'; return q; }, eq(c, v) { st.eqs.push([c, v]); return q; },
       then(res, rej) { return run().then(res, rej); },
     };
     async function run() {
@@ -101,6 +138,7 @@ const WORK = { tasks: [], events: [], reqs: [], files: new Map(), uploads: [], s
       CALLS.push({ op: st.op, table, payload: st.payload, who });
       if (WORK.gate) await WORK.gate;
       if (st.op !== 'select') return E('permission denied for table ' + table);
+      if (table === 'transfer_attachments' || table === 'transfer_files') return transferRows(table, st, who);      // ไฟล์แนบจากคลังโอนไฟล์ (053) — แยกสวิตช์ล้ม/ยังไม่รันจากชุด work_*
       if (WORK.fail.select) return E(WORK.fail.select);
       if (WORK.missing || (WORK.noReq && table === 'work_requests')) return E('relation "public.' + table + '" does not exist');
       let rows = table === 'work_tasks' ? WORK.tasks.filter(t => taskVisible(who, t))
@@ -252,6 +290,38 @@ const WORK = { tasks: [], events: [], reqs: [], files: new Map(), uploads: [], s
       Object.assign(r, { status: 'withdrawn', closed_at: nowIso(), updated_at: nowIso() });
       return OK();
     },
+    // ── โอนไฟล์: แนบ/ถอด/เปิด (053 + 049) ──
+    transfer_attach(me, a) {
+      if (!role(me)) return E('ไม่มีสิทธิ์ใช้งาน (ต้องเป็นทีมงานที่ยังใช้งานอยู่)');
+      const kind = a.p_kind, ctx = a.p_ctx || '', target = a.p_target;
+      if (kind !== 'task') return E('ชนิดรายการที่แนบไม่ถูกต้อง');
+      if (!(ctx === 'brief' || /^submit:[0-9]{1,3}$/.test(ctx))) return E('ใบงานแนบได้เฉพาะตอนสั่ง (brief) หรือตอนส่งงาน (submit:N)');
+      if (!attachOk(me, find(target), ctx)) return E('แนบไฟล์ไม่ได้ — ไม่มีสิทธิ์กับรายการนี้ หรือรายการถูกลบ/ยกเลิกไปแล้ว');
+      const ids = [...new Set((a.p_files || []).filter(Boolean))];
+      if (!ids.length) return OK(0);
+      if (ids.length > 20) return E('แนบได้ไม่เกิน 20 ไฟล์ต่อครั้ง');
+      if (!ids.every(id => libAlive(WORK.lib.find(x => x.id === id)))) return E('มีไฟล์ที่ไม่พบ ถูกลบ หรือหมดอายุแล้ว — เลือกใหม่จากคลังไฟล์');
+      const have = WORK.att.filter(x => x.target_kind === kind && x.target_id === target && x.ctx === ctx);
+      const fresh = ids.filter(id => !have.some(x => x.file_id === id));
+      if (have.length + fresh.length > 20) return E('แนบไฟล์ได้ไม่เกิน 20 ไฟล์ต่อรายการ (ตอนนี้มี ' + have.length + ')');
+      fresh.forEach(id => WORK.att.push({ id: 'at' + (++WORK.seq), file_id: id, target_kind: kind, target_id: target, ctx, attached_by: me, attached_at: nowIso() }));
+      return OK(fresh.length);
+    },
+    transfer_detach(me, a) {
+      if (!role(me)) return E('ไม่มีสิทธิ์ใช้งาน');
+      const x = WORK.att.find(r => r.id === a.p_id);
+      if (!x) return E('ไม่พบไฟล์แนบนี้ (อาจถูกถอดไปแล้ว)');
+      if (x.attached_by !== me && !attachOk(me, find(x.target_id), x.ctx)) return E('ถอดไฟล์แนบไม่ได้ — ถอดได้เฉพาะคนที่แนบ หรือผู้ที่แก้รายการนั้นได้');
+      WORK.att = WORK.att.filter(r => r.id !== a.p_id);
+      return OK();
+    },
+    transfer_open(me, a) {
+      const f = WORK.lib.find(x => x.id === a.p_id);
+      if (!role(me) || !f || f.hidden) return E('ไม่พบไฟล์นี้');
+      if (!libAlive(f)) return E('ไฟล์นี้หมดอายุหรือถูกลบแล้ว เปิดไม่ได้');
+      WORK.opens.push({ id: f.id, purpose: a.p_purpose, who: me });
+      return OK([{ r_path: f.category + '/' + f.id + '.bin', r_name: f.file_name, r_cat: f.category }]);
+    },
   };
 
   // ── ถังรูป work-evidence ──
@@ -289,20 +359,24 @@ const WORK = { tasks: [], events: [], reqs: [], files: new Map(), uploads: [], s
   const create = window.supabase.createClient;
   window.supabase.createClient = (u, k, o) => {
     const c = create(u, k, o), from = c.from, rpc = c.rpc, ch0 = c.channel;
-    c.from = t => (t === 'work_tasks' || t === 'work_task_events' || t === 'work_requests') ? builder(c, t) : from(t);
+    c.from = t => (t === 'work_tasks' || t === 'work_task_events' || t === 'work_requests' || t === 'transfer_attachments' || t === 'transfer_files') ? builder(c, t) : from(t);
     c.rpc = async (fn, args) => {
       if (!RPC[fn]) return rpc(fn, args);
       const me = c.session && c.session.user.id;
       CALLS.push({ op: 'rpc', fn, args, who: me, main: c.isMain });
       if (WORK.gate) await WORK.gate;
       if (WORK.fail['rpc_' + fn]) return E(WORK.fail['rpc_' + fn]);
-      if (WORK.missing) return E('Could not find the function public.' + fn + ' in the schema cache');
+      if (WORK.missing || (WORK.noAtt && /^transfer_(attach|detach)$/.test(fn))) return E('Could not find the function public.' + fn + ' in the schema cache');
       return RPC[fn](me, args || {});
     };
     c.storage = { from: bucket => ({
       upload: (p, f, o) => bucket === 'work-evidence' ? BUCKET.upload(c, p, f, o) : Promise.resolve(E('Bucket not found')),
       remove: ps => BUCKET.remove(c, ps),
-      createSignedUrl: (p, s) => BUCKET.createSignedUrl(c, p, s),
+      createSignedUrl: (p, s, o) => {
+        if (bucket !== 'internal-transfer') return BUCKET.createSignedUrl(c, p, s);
+        WORK.tsigned.push({ path: p, secs: s, opts: o || null });                       // ถังโอนไฟล์ (เปิดผ่าน transfer_open แล้วขอลิงก์ 60 วินาที)
+        return Promise.resolve(WORK.fail.tsign ? E(WORK.fail.tsign) : OK({ signedUrl: 'data:text/plain;base64,QQ==#' + encodeURIComponent(p) }));
+      },
     }) };
     c.channel = function (name) {
       const ch = ch0.apply(c, arguments), on0 = ch.on;
