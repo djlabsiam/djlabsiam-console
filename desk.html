@@ -1081,6 +1081,8 @@
   .wk-link { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); }
   .wk-link:last-child { border-bottom: 0; }
   .wk-attbtns { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; flex: none; }
+  .wk-fmain { display: flex; align-items: center; gap: 12px; flex: 1 1 auto; min-width: 0; }
+  .wk-fmain > div { min-width: 0; overflow-wrap: anywhere; }
   .wk-pick { max-height: 52vh; overflow: auto; margin-bottom: 10px; }
   .wk-fico { width: 34px; height: 27px; vertical-align: middle; margin-right: 8px; }
   .wk-fold summary { display: flex; align-items: center; min-height: 44px; cursor: pointer; font-weight: 600; }
@@ -15777,7 +15779,7 @@ const WORK_BUCKET = 'work-evidence';
 const WORK_SOON_MS = 3 * 3600000;      // "ใกล้ถึงกำหนด" = เหลือไม่ถึง 3 ชม. (ค่าตั้งต้นข้อ 8)
 const WORK_MAX_IMG = 6;
 
-function workBlank() { return { loaded: false, missing: false, error: '', tasks: [], events: [], reqs: [], people: [], att: [], attMissing: false, attErr: '', fatt: [], f059: false, ff: {}, ffOpen: {}, tab: 'mine', sel: null, reqSel: null, reqBox: '', filter: 'all', doneOpen: false, signed: {}, rt: null }; }
+function workBlank() { return { loaded: false, missing: false, error: '', tasks: [], events: [], reqs: [], people: [], att: [], attMissing: false, attErr: '', fatt: [], f059: false, ff: {}, ffOpen: {}, tab: 'mine', sel: null, reqSel: null, reqBox: '', filter: 'all', doneOpen: false, signed: {}, thumbs: {}, rt: null }; }
 let work = workBlank();
 let workSub = null;       // หน้าต่างส่งงาน: { id, imgs: [{ blob, url }], busy }
 let workForm = null;      // หน้าต่างสั่งงาน/แก้: { id|null, kind, channels:Set, busy }
@@ -16577,15 +16579,15 @@ function workAttCanBrief(t) {                // สำเนาของ transfe
   return t.created_by === currentUserId || me === 'owner' || (me === 'admin' && !!as && as.role === 'staff');
 }
 const workAttCanSubmit = t => workAttLive(t) && (t.assignee_id === currentUserId || workMyRole() === 'owner');      // ctx submit:N — ผู้รับ · เจ้าของ
-// คำขอ: ผู้ยื่น · เจ้าของ · กระดาน: คนเขียน · เจ้าของ · ผู้ดูแล (ฐานไม่ดูสถานะคำขอ — หน้าจอให้แนบ/ถอดเฉพาะตอนรอตอบ ไม่ให้ไฟล์ของคำขอที่ตัดสินแล้วเปลี่ยน)
+// คำขอ: ผู้ยื่น · เจ้าของ · กระดาน: คนเขียน · เจ้าของ · ผู้ดูแล (ฐานไม่ดูสถานะคำขอ — เจ้าของตัดสิน 14 ต.ค. 69: คำขอที่ตัดสินแล้วแนบ/ถอดเพิ่มได้)
 function workAttCanTarget(kind, row) {
   if (!row) return false;
   const me = workMyRole();
-  if (kind === 'request') return row.status === 'pending' && (row.requester_id === currentUserId || me === 'owner');
+  if (kind === 'request') return row.requester_id === currentUserId || me === 'owner';
   if (kind === 'board') return row.author_id === currentUserId || me === 'owner' || me === 'admin';
   return false;
 }
-const workAttCanDetach = (a, t) => !!t && !(a.target_kind === 'request' && t.status !== 'pending') && (a.attached_by === currentUserId || (a.target_kind === 'request' || a.target_kind === 'board' ? workAttCanTarget(a.target_kind, t) : (a.ctx === 'brief' ? workAttCanBrief(t) : workAttCanSubmit(t))));
+const workAttCanDetach = (a, t) => !!t && (a.attached_by === currentUserId || (a.target_kind === 'request' || a.target_kind === 'board' ? workAttCanTarget(a.target_kind, t) : (a.ctx === 'brief' ? workAttCanBrief(t) : workAttCanSubmit(t))));
 function workAttState(a) {
   const f = a.file;
   if (!f) return { ok: false, text: 'ไฟล์ไม่พร้อมใช้งาน — ถูกลบออกจากคลังแล้ว หรือคุณไม่มีสิทธิ์เห็น' };
@@ -16605,22 +16607,50 @@ function workAttLifeHtml(f, dueIso, evidence) {
     ? '<div class="wk-red">หมดอายุก่อนกำหนดส่งงาน (' + escapeHtml(workDt(f.expires_at)) + ') — ผู้รับเปิดไม่ได้หลังจากนั้น ให้เจ้าของตั้งเป็นไฟล์ถาวรถ้าต้องการให้อยู่นาน</div>' : '';
   return pill + warn;
 }
+// รูปตัวอย่างของไฟล์แนบ: ใช้ thumb ที่คลังเก็บไว้ตอนอัปโหลด — ไม่เปิดไฟล์จริง จึงไม่ลงประวัติคลัง/ไม่ทำเครื่องหมาย "เปิดแล้ว" ให้คนที่ถูก Tag
+// ไม่ดึงรวมไปกับรายการแนบ (thumb ใหญ่ถึง 40,000 ตัวอักษรต่อไฟล์) — ขอเฉพาะไฟล์ที่ถูกวาดบนหน้าจอทีเดียวหลังวาด แล้วแทนรูปในหน้าเลย · ไม่ได้รูป = ไอคอนตามชนิด
+const workThumbWant = new Set();
+let workThumbTimer = 0;
+function workThumbHtml(fid, category, name, canView) {
+  const th = work.thumbs[fid];
+  if (th === undefined) { workThumbWant.add(fid); clearTimeout(workThumbTimer); workThumbTimer = setTimeout(workThumbFetch, 0); }
+  const inner = th && TR_THUMB_OK.test(th) ? '<img src="' + th + '" alt="" loading="lazy">' : '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">' + (TR_ICON[category] || TR_ICON.other) + '</svg>';
+  const id = escapeHtml(fid);
+  return canView ? '<button type="button" class="tr-thumb" data-wkth="' + id + '" data-act="att-view" data-fid="' + id + '" aria-label="เปิดดู ' + escapeHtml(name) + '">' + inner + '</button>'
+    : '<span class="tr-thumb" data-wkth="' + id + '" aria-hidden="true">' + inner + '</span>';
+}
+async function workThumbFetch() {
+  const ids = [...workThumbWant].slice(0, 100);
+  ids.forEach(i => { workThumbWant.delete(i); work.thumbs[i] = ''; });        // ใส่ว่างไว้ก่อน = วาดซ้ำระหว่างรอไม่ขอซ้ำ · ขอไม่สำเร็จ = ใช้ไอคอนต่อ
+  if (workThumbWant.size) workThumbTimer = setTimeout(workThumbFetch, 0);
+  if (!ids.length || !currentUserId) return;
+  const uid = currentUserId, w = work;
+  const { data, error } = await db.from('transfer_files').select('id, thumb').in('id', ids);
+  if (error || uid !== currentUserId || w !== work) return;
+  (data || []).forEach(r => {
+    if (!r.thumb || !TR_THUMB_OK.test(r.thumb)) return;
+    w.thumbs[r.id] = r.thumb;
+    document.querySelectorAll('[data-wkth="' + r.id + '"]').forEach(el => { const img = document.createElement('img'); img.alt = ''; img.src = r.thumb; el.replaceChildren(img); });
+  });
+}
 function workAttRowHtml(a, t) {
   const f = a.file, s = workAttState(a), fid = escapeHtml(a.file_id), b = [];
   if (s.ok && trPreviewable(f)) b.push('<button type="button" class="btn btn-sm" data-act="att-view" data-fid="' + fid + '">เปิดดู</button>');
   if (s.ok) b.push('<button type="button" class="btn btn-sm" data-act="att-dl" data-fid="' + fid + '">ดาวน์โหลด</button>');
   if (workAttCanDetach(a, t)) b.push('<button type="button" class="btn btn-sm btn-danger" data-act="att-rm" data-aid="' + escapeHtml(a.id) + '">ถอดออก</button>');
-  return '<div class="wk-link"><div><strong>' + escapeHtml(f ? f.file_name : 'ไฟล์ที่ไม่พร้อมใช้งาน') + '</strong>' +
+  const th = f && s.ok ? workThumbHtml(a.file_id, f.category, f.file_name, trPreviewable(f)) : '';
+  return '<div class="wk-link"><div class="wk-fmain">' + th + '<div><strong>' + escapeHtml(f ? f.file_name : 'ไฟล์ที่ไม่พร้อมใช้งาน') + '</strong>' +
     '<div class="wk-url">' + (f ? escapeHtml(trCatName(f.category)) + ' · ' + trSize(f.size_bytes) + ' · ' : '') + 'แนบโดย ' + escapeHtml(workName(a.attached_by)) + ' · ' + escapeHtml(workDt(a.attached_at)) + '</div>' +
-    (s.ok ? workAttLifeHtml(f, t.due_at, work.f059 && /^submit:/.test(a.ctx)) : '<div class="wk-red">' + escapeHtml(s.text) + '</div>') + '</div><div class="wk-attbtns">' + b.join('') + '</div></div>';
+    (s.ok ? workAttLifeHtml(f, t.due_at, work.f059 && /^submit:/.test(a.ctx)) : '<div class="wk-red">' + escapeHtml(s.text) + '</div>') + '</div></div><div class="wk-attbtns">' + b.join('') + '</div></div>';
 }
 // โฟลเดอร์ลิงก์สด (059): ไฟล์ในโฟลเดอร์ ณ ตอนนี้ — อ่านจาก transfer_folder_files ทุกครั้งที่เปิดดู (ไม่ใช่ snapshot)
 function workFoldFileHtml(r, t) {
   const f = { is_permanent: r.r_permanent, expires_at: r.r_expires }, fid = escapeHtml(r.r_id), b = [];
   if (trPreviewable({ category: r.r_category, file_name: r.r_name })) b.push('<button type="button" class="btn btn-sm" data-act="att-view" data-fid="' + fid + '">เปิดดู</button>');
   b.push('<button type="button" class="btn btn-sm" data-act="att-dl" data-fid="' + fid + '">ดาวน์โหลด</button>');
-  return '<div class="wk-fil"><div><strong>' + escapeHtml(r.r_name) + '</strong><div class="wk-url">' + (r.r_folder ? escapeHtml(r.r_folder) + ' · ' : '') + escapeHtml(trCatName(r.r_category)) + ' · ' + trSize(r.r_size) + '</div>' +
-    workAttLifeHtml(f, t.due_at, false) + '</div><div class="wk-attbtns">' + b.join('') + '</div></div>';
+  const th = workThumbHtml(r.r_id, r.r_category, r.r_name, trPreviewable({ category: r.r_category, file_name: r.r_name }));
+  return '<div class="wk-fil"><div class="wk-fmain">' + th + '<div><strong>' + escapeHtml(r.r_name) + '</strong><div class="wk-url">' + (r.r_folder ? escapeHtml(r.r_folder) + ' · ' : '') + escapeHtml(trCatName(r.r_category)) + ' · ' + trSize(r.r_size) + '</div>' +
+    workAttLifeHtml(f, t.due_at, false) + '</div></div><div class="wk-attbtns">' + b.join('') + '</div></div>';
 }
 function workFoldRowHtml(a, t) {
   const live = work.ff[a.id], aid = escapeHtml(a.id), b = [];
@@ -16776,7 +16806,7 @@ function workAttAdd(taskId, which, kind) {
   const n = kind === 'task' ? workRound(taskId) : 0, ctx = kind !== 'task' ? '' : which === 'brief' ? 'brief' : 'submit:' + n;
   if (kind === 'task' && which !== 'brief' && n < 1) { showToast('⚠️ ยังไม่มีการส่งงาน — แนบได้หลังส่งงานแล้ว'); return; }
   const can = kind !== 'task' ? workAttCanTarget(kind, t) : (which === 'brief' ? workAttCanBrief(t) : workAttCanSubmit(t));
-  if (!can) { showToast(kind === 'task' ? '⚠️ แนบไฟล์ให้ใบงานนี้ไม่ได้แล้ว — สถานะเปลี่ยนไปหรือไม่มีสิทธิ์' : '⚠️ แนบไฟล์ให้รายการนี้ไม่ได้แล้ว — คำขอถูกตัดสินแล้วหรือไม่มีสิทธิ์'); return; }
+  if (!can) { showToast(kind === 'task' ? '⚠️ แนบไฟล์ให้ใบงานนี้ไม่ได้แล้ว — สถานะเปลี่ยนไปหรือไม่มีสิทธิ์' : '⚠️ แนบไฟล์ให้รายการนี้ไม่ได้แล้ว — ไม่มีสิทธิ์แนบให้รายการนี้'); return; }
   const have = work.att.filter(a => a.target_kind === kind && a.target_id === taskId && a.ctx === ctx), haveF = work.fatt.filter(a => a.target_kind === kind && a.target_id === taskId && a.ctx === ctx);
   workPickOpen({ taken: new Set(have.map(a => a.file_id)), have: have.length,
     folders: work.f059 ? { taken: new Set(haveF.map(a => workPathKey(a.folder_path))), have: haveF.length } : null,

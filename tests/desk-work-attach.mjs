@@ -69,7 +69,7 @@ const F = (id, o) => Object.assign({ id, category: 'photo', file_name: id, size_
 function seedLib() {
   WORK.lib = [
     F('L1', { category: 'video', file_name: 'รีวิว HDJ-CUE1.mp4', size_bytes: 83886080, note: 'คลิปตัวเต็ม', expires_at: iso(NOW + 20 * D), folder_path: 'End credit/2026' }),
-    F('L2', { category: 'photo', file_name: 'ภาพสินค้า FLX4.png', expires_at: iso(NOW + 5 * D) }),
+    F('L2', { category: 'photo', file_name: 'ภาพสินค้า FLX4.png', expires_at: iso(NOW + 5 * D), thumb: 'data:image/png;base64,iVBORw0KGgo=' }),
     F('L3', { category: 'doc', file_name: 'โปรโมชัน ตุลาคม.pdf', is_permanent: true, expires_at: iso(NOW - D) }),          // ถาวร — ไม่สน expires_at
     F('L4', { category: 'photo', file_name: 'หมดอายุแล้ว.png', expires_at: iso(NOW - 2 * H) }),                              // ครบ 30 วันแล้วแต่ยังไม่ถูกเก็บกวาด (status ยัง ready)
     F('L5', { category: 'doc', file_name: 'ถูกลบ.pdf', status: 'deleted' }),
@@ -194,6 +194,9 @@ async function runTests() {
   ok('สิทธิ์ของผู้รับ (Zen): ถอดได้เฉพาะไฟล์ที่ตัวเองแนบ (L2) — ไฟล์ของผู้สั่ง (L1 L4) ไม่มีปุ่มถอด · ไม่มีปุ่ม "แนบ" ของผู้สั่ง · มีปุ่มแนบของครั้งที่ส่ง', !!rL2.querySelector('[data-act="att-rm"]') && !rL1.querySelector('[data-act="att-rm"]') && !rL4.querySelector('[data-act="att-rm"]') && !detBtn('att-add', 'data-which="brief"') && !!detBtn('att-add', 'data-which="submit"'));
   const xr = detRow(XSS);
   ok('ชื่อไฟล์ที่เป็นแท็ก HTML แสดงเป็นข้อความ (ไม่สร้างองค์ประกอบ · ไม่รันสคริปต์)', !!xr && !document.querySelector('#workDlgBody img[src="x"]') && window.__xss === undefined);
+  // รูปตัวอย่าง: อ่าน thumb จากคลังโดยตรง (ไม่เปิดไฟล์จริง = ไม่ลงประวัติ/ไม่ทำเครื่องหมายเปิดแล้ว)
+  ok('รูปตัวอย่างไฟล์แนบ: L2 (มี thumb) ขึ้นเป็นรูปจากคลัง · ปุ่มรูปกดเปิดดูได้ · L1 (ไม่มี thumb) ขึ้นไอคอน · ไฟล์หมดอายุไม่มีรูป · ยังไม่เรียก transfer_open',
+    !!rL2.querySelector('button.tr-thumb[data-act="att-view"] img[src^="data:image/png"]') && !!rL1.querySelector('.tr-thumb svg') && !rL1.querySelector('.tr-thumb img') && !rL4.querySelector('.tr-thumb') && WORK.opens.length === 0, rL2.innerHTML.slice(0, 200));
   // เปิดดู/ดาวน์โหลด — ผ่าน transfer_open เสมอ
   const nUnseen = rpcs('transfer_unseen_count').length;
   rL1.querySelector('[data-act="att-view"]').click(); await sleep(400);
@@ -681,15 +684,15 @@ async function runTests() {
   document.querySelector('#workReqList [data-id="' + newReq.id + '"]').click(); await sleep(150);
   await workAttRefresh(); await sleep(500);
   ok('ไฟล์ที่อัปเข้าโฟลเดอร์ทีหลังตามมา: ผู้รับเห็นไฟล์เพิ่ม (ลิงก์สด) ในรายละเอียดคำขอ', /ใหม่ในโฟลเดอร์คำขอ\\.pdf/.test(detReq().textContent) || /3 ไฟล์ ณ ตอนนี้/.test(detReq().textContent), flat(detReq().textContent).slice(0, 300));
-  // คำขอที่ตัดสินแล้ว: ผู้ยื่นแนบ/ถอดไม่ได้
+  // คำขอที่ตัดสินแล้ว (เจ้าของตัดสิน 14 ต.ค. 69): ผู้ยื่นแนบ/ถอดเพิ่มได้เหมือนตอนรอตอบ · คนอื่นที่ไม่ใช่ผู้ยื่นยังไม่ได้
   doLogout(); await sleep(400);
   newReq.status = 'approved'; newReq.decided_by = 'u4'; newReq.closed_at = new Date().toISOString();
   await login('zen'); showSection('tasks'); await sleep(300); reqTab(); await frames();
   document.querySelector('#workReqList [data-id="' + newReq.id + '"]').click(); await sleep(400);
-  ok('คำขอที่อนุมัติแล้ว: ผู้ยื่นยังเห็นไฟล์ที่แนบ แต่ไม่มีปุ่มแนบเพิ่ม/ถอด (ไฟล์ของคำขอที่ตัดสินแล้วไม่เปลี่ยน)', /ภาพสินค้า FLX4\\.png/.test(detReq().textContent) && !reqRowBtn('att-add') && !reqRowBtn('att-rm') && !reqRowBtn('att-frm'));
-  const nPk = rpcs('transfer_attach').length;
-  workAttAdd(newReq.id, '', 'request'); await sleep(150);
-  ok('เรียกแนบตรง ๆ ทั้งที่คำขอตัดสินแล้ว: ขึ้นข้อความ · ไม่เปิดตัวเลือก · ไม่เรียกฐาน', /ไม่ได้แล้ว/.test(toast()) && !dlgOpen('workPickDlg') && rpcs('transfer_attach').length === nPk);
+  ok('คำขอที่อนุมัติแล้ว: ผู้ยื่นเห็นไฟล์ที่แนบ และยังมีปุ่มแนบเพิ่ม/ถอดไฟล์/ถอดโฟลเดอร์', /ภาพสินค้า FLX4\\.png/.test(detReq().textContent) && !!reqRowBtn('att-add', 'data-kind="request"') && !!reqRowBtn('att-rm') && !!reqRowBtn('att-frm'));
+  workAttAdd(newReq.id, '', 'request'); await sleep(300);
+  ok('แนบเพิ่มทั้งที่คำขอตัดสินแล้ว: ตัวเลือกไฟล์เปิด (ไม่ขึ้นข้อความห้าม)', dlgOpen('workPickDlg') && !/ไม่ได้แล้ว/.test(toast()));
+  closeAll(); await sleep(100);
   // ยื่นคำขอ: แนบล้มบางส่วน
   $('workReqNew').click(); await sleep(150);
   await openPicker('workrPick'); pickClick('L1'); folderTab(); await sleep(100); pickFolder('End credit/2026'); $('workPickGo').click(); await sleep(150);

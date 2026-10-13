@@ -121,6 +121,7 @@ const WORK = { tasks: [], events: [], reqs: [], files: new Map(), uploads: [], s
       if (WORK.noFolder && st.cols.indexOf('folder_path') >= 0) return { data: null, error: { code: '42703', message: 'column transfer_files.folder_path does not exist' } };
       rows = WORK.lib.filter(f => !f.hidden);
       st.eqs.forEach(([c, v]) => { rows = rows.filter(r => r[c] === v); });
+      st.ins.forEach(([c, v]) => { rows = rows.filter(r => v.indexOf(r[c]) >= 0); });
       rows = rows.map(f => { const o = Object.assign(clone(f), { uploader: { full_name: nameOf(f.uploaded_by) } }); if (st.cols.indexOf('folder_path') < 0) delete o.folder_path; return o; });
     }
     if (st.order) rows.sort((a, b) => String(a[st.order.c]).localeCompare(String(b[st.order.c])) * (st.order.asc ? 1 : -1));
