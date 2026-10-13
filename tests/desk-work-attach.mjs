@@ -626,6 +626,191 @@ async function runTests() {
   doLogout(); await sleep(500);
   ok('ออกจากระบบ: รายการที่เลือกไว้ (รวมโฟลเดอร์) ล้างหมด · ข้อมูลไฟล์สด/ลิงก์โฟลเดอร์ที่โหลดไว้หาย', $('workfFiles').innerHTML === '' && work.fatt.length === 0 && Object.keys(work.ff).length === 0);
 
+  // ── 8. แนบเข้าคำขอ (request) และข้อความกระดาน (board) ───────────────────
+  doLogout(); await sleep(400);
+  WORK.seed(); seedLib(); attSeq = 0; WORK.has059 = true;
+  WORK.lib.push(F('FE1', { category: 'video', file_name: 'ep1.mp4', folder_path: 'End credit/2026/ep1' }));
+  const reqTab = () => tab('req');
+  const detReq = () => $('workReqDetail');
+  const reqRowBtn = (act, key) => detReq().querySelector('[data-act="' + act + '"]' + (key ? '[' + key + ']' : ''));
+  const reqHeads = () => [...detReq().querySelectorAll('h4.wk-sec-h')].map(h => flat(h.textContent));
+  await login('zen'); showSection('tasks'); await sleep(300); reqTab(); await frames();
+  $('workReqNew').click(); await sleep(150);
+  ok('ฟอร์มยื่นคำขอ: มีช่อง "ไฟล์จากคลังไฟล์" + ปุ่มแนบ · หลังรัน 059 มีคำแนะนำให้เลือกแท็บโฟลเดอร์', !$('workrFilesField').hidden && vis($('workrPick')) && /แท็บ "โฟลเดอร์"/.test(txt('workrFoldHint')) && stagedNames('workrFiles').length === 0);
+  await openPicker('workrPick'); pickClick('L2'); folderTab(); await sleep(100); pickFolder('End credit/2026'); $('workPickGo').click(); await sleep(150);
+  ok('เลือกไฟล์ 1 + โฟลเดอร์ 1 ในฟอร์มคำขอ: เก็บไว้ · โฟลเดอร์ขึ้น "ลิงก์สด" + คำเตือนแดงตัวหนา · ยังไม่เรียกฐาน', stagedNames('workrFiles').length === 2 && $('workrFiles').querySelectorAll('.wk-fold').length === 1 && isRed($('workrFiles').querySelector('.wk-fold .wk-red')) && rpcs('transfer_attach').filter(c => c.args.p_kind === 'request').length === 0, stagedNames('workrFiles').join('|'));
+  await openPicker('workrPick');
+  ok('ตัวเลือกในฟอร์มคำขอ: ไฟล์ที่เลือกไว้แล้ว (L2) เป็น "แนบแล้ว" เลือกซ้ำไม่ได้', pickBox('L2').disabled && !pickBox('L3').disabled);
+  pickClick('L3'); $('workPickGo').click(); await sleep(150);
+  $('workrFiles').querySelector('[data-act="stg-rm"][data-i="1"]').click();
+  ok('เอาไฟล์ออกตามตำแหน่ง (ตำแหน่งที่ 2 = L3): เหลือ L2 + โฟลเดอร์', stagedNames('workrFiles').join('|') === 'ภาพสินค้า FLX4.png|End credit/2026', stagedNames('workrFiles').join('|'));
+  document.querySelector('#workrGroups button[data-group="admin"]').click();
+  setVal('workrBody', 'ขอตรวจไฟล์ประกอบก่อนอนุมัติ');
+  const nReqA = rpcs('transfer_attach').length, nReqF = rpcs('transfer_attach_folder').length;
+  $('workrGo').click(); await sleep(900);
+  const newReq = WORK.reqs.find(r => r.body === 'ขอตรวจไฟล์ประกอบก่อนอนุมัติ');
+  const ra = rpcs('transfer_attach').slice(nReqA), rf = rpcs('transfer_attach_folder').slice(nReqF);
+  ok('ส่งคำขอ: work_request_create แล้ว transfer_attach (kind request · ctx ว่าง · ไฟล์ L2) + transfer_attach_folder (kind request · ctx ว่าง · พาธ End credit/2026) ที่ id ของคำขอใหม่',
+    !!newReq && ra.length === 1 && ra[0].args.p_kind === 'request' && ra[0].args.p_ctx === '' && ra[0].args.p_target === newReq.id && ra[0].args.p_files.join() === 'L2' && rf.length === 1 && rf[0].args.p_kind === 'request' && rf[0].args.p_ctx === '' && rf[0].args.p_target === newReq.id && rf[0].args.p_path === 'End credit/2026', JSON.stringify(ra.concat(rf).map(c => c.args)));
+  ok('คำขอสร้างสำเร็จ: ฟอร์มปิด · ข้อความ "แนบไฟล์ 1 ไฟล์ · โฟลเดอร์ 1 โฟลเดอร์" · ไม่มีแถบแดง · เลือกแสดงคำขอใหม่', !dlgOpen('workReqDialog') && /แนบไฟล์ 1 ไฟล์ · โฟลเดอร์ 1 โฟลเดอร์/.test(toast()) && fatalText() === '' && work.reqSel === newReq.id, toast());
+  await sleep(300);
+  ok('รายละเอียดคำขอ (ผู้ยื่น): ส่วน "ไฟล์แนบจากคลังไฟล์" มีไฟล์ ภาพสินค้า FLX4.png + โฟลเดอร์ End credit/2026 (ลิงก์สด) · ปุ่มแนบเพิ่ม/ถอด (คำขอยังรอตอบ)',
+    reqHeads().includes('ไฟล์แนบจากคลังไฟล์') && /ภาพสินค้า FLX4\\.png/.test(detReq().textContent) && /End credit\\/2026/.test(detReq().textContent) && /ลิงก์สด/.test(detReq().textContent) && !!reqRowBtn('att-add', 'data-kind="request"') && !!reqRowBtn('att-rm') && !!reqRowBtn('att-frm'), flat(detReq().textContent).slice(0, 200));
+  // แนบเพิ่มทันทีจากรายละเอียด
+  reqRowBtn('att-add', 'data-kind="request"').click(); await sleep(300);
+  ok('แนบเพิ่มจากรายละเอียดคำขอ: ตัวเลือกเปิด · ไฟล์ที่แนบแล้ว (L2) เป็น "แนบแล้ว"', dlgOpen('workPickDlg') && pickBox('L2').disabled);
+  pickClick('L3'); $('workPickGo').click(); await sleep(600);
+  ok('แนบ L3: transfer_attach kind request ctx ว่าง ที่คำขอนี้ · ปิดตัวเลือก · ขึ้นในรายละเอียด', lastRpc('transfer_attach').args.p_kind === 'request' && lastRpc('transfer_attach').args.p_target === newReq.id && lastRpc('transfer_attach').args.p_ctx === '' && !dlgOpen('workPickDlg') && /โปรโมชัน ตุลาคม\\.pdf/.test(detReq().textContent));
+  // ถอดไฟล์
+  const rmBtn = [...detReq().querySelectorAll('[data-act="att-rm"]')].pop();
+  rmBtn.click(); await sleep(150); $('confirmOkBtn').click(); await sleep(600);
+  ok('ถอดไฟล์ที่แนบเพิ่ม: transfer_detach · ตัวไฟล์ในคลังอยู่ครบ · ข้อความ "ถอดไฟล์แนบแล้ว"', rpcs('transfer_detach').length >= 1 && WORK.lib.some(f => f.id === 'L3') && /ถอดไฟล์แนบแล้ว/.test(toast()));
+  // ผู้รับ (Nui · กลุ่มผู้ดูแล) เห็นไฟล์ เปิดได้ แต่ไม่มีปุ่มแนบ/ถอด
+  doLogout(); await sleep(400);
+  await login('nui'); showSection('tasks'); await sleep(300); reqTab(); await frames();
+  document.querySelector('#workReqBoxes button[data-box="in"]').click(); await frames();
+  document.querySelector('#workReqList [data-id="' + newReq.id + '"]').click(); await sleep(400);
+  ok('ผู้รับคำขอ (ผู้ดูแล): เห็นไฟล์และโฟลเดอร์ที่แนบ · เปิดดู/ดาวน์โหลดได้ · ไม่มีปุ่มแนบเพิ่ม/ถอด (ไม่ใช่ผู้ยื่น)',
+    /ภาพสินค้า FLX4\\.png/.test(detReq().textContent) && !!reqRowBtn('att-dl') && !reqRowBtn('att-add') && !reqRowBtn('att-rm') && !reqRowBtn('att-frm'));
+  const nOpR = WORK.opens.length;
+  reqRowBtn('att-dl', 'data-fid="L2"').click(); await sleep(400);
+  ok('ผู้รับดาวน์โหลดไฟล์แนบของคำขอ: ผ่าน transfer_open (ลงประวัติ) · ลิงก์ 60 วินาที', WORK.opens.length === nOpR + 1 && WORK.opens[WORK.opens.length - 1].id === 'L2' && WORK.tsigned[WORK.tsigned.length - 1].secs === 60);
+  // ไฟล์สดของโฟลเดอร์ในคำขอ
+  WORK.lib.push(F('FE9', { category: 'doc', file_name: 'ใหม่ในโฟลเดอร์คำขอ.pdf', folder_path: 'End credit/2026' }));
+  closeAll(); await sleep(80);
+  document.querySelector('#workReqList [data-id="' + newReq.id + '"]').click(); await sleep(150);
+  await workAttRefresh(); await sleep(500);
+  ok('ไฟล์ที่อัปเข้าโฟลเดอร์ทีหลังตามมา: ผู้รับเห็นไฟล์เพิ่ม (ลิงก์สด) ในรายละเอียดคำขอ', /ใหม่ในโฟลเดอร์คำขอ\\.pdf/.test(detReq().textContent) || /3 ไฟล์ ณ ตอนนี้/.test(detReq().textContent), flat(detReq().textContent).slice(0, 300));
+  // คำขอที่ตัดสินแล้ว: ผู้ยื่นแนบ/ถอดไม่ได้
+  doLogout(); await sleep(400);
+  newReq.status = 'approved'; newReq.decided_by = 'u4'; newReq.closed_at = new Date().toISOString();
+  await login('zen'); showSection('tasks'); await sleep(300); reqTab(); await frames();
+  document.querySelector('#workReqList [data-id="' + newReq.id + '"]').click(); await sleep(400);
+  ok('คำขอที่อนุมัติแล้ว: ผู้ยื่นยังเห็นไฟล์ที่แนบ แต่ไม่มีปุ่มแนบเพิ่ม/ถอด (ไฟล์ของคำขอที่ตัดสินแล้วไม่เปลี่ยน)', /ภาพสินค้า FLX4\\.png/.test(detReq().textContent) && !reqRowBtn('att-add') && !reqRowBtn('att-rm') && !reqRowBtn('att-frm'));
+  const nPk = rpcs('transfer_attach').length;
+  workAttAdd(newReq.id, '', 'request'); await sleep(150);
+  ok('เรียกแนบตรง ๆ ทั้งที่คำขอตัดสินแล้ว: ขึ้นข้อความ · ไม่เปิดตัวเลือก · ไม่เรียกฐาน', /ไม่ได้แล้ว/.test(toast()) && !dlgOpen('workPickDlg') && rpcs('transfer_attach').length === nPk);
+  // ยื่นคำขอ: แนบล้มบางส่วน
+  $('workReqNew').click(); await sleep(150);
+  await openPicker('workrPick'); pickClick('L1'); folderTab(); await sleep(100); pickFolder('End credit/2026'); $('workPickGo').click(); await sleep(150);
+  document.querySelector('#workrGroups button[data-group="owner"]') ? document.querySelector('#workrGroups button[data-group="owner"]').click() : document.querySelector('#workrGroups button').click();
+  setVal('workrBody', 'ขอเก็บถาวรไฟล์ — โฟลเดอร์ล้ม');
+  const origRF = WORK.rpc.transfer_attach_folder;
+  WORK.rpc.transfer_attach_folder = (me, a) => ({ data: null, error: { message: 'โฟลเดอร์ "End credit/2026" ไม่มีไฟล์ที่ใช้ได้อยู่เลย' } });
+  $('workrGo').click(); await sleep(900);
+  WORK.rpc.transfer_attach_folder = origRF;
+  const req2 = WORK.reqs.find(r => r.body === 'ขอเก็บถาวรไฟล์ — โฟลเดอร์ล้ม');
+  ok('โฟลเดอร์แนบล้ม (ไฟล์สำเร็จ): คำขอถูกสร้างแล้ว · ฟอร์มปิด (กันได้คำขอซ้ำ) · แถบแดงบอก "ส่งคำขอแล้ว แต่แนบไฟล์/โฟลเดอร์จากคลังไม่สำเร็จ" + เหตุผล + แนบซ้ำได้ · ไม่ขึ้น "แนบ…" ใน toast',
+    !!req2 && !dlgOpen('workReqDialog') && /ส่งคำขอแล้ว แต่แนบไฟล์\\/โฟลเดอร์จากคลังไม่สำเร็จ/.test(fatalText()) && /ไม่มีไฟล์ที่ใช้ได้อยู่เลย/.test(fatalText()) && /ซ้ำได้/.test(fatalText()) && !/แนบไฟล์ 1/.test(toast()) && WORK.att.some(a => a.target_kind === 'request' && a.target_id === req2.id), fatalText());
+  clearFatal();
+  // ยังไม่รัน 053
+  WORK.noAtt = true; await loadWork(); await sleep(200);
+  $('workReqNew').click(); await sleep(150);
+  ok('ยังไม่รัน 053: ฟอร์มคำขอซ่อนช่องไฟล์จากคลัง · ยื่นคำขอได้ตามปกติ', $('workrFilesField').hidden === true);
+  closeAll(); await sleep(100); WORK.noAtt = false;
+  doLogout(); await sleep(400);
+
+  // ── กระดานข้อความ ──
+  WORK.seed(); seedLib(); attSeq = 0; WORK.has059 = true;
+  WORK.lib.push(F('FE1', { category: 'video', file_name: 'ep1.mp4', folder_path: 'End credit/2026/ep1' }));
+  const bdetail = () => $('detailBody');
+  const bBtn = (act, key) => bdetail().querySelector('[data-act="' + act + '"]' + (key ? '[' + key + ']' : ''));
+  const fakeBoard = title => FAKE.board_messages.find(m => m.title === title);
+  await login('nui'); await sleep(300);
+  showSection('board'); await sleep(300);
+  openBoardForm(null); await sleep(150);
+  ok('ฟอร์มเขียนข้อความกระดาน: มีช่อง "ไฟล์จากคลังไฟล์" + ปุ่มแนบ · แท็บโฟลเดอร์ใช้ตัวเลือกเดียวกัน', !$('bfFilesField').hidden && vis($('bfPick')) && /แท็บ "โฟลเดอร์"/.test(txt('bfFilesHint')));
+  await openPicker('bfPick'); pickClick('L1'); folderTab(); await sleep(100); pickFolder('End credit/2026'); $('workPickGo').click(); await sleep(150);
+  ok('เลือกไฟล์ 1 + โฟลเดอร์ 1 ในฟอร์มกระดาน: เก็บไว้ · คำเตือนลิงก์สดแดงตัวหนา · ยังไม่แนบ', stagedNames('bfFiles').length === 2 && isRed($('bfFiles').querySelector('.wk-fold .wk-red')) && rpcs('transfer_attach').filter(c => c.args.p_kind === 'board').length === 0);
+  setVal('bfTitle', 'แนบไฟล์ประกอบประชุม'); setVal('bfBody', 'ดูไฟล์แนบก่อนเข้าประชุม');
+  const nBA = rpcs('transfer_attach').length, nBF = rpcs('transfer_attach_folder').length;
+  await saveBoard(); await sleep(700);
+  const bm = fakeBoard('แนบไฟล์ประกอบประชุม');
+  const ba = rpcs('transfer_attach').slice(nBA), bf2 = rpcs('transfer_attach_folder').slice(nBF);
+  ok('บันทึกข้อความ: insert board_messages แล้ว transfer_attach (kind board · ctx ว่าง · L1) + transfer_attach_folder (kind board · พาธ End credit/2026) ที่ id ข้อความใหม่',
+    !!bm && ba.length === 1 && ba[0].args.p_kind === 'board' && ba[0].args.p_ctx === '' && ba[0].args.p_target === bm.id && ba[0].args.p_files.join() === 'L1' && bf2.length === 1 && bf2[0].args.p_kind === 'board' && bf2[0].args.p_target === bm.id && bf2[0].args.p_path === 'End credit/2026', JSON.stringify(ba.concat(bf2).map(c => c.args)));
+  ok('บันทึกสำเร็จ: ฟอร์มปิด · ข้อความ "แนบไฟล์ 1 ไฟล์ · โฟลเดอร์ 1 โฟลเดอร์" · ไม่มีแถบแดง · ตารางกระดานขึ้น 📎 2', !dlgOpen('boardDialog') && /แนบไฟล์ 1 ไฟล์ · โฟลเดอร์ 1 โฟลเดอร์/.test(toast()) && fatalText() === '' && /📎 2/.test($('boardRows').textContent), $('boardRows').textContent.slice(0, 160));
+  // เปิดอ่าน → ไฟล์แนบใต้ข้อความ
+  await openBoardMsg(bm.id); await sleep(600);
+  ok('รายละเอียดข้อความ: ส่วน "ไฟล์แนบจากคลังไฟล์" มีไฟล์ + โฟลเดอร์ลิงก์สด (ขึ้นจำนวนไฟล์จริง) · ผู้เขียนมีปุ่มแนบเพิ่ม/ถอด', /ไฟล์แนบจากคลังไฟล์/.test(bdetail().textContent) && /รีวิว HDJ-CUE1\\.mp4/.test(bdetail().textContent) && /ลิงก์สด/.test(bdetail().textContent) && /ไฟล์ ณ ตอนนี้/.test(bdetail().textContent) && !!bBtn('att-add', 'data-kind="board"') && !!bBtn('att-rm') && !!bBtn('att-frm'), flat(bdetail().textContent).slice(0, 260));
+  // โหลดไฟล์แนบรวมครั้งเดียวทั้งกระดาน
+  const nSel0 = CALLS.filter(c => c.op === 'select' && c.table === 'transfer_attachments').length;
+  await refreshBoard(); await sleep(300);
+  ok('รีเฟรชกระดาน (หลายข้อความ): โหลดไฟล์แนบรวมคำสั่งเดียว — ไม่ยิงต่อข้อความ', CALLS.filter(c => c.op === 'select' && c.table === 'transfer_attachments').length === nSel0 + 1 && FAKE.board_messages.length >= 2, String(CALLS.filter(c => c.op === 'select' && c.table === 'transfer_attachments').length - nSel0));
+  // เปิดไฟล์
+  const nOpB = WORK.opens.length;
+  bBtn('att-dl', 'data-fid="L1"').click(); await sleep(400);
+  ok('ดาวน์โหลดไฟล์ในข้อความ: ผ่าน transfer_open เสมอ', WORK.opens.length === nOpB + 1 && WORK.opens[WORK.opens.length - 1].id === 'L1');
+  // แนบเพิ่มตอนแก้ข้อความ
+  openBoardForm(bm.id); await sleep(150);
+  ok('แก้ข้อความ: ฟอร์มบอก "แนบไว้แล้ว 2 รายการ" (ถอดที่รายละเอียดข้อความ) · เริ่มรายการที่เลือกไว้ว่าง', /แนบไว้แล้ว 2 รายการ/.test(txt('bfFilesHint')) && stagedNames('bfFiles').length === 0);
+  await openPicker('bfPick');
+  ok('ตัวเลือกตอนแก้: ไฟล์ที่แนบแล้ว (L1) เป็น "แนบแล้ว" เลือกซ้ำไม่ได้', pickBox('L1').disabled && !pickBox('L2').disabled);
+  pickClick('L2'); $('workPickGo').click(); await sleep(150);
+  await saveBoard(); await sleep(700);
+  ok('บันทึกการแก้พร้อมแนบ L2: transfer_attach kind board ที่ข้อความเดิม (L2 อย่างเดียว) · ตารางขึ้น 📎 3', lastRpc('transfer_attach').args.p_target === bm.id && lastRpc('transfer_attach').args.p_files.join() === 'L2' && /📎 3/.test($('boardRows').textContent));
+  // ถอด
+  await openBoardMsg(bm.id); await sleep(500);
+  const rmB = bdetail().querySelector('[data-act="att-rm"][data-aid]');
+  rmB.click(); await sleep(150); $('confirmOkBtn').click(); await sleep(700);
+  ok('ถอดไฟล์แนบของข้อความ: transfer_detach · กระดานโหลดใหม่ (📎 ลดลง) · ไฟล์ในคลังไม่ถูกลบ', rpcs('transfer_detach').length >= 1 && /📎 2/.test($('boardRows').textContent) && WORK.lib.some(f => f.id === 'L1' && f.status === 'ready'));
+  // กดบันทึกซ้ำระหว่างแนบ: ปุ่มปิด — ข้อความถูกสร้างครั้งเดียว
+  openBoardForm(null); await sleep(150);
+  await openPicker('bfPick'); pickClick('L2'); $('workPickGo').click(); await sleep(150);
+  setVal('bfTitle', 'กดบันทึกซ้ำ');
+  let relBF = null; const nIns0 = CALLS.filter(c => c.op === 'insert' && c.table === 'board_messages').length;
+  WORK.gate = new Promise(r => { relBF = r; });
+  $('bfSaveBtn').click(); await sleep(150);
+  const dis = $('bfSaveBtn').disabled;
+  $('bfSaveBtn').click(); await sleep(80);
+  WORK.gate = null; relBF(); await sleep(800);
+  ok('กดบันทึกซ้ำระหว่างรอแนบ: ปุ่มถูกปิด · board_messages ถูก insert ครั้งเดียว (ไม่ได้ข้อความซ้ำ)', dis && CALLS.filter(c => c.op === 'insert' && c.table === 'board_messages').length === nIns0 + 1 && FAKE.board_messages.filter(m => m.title === 'กดบันทึกซ้ำ').length === 1);
+  // แนบล้มบางส่วนตอนเขียนข้อความ
+  openBoardForm(null); await sleep(150);
+  await openPicker('bfPick'); pickClick('L3'); folderTab(); await sleep(100); pickFolder('End credit/2026'); $('workPickGo').click(); await sleep(150);
+  setVal('bfTitle', 'ข้อความโฟลเดอร์ล้ม');
+  const origBF = WORK.rpc.transfer_attach_folder;
+  WORK.rpc.transfer_attach_folder = () => ({ data: null, error: { message: 'ฐานข้อมูลแนบโฟลเดอร์ล่ม' } });
+  await saveBoard(); await sleep(700);
+  WORK.rpc.transfer_attach_folder = origBF;
+  const bm2 = fakeBoard('ข้อความโฟลเดอร์ล้ม');
+  ok('โฟลเดอร์แนบล้ม: ข้อความถูกบันทึกแล้ว · ฟอร์มปิด (กันข้อความซ้ำ) · แถบแดง "บันทึกข้อความแล้ว แต่แนบไฟล์/โฟลเดอร์จากคลังไม่สำเร็จ" + เหตุผล + แนบซ้ำได้ · ไฟล์ที่แนบสำเร็จอยู่ครบ',
+    !!bm2 && !dlgOpen('boardDialog') && /บันทึกข้อความแล้ว แต่แนบไฟล์\\/โฟลเดอร์จากคลังไม่สำเร็จ: .*ฐานข้อมูลแนบโฟลเดอร์ล่ม/.test(fatalText()) && /ซ้ำได้/.test(fatalText()) && WORK.att.some(a => a.target_kind === 'board' && a.target_id === bm2.id), fatalText());
+  clearFatal();
+  doLogout(); await sleep(400);
+
+  // ผู้อ่านที่ไม่ใช่ผู้เขียน/ผู้ดูแล: เห็นไฟล์ เปิดได้ แต่ไม่มีปุ่มแนบ/ถอด
+  await login('zen'); await sleep(300);
+  showSection('board'); await sleep(300);
+  await openBoardMsg(bm.id); await sleep(600);
+  ok('พนักงานทั่วไป (ไม่ใช่ผู้เขียน): เห็นไฟล์แนบและเปิดได้ · ไม่มีปุ่มแนบเพิ่ม/ถอด', /รีวิว HDJ-CUE1|ภาพสินค้า FLX4/.test(bdetail().textContent) && !!bdetail().querySelector('[data-act="att-dl"]') && !bBtn('att-add') && !bBtn('att-rm') && !bBtn('att-frm'));
+  const nPB = rpcs('transfer_attach').length;
+  workAttAdd(bm.id, '', 'board'); await sleep(150);
+  ok('เรียกแนบตรง ๆ โดยไม่ใช่ผู้เขียน/ผู้ดูแล: ขึ้นข้อความ · ไม่เรียกฐาน', /ไม่ได้แล้ว/.test(toast()) && rpcs('transfer_attach').length === nPB);
+  // ข้อความถูกลบ → ไฟล์แนบที่ค้างไม่มีใครเห็น
+  FAKE.board_messages = FAKE.board_messages.filter(m => m.id !== bm.id);
+  await refreshBoard(); await sleep(300);
+  ok('ข้อความถูกลบ: ลิงก์ไฟล์แนบที่ค้างอยู่ในฐานไม่ขึ้นที่ไหน (ตาราง/รายละเอียด) · ไม่ error', workAttFor('board', bm.id).length === 0 && fatalText() === '' && !/📎 3/.test($('boardRows').textContent));
+  // ฟอร์มค้างตอนสลับบัญชี
+  openBoardForm(null); await sleep(150);
+  await openPicker('bfPick'); pickClick('L2'); $('workPickGo').click(); await sleep(150);
+  doLogout(); await sleep(500);
+  ok('ออกจากระบบตอนฟอร์มกระดานเปิดค้าง: ฟอร์ม/ตัวเลือกปิด · รายการที่เลือกไว้ถูกล้างหมด', !dlgOpen('boardDialog') && !dlgOpen('workPickDlg') && $('bfFiles').innerHTML === '' && boardForm.files.length === 0 && boardForm.folders.length === 0);
+
+  // ยังไม่รัน 053 / ชื่อไฟล์เป็นแท็ก
+  WORK.seed(); seedLib(); attSeq = 0; WORK.noAtt = true;
+  await login('nui'); showSection('board'); await sleep(300);
+  openBoardForm(null); await sleep(150);
+  ok('ยังไม่รัน 053: ฟอร์มกระดานซ่อนช่องไฟล์จากคลัง · ตารางไม่ขึ้น 📎 · ไม่ขึ้นแถบแดง', $('bfFilesField').hidden === true && !/📎/.test($('boardRows').textContent) && fatalText() === '');
+  closeAll(); await sleep(100);
+  doLogout(); await sleep(400);
+  WORK.seed(); seedLib(); attSeq = 0; WORK.has059 = true;
+  await login('nui'); showSection('board'); await sleep(300);
+  openBoardForm(null); await sleep(150);
+  await openPicker('bfPick'); pickClick('L7'); $('workPickGo').click(); await sleep(150);
+  ok('ชื่อไฟล์ที่เป็นแท็ก HTML ในฟอร์มกระดาน: แสดงเป็นข้อความ ไม่สร้างองค์ประกอบ', !$('bfFiles').querySelector('img') && /<img src=x/.test(txt('bfFiles')) && window.__xss === undefined);
+  closeAll(); await sleep(100);
+
   done();
 }
 function detRowText(name) { const r = [...document.querySelectorAll('#workfFiles .wk-link')].find(x => x.querySelector('strong').textContent === name); return r ? r.textContent : ''; }

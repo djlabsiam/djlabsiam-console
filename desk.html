@@ -2984,6 +2984,10 @@
     <div class="field"><label class="lbl" for="workrTask">ใบงานที่เกี่ยวข้อง <span class="hint" style="margin:0;">ไม่บังคับ</span></label><select class="input" id="workrTask"></select></div>
     <div class="field"><label class="lbl" for="workrBody">ข้อความคำขอ</label><textarea class="input" id="workrBody" rows="4" maxlength="1000" placeholder="เช่น ช่วยย้ายงานนี้ไปให้แพรได้มั้ยครับ ตอนนี้ติดงานอื่นอยู่"></textarea><div class="hint" id="workrCount" style="text-align:right;">0 / 1000</div></div>
     <div class="alert alert-plain"><strong class="wk-red">อนุมัติ = ผู้รับรับเรื่อง</strong> — <strong class="wk-red">ระบบไม่ย้ายงานหรือเลื่อนกำหนดให้เอง</strong> ผู้อนุมัติจะไปทำที่หน้าใบงาน · ถ้าถูกปฏิเสธจะเห็นเหตุผล · ถอนคำขอได้ตอนที่ยังไม่มีคนตอบ</div>
+    <div class="field" id="workrFilesField"><span class="lbl">ไฟล์จากคลังไฟล์ <span class="hint" style="margin:0;">ไม่บังคับ · สูงสุด 20 ไฟล์ · ผู้รับเห็นเมื่อเปิดคำขอ</span></span>
+      <div id="workrFiles"></div>
+      <button type="button" class="btn" id="workrPick">+ แนบจากคลังไฟล์</button>
+      <div class="hint">ไฟล์ยังอยู่ในคลังไฟล์ ไม่ถูกก๊อปซ้ำ · ไฟล์ที่ไม่ใช่ไฟล์ถาวรหมดอายุ 30 วันนับจากอัปโหลด — ครบแล้วผู้ตอบเปิดไม่ได้<span id="workrFoldHint"></span></div></div>
     <div id="workrErr" class="alert alert-red" role="alert" hidden></div>
     <div class="dlg-foot" style="padding:0;">
       <button class="btn" type="button" id="workrCancel">ปิด (Esc)</button>
@@ -3191,6 +3195,10 @@
     </div>
     <div class="field"><label class="lbl" for="bfTitle">หัวข้อ *</label><input type="text" id="bfTitle" class="input" maxlength="200" placeholder="เช่น ของเข้าพรุ่งนี้ช่วงบ่าย"></div>
     <div class="field"><label class="lbl" for="bfBody">ข้อความ</label><textarea id="bfBody" class="input" rows="6" placeholder="รายละเอียดที่ต้องการฝากไว้"></textarea></div>
+    <div class="field" id="bfFilesField"><span class="lbl">ไฟล์จากคลังไฟล์ <span class="hint" style="margin:0;">ไม่บังคับ · สูงสุด 20 ไฟล์</span></span>
+      <div id="bfFiles"></div>
+      <button type="button" class="btn" id="bfPick">+ แนบจากคลังไฟล์</button>
+      <div class="hint" id="bfFilesHint">ไฟล์ยังอยู่ในคลังไฟล์ ไม่ถูกก๊อปซ้ำ · ไฟล์ที่ไม่ใช่ไฟล์ถาวรหมดอายุ 30 วันนับจากอัปโหลด — ครบแล้วทุกคนเปิดไม่ได้</div></div>
     <label class="chk" style="margin-bottom:16px;"><input type="checkbox" id="bfPinned"> ปักหมุดไว้บนสุด</label>
     <div class="dlg-foot" style="padding:0;">
       <button class="btn" type="button" onclick="document.getElementById('boardDialog').close()">ปิด (Esc)</button>
@@ -9915,6 +9923,7 @@ let boardMsgs = [];
 let boardReads = [];
 let boardOpenId = null;
 let editingBoardId = null;
+let boardForm = { files: [], folders: [] };       // ไฟล์/โฟลเดอร์ที่เลือกไว้ในฟอร์มข้อความ — แนบหลังบันทึกสำเร็จ
 let editingEventId = null;
 let homeToday = { shop: [], google: [], googleErr: null };
 // status: null = ยังไม่รู้ · 'ok' · 'setup' = ยังไม่ได้ตั้งค่า/ยังไม่ได้ติดตั้งฟังก์ชัน · 'error'
@@ -11130,6 +11139,7 @@ async function loadBoard() {
 
 async function refreshBoard() {
   await loadBoard();
+  await workAttRefresh();                  // ไฟล์แนบของข้อความทั้งกระดาน — โหลดรวมครั้งเดียว (ตารางแนบไม่มี Realtime)
   renderBoardAll();
   if (current === 'board' && detailOpen() && boardOpenId) {
     const m = boardMsgs.find(x => x.id === boardOpenId);
@@ -11171,12 +11181,18 @@ function boardSorted() {
   }).sort((a, b) => (Number(b.pinned) - Number(a.pinned)) || cmp(b.refers_to, a.refers_to) || cmp(b.created_at, a.created_at));
 }
 
+// 📎 จำนวนไฟล์/โฟลเดอร์ที่แนบจากคลัง (ข้อมูลมาจากการโหลดไฟล์แนบรวม — ยังไม่มา/ยังไม่รัน 053 = ไม่ขึ้น)
+function workBoardClip(m) {
+  if (work.attMissing) return '';
+  const n = workAttFor('board', m.id).length + workFAttFor('board', m.id).length;
+  return n ? ' <span class="st st-off" title="มีไฟล์/โฟลเดอร์แนบจากคลังไฟล์ ' + n + ' รายการ">📎 ' + n + '</span>' : '';
+}
 function renderBoard() {
   fillTable('board', boardSorted(), m => {
     const rec = boardRecipients(m), n = rec.filter(a => hasRead(m, a.id)).length;
     return '<td>' + boardStatusHtml(m) + '</td>' +
       '<td class="nowrap col-ph">' + fmtDate(m.refers_to) + '</td>' +
-      '<td>' + (m.pinned ? '<span class="st st-off">📌 ปักหมุด</span> ' : '') + '<strong>' + escapeHtml(m.title) + '</strong>' +
+      '<td>' + (m.pinned ? '<span class="st st-off">📌 ปักหมุด</span> ' : '') + '<strong>' + escapeHtml(m.title) + '</strong>' + workBoardClip(m) +
         (m.target_admin_id ? '<div class="sub">ถึง ' + escapeHtml(staffName(m.target_admin_id)) + ' เท่านั้น</div>' : '') + '</td>' +
       '<td class="col-opt">' + escapeHtml(staffName(m.author_id)) + '</td>' +
       '<td class="num nowrap col-ph" title="อ่านแล้ว ' + n + ' จาก ' + rec.length + ' คน">อ่านแล้ว ' + n + '/' + rec.length + '</td>';
@@ -11190,6 +11206,7 @@ async function openBoardMsg(id) {
   if (!m) { showToast('⚠️ ไม่พบข้อความนี้แล้ว — อาจถูกลบไป'); return; }
   boardOpenId = id;
   renderBoardDetail(m);
+  workAttRefresh();                        // ไฟล์แนบของข้อความนี้ (ใหม่สุด) + ไฟล์สดในโฟลเดอร์ที่แนบ
   if (!isUnreadForMe(m)) return;
   // เปิดอ่าน = อ่านแล้ว (ของฉันคนเดียว)
   const { error } = await db.from('board_reads').insert({ message_id: id, admin_id: currentUserId });
@@ -11218,6 +11235,7 @@ function renderBoardDetail(m) {
       (m.pinned ? '<dt>ปักหมุด</dt><dd>📌 อยู่บนสุดของกระดาน</dd>' : '') +
     '</dl>' +
     '<div class="card pre" style="box-shadow:none;">' + (escapeHtml(m.body) || '<span class="hint">(ไม่มีรายละเอียดเพิ่มเติม)</span>') + '</div>' +
+    workTargetAttHtml('board', m, workAttCanTarget('board', m)) +
     '<div class="sec-title">อ่านแล้ว ' + read.length + '/' + rec.length + ' คน</div>' +
     (read.length ? read.map(a => '<div class="list-row"><div>✓ ' + escapeHtml(a.full_name) + '</div><div class="sub">' + readAt(a) + '</div></div>').join('')
                  : '<p class="hint">ยังไม่มีใครอ่าน</p>') +
@@ -11258,6 +11276,12 @@ function openBoardForm(id) {
   document.getElementById('bfBody').value = m ? m.body : '';
   document.getElementById('bfTarget').value = m && m.target_admin_id ? m.target_admin_id : '';
   document.getElementById('bfPinned').checked = !!(m && m.pinned);
+  boardForm = { files: [], folders: [] };
+  const had = m ? workAttFor('board', m.id).length + workFAttFor('board', m.id).length : 0;
+  document.getElementById('bfFilesField').hidden = work.attMissing;
+  document.getElementById('bfFilesHint').textContent = 'ไฟล์ยังอยู่ในคลังไฟล์ ไม่ถูกก๊อปซ้ำ · ไฟล์ที่ไม่ใช่ไฟล์ถาวรหมดอายุ 30 วันนับจากอัปโหลด — ครบแล้วทุกคนเปิดไม่ได้' +
+    (had ? ' · แนบไว้แล้ว ' + had + ' รายการ (ถอด/ดูได้ที่รายละเอียดข้อความ)' : '') + (work.f059 ? ' · เลือกแท็บ "โฟลเดอร์" ในหน้าต่างเลือก เพื่อแนบทั้งโฟลเดอร์เป็นลิงก์สด' : '');
+  workStageRender(boardForm, 'bfFiles', 'bfPick');
   document.getElementById('boardDialog').showModal();
   document.getElementById('bfTitle').focus();
 }
@@ -11284,8 +11308,14 @@ async function saveBoard() {
   if (res.error) { console.error('[Save board]', res.error); showFatalError('บันทึกข้อความไม่สำเร็จ: ' + res.error.message); return; }
   // RLS ที่ไม่ให้แก้ จะไม่ตอบ error แต่แก้ได้ 0 แถว — ต้องบอกตรง ๆ ไม่ใช่ขึ้นว่าสำเร็จ
   if (!res.data || !res.data.length) { showFatalError('บันทึกข้อความไม่สำเร็จ — ไม่มีสิทธิ์แก้ข้อความนี้ หรือข้อความถูกลบไปแล้ว'); return; }
+  // ข้อความบันทึกแล้ว — ฟอร์มปิดเสมอ (กันได้ข้อความซ้ำ) · แนบไฟล์/โฟลเดอร์ทีหลัง ล้ม = บอกตรง ๆ + แนบซ้ำได้จากรายละเอียดข้อความ
+  const bf = boardForm, bid = res.data[0].id, nF = bf.files.length, nD = bf.folders.length;
+  btn.disabled = true;                      // กันกดบันทึกซ้ำระหว่างแนบ (ข้อความถูกบันทึกแล้ว — กดอีกจะได้ข้อความซ้ำ)
+  const errs = nF || nD ? await workAttachTo('board', bid, bf.files, bf.folders) : [];
+  btn.disabled = false;
   document.getElementById('boardDialog').close();
-  showToast('✅ บันทึกข้อความแล้ว');
+  showToast('✅ บันทึกข้อความแล้ว' + (!errs.length && (nF || nD) ? ' · แนบ' + (nF ? 'ไฟล์ ' + nF + ' ไฟล์' : '') + (nF && nD ? ' · ' : '') + (nD ? 'โฟลเดอร์ ' + nD + ' โฟลเดอร์' : '') : ''));
+  if (errs.length) showFatalError('บันทึกข้อความแล้ว แต่แนบไฟล์/โฟลเดอร์จากคลังไม่สำเร็จ: ' + errs.join(' · ') + ' — เปิดข้อความแล้วกด "+ แนบจากคลังไฟล์" ซ้ำได้');
   refreshBoard();
 }
 
@@ -15871,6 +15901,7 @@ async function loadWork() {
   workFAttApply(fa);
   workNotify(before);
   renderWork();
+  if (typeof renderBoard === 'function') renderBoard();                  // 📎 ในตารางกระดาน (ข้อมูลไฟล์แนบมาพร้อมโหลดงาน)
   workFFilesLoad(workFFilesVisible());
 }
 // มีของใหม่ถึงฉัน (ใบใหม่ · ถูกส่งกลับแก้ · มีงานรอตรวจ · คำขอใหม่ · คำขอของฉันถูกตอบ) → ข้อความสั้นหนึ่งบรรทัด (เฉพาะรอบที่โหลดต่อจากรอบก่อน ไม่ใช่ตอนเข้าครั้งแรก)
@@ -15904,6 +15935,9 @@ function workReset() {
   clearTimeout(work.rt);
   workSubFree();
   work = workBlank(); workSub = null; workForm = null; workReq = null; workDlgId = null; workBusy = false; workPick = null; workAttBusy.clear();
+  boardForm = { files: [], folders: [] };
+  ['bfFiles', 'workrFiles'].forEach(id => { document.getElementById(id).innerHTML = ''; });
+  { const bd = document.getElementById('boardDialog'); if (bd.open) bd.close(); }          // ฟอร์มข้อความที่เปิดค้าง — รายการไฟล์ที่เลือกไว้ของคนเดิมต้องไม่ค้าง
   ['workMineList', 'workQueue', 'workDetail', 'workTeam', 'workAll', 'workAlert', 'workDlgBody', 'workSubTask', 'workSubChans', 'workSubImgs', 'workSubFiles', 'workfFiles', 'workPickList', 'workfPeople', 'workReqList', 'workReqDetail', 'workReqBoxes', 'workrGroups', 'workrUser', 'workrTask'].forEach(id => { document.getElementById(id).innerHTML = ''; });
   document.getElementById('workPickMsg').textContent = '';
   document.getElementById('workPickQ').value = '';
@@ -16142,7 +16176,7 @@ function workReqDetailHtml(r) {
   }
   return '<section class="card wk-card"><div class="wk-card-head"><span>' + (r.requester_id === currentUserId ? 'คำขอของฉัน' : 'จาก ' + escapeHtml(workName(r.requester_id)) + ' · ' + escapeHtml(workRoleOf(r.requester_id))) + '</span>' +
     '<span class="wk-pills"><span class="wk-chan">ถึง ' + escapeHtml(workReqToLabel(r)) + '</span><span class="' + st[1] + '">' + st[0] + '</span></span></div><div class="wk-card-body">' +
-    '<div class="wk-note">' + escapeHtml(r.body) + '</div>' + att +
+    '<div class="wk-note">' + escapeHtml(r.body) + '</div>' + att + workTargetAttHtml('request', r, workAttCanTarget('request', r)) +
     '<dl class="wk-kv" style="margin-top:14px"><dt>ผู้ยื่น</dt><dd>' + escapeHtml(workName(r.requester_id)) + ' · ' + escapeHtml(workRoleOf(r.requester_id)) + ' · ' + escapeHtml(workDt(r.created_at)) + '</dd>' +
     '<dt>ส่งถึง</dt><dd>' + escapeHtml(workReqToLabel(r)) + (r.to_group ? ' · ใครในกลุ่มตอบก่อนเป็นคนตัดสิน' : '') + '</dd></dl>' + ans +
     (workReqCanDecide(r) ? '<p class="hint">อนุมัติ = รับเรื่อง <strong class="wk-red">ระบบไม่ย้ายงานหรือเลื่อนกำหนดให้</strong> — ผู้อนุมัติไปทำเองที่หน้าใบงาน</p>' : '') + '</div>' + actions + '</section>';
@@ -16503,10 +16537,11 @@ async function workFormSave() {
 // ไฟล์ยังอยู่ที่เดิมในคลัง (ไม่ก๊อปซ้ำ) ตารางแนบเก็บแค่ลิงก์ · เปิดดู/ดาวน์โหลดผ่าน transfer_open เสมอ (ลงประวัติคลังเหมือนเปิดจากหน้า "โอนไฟล์") — ห้ามขอ signed URL ตรง
 // ctx: 'brief' = ผู้สั่งแนบตอนสั่ง · 'submit:N' = ผู้รับแนบตอนส่งงานครั้งที่ N · ใครแนบ/ถอดได้ ฐานตัดสิน (transfer_attach_ok) — workAttCan* แค่ซ่อน/โชว์ปุ่ม
 // ⚠️ ไฟล์จากคลังไม่นับเป็น "หลักฐาน" ของ work_submit (ฐานนับเฉพาะลิงก์/รูป) — ฟอร์มส่งงานบอกผู้ใช้ตรง ๆ
-const WORK_ATT_COLS = 'id, file_id, target_id, ctx, attached_by, attached_at, file:transfer_files(id, category, file_name, size_bytes, status, is_permanent, expires_at)';
+const WORK_ATT_COLS = 'id, file_id, target_kind, target_id, ctx, attached_by, attached_at, file:transfer_files(id, category, file_name, size_bytes, status, is_permanent, expires_at)';
 const WORK_PICK_COLS = 'id, category, file_name, size_bytes, note, uploaded_at, expires_at, is_permanent, uploader:admins!transfer_files_uploaded_by_fkey(full_name)';
 const WORK_ATT_MAX = 20;                     // ตรงกับเพดานใน transfer_attach (053)
-const workAttQuery = () => db.from('transfer_attachments').select(WORK_ATT_COLS).eq('target_kind', 'task').order('attached_at', { ascending: true }).limit(2000);
+const WORK_ATT_KINDS = ['task', 'request', 'board'];        // ใบงาน · คำขอ · ข้อความกระดาน — โหลดรวมครั้งเดียว (กระดานไม่ยิงต่อข้อความ)
+const workAttQuery = () => db.from('transfer_attachments').select(WORK_ATT_COLS).in('target_kind', WORK_ATT_KINDS).order('attached_at', { ascending: true }).limit(2000);
 function workAttApply(r) {
   if (r.error) {
     work.att = []; work.attMissing = trIsMissing(r.error);                 // ยังไม่รัน 053 = ซ่อนปุ่มแนบเงียบ ๆ ส่วนอื่นใช้ได้ตามปกติ
@@ -16518,8 +16553,8 @@ function workAttApply(r) {
 }
 // ลิงก์โฟลเดอร์สด + ส่วนที่ 2 ของ 059 (work_submit รับไฟล์คลังเป็นหลักฐาน) — ตรวจว่า 059 รันแล้วด้วย "อ่านตารางได้" (รันไฟล์เดียวกัน) ไม่ใช่เดา:
 // อ่านได้ = work.f059 true → ไฟล์จากคลังนับเป็นหลักฐานส่งงาน + ส่งไปกับ work_submit ใน transaction เดียว · อ่านไม่ได้ = พฤติกรรมเดิมของ 053 (แนบหลังส่ง ไม่นับเป็นหลักฐาน)
-const WORK_FATT_COLS = 'id, folder_path, target_id, ctx, attached_by, attached_at';
-const workFAttQuery = () => db.from('transfer_folder_attachments').select(WORK_FATT_COLS).eq('target_kind', 'task').order('attached_at', { ascending: true }).limit(500);
+const WORK_FATT_COLS = 'id, folder_path, target_kind, target_id, ctx, attached_by, attached_at';
+const workFAttQuery = () => db.from('transfer_folder_attachments').select(WORK_FATT_COLS).in('target_kind', WORK_ATT_KINDS).order('attached_at', { ascending: true }).limit(500);
 function workFAttApply(r) {
   if (r.error) {
     work.fatt = []; work.f059 = false;
@@ -16528,11 +16563,13 @@ function workFAttApply(r) {
   }
   work.fatt = r.data || []; work.f059 = true;
 }
-const workFAttOf = (taskId, ctx) => work.fatt.filter(a => a.target_id === taskId && a.ctx === ctx);
+const workFAttOf = (taskId, ctx) => work.fatt.filter(a => a.target_kind === 'task' && a.target_id === taskId && a.ctx === ctx);
+const workAttFor = (kind, id) => work.att.filter(a => a.target_kind === kind && a.target_id === id);              // คำขอ/ข้อความกระดาน (ctx ว่างเสมอ)
+const workFAttFor = (kind, id) => work.fatt.filter(a => a.target_kind === kind && a.target_id === id);
 const WORK_FOLD_MAX = 5;                                  // ตรงกับเพดานใน transfer_attach_folder (059)
 const workPathKey = p => trCleanDir(p).join('/').toLowerCase();          // พาธโฟลเดอร์เทียบแบบไม่สนตัวพิมพ์ + ล้างพาธเหมือนฐาน (transfer_clean_folder)
-const workAttOf = (taskId, ctx) => work.att.filter(a => a.target_id === taskId && a.ctx === ctx);
-const workAttRounds = taskId => [...new Set(work.att.concat(work.fatt).filter(a => a.target_id === taskId && /^submit:[0-9]{1,3}$/.test(a.ctx)).map(a => Number(a.ctx.slice(7))))].sort((x, y) => x - y);
+const workAttOf = (taskId, ctx) => work.att.filter(a => a.target_kind === 'task' && a.target_id === taskId && a.ctx === ctx);
+const workAttRounds = taskId => [...new Set(work.att.concat(work.fatt).filter(a => a.target_kind === 'task' && a.target_id === taskId && /^submit:[0-9]{1,3}$/.test(a.ctx)).map(a => Number(a.ctx.slice(7))))].sort((x, y) => x - y);
 const workAttLive = t => !!t && t.status !== 'cancelled' && !work.attMissing;             // ใบที่ยกเลิกแล้วแนบเพิ่มไม่ได้ (ฐานบังคับ)
 function workAttCanBrief(t) {                // สำเนาของ transfer_attach_ok ctx brief: ผู้สั่ง · เจ้าของ · ผู้ดูแล (เฉพาะใบที่ผู้รับเป็นพนักงาน)
   if (!workAttLive(t)) return false;
@@ -16540,7 +16577,15 @@ function workAttCanBrief(t) {                // สำเนาของ transfe
   return t.created_by === currentUserId || me === 'owner' || (me === 'admin' && !!as && as.role === 'staff');
 }
 const workAttCanSubmit = t => workAttLive(t) && (t.assignee_id === currentUserId || workMyRole() === 'owner');      // ctx submit:N — ผู้รับ · เจ้าของ
-const workAttCanDetach = (a, t) => !!t && (a.attached_by === currentUserId || (a.ctx === 'brief' ? workAttCanBrief(t) : workAttCanSubmit(t)));
+// คำขอ: ผู้ยื่น · เจ้าของ · กระดาน: คนเขียน · เจ้าของ · ผู้ดูแล (ฐานไม่ดูสถานะคำขอ — หน้าจอให้แนบ/ถอดเฉพาะตอนรอตอบ ไม่ให้ไฟล์ของคำขอที่ตัดสินแล้วเปลี่ยน)
+function workAttCanTarget(kind, row) {
+  if (!row) return false;
+  const me = workMyRole();
+  if (kind === 'request') return row.status === 'pending' && (row.requester_id === currentUserId || me === 'owner');
+  if (kind === 'board') return row.author_id === currentUserId || me === 'owner' || me === 'admin';
+  return false;
+}
+const workAttCanDetach = (a, t) => !!t && !(a.target_kind === 'request' && t.status !== 'pending') && (a.attached_by === currentUserId || (a.target_kind === 'request' || a.target_kind === 'board' ? workAttCanTarget(a.target_kind, t) : (a.ctx === 'brief' ? workAttCanBrief(t) : workAttCanSubmit(t))));
 function workAttState(a) {
   const f = a.file;
   if (!f) return { ok: false, text: 'ไฟล์ไม่พร้อมใช้งาน — ถูกลบออกจากคลังแล้ว หรือคุณไม่มีสิทธิ์เห็น' };
@@ -16592,6 +16637,15 @@ function workFoldRowHtml(a, t) {
   return '<div class="wk-link wk-fold"><div>' + trFolderSvg(true, 'wk-fico') + '<strong>' + escapeHtml(a.folder_path) + '</strong> <span class="st st-warn">ลิงก์สด</span>' +
     '<div class="wk-url">แนบโดย ' + escapeHtml(workName(a.attached_by)) + ' · ' + escapeHtml(workDt(a.attached_at)) + ' · ไฟล์ที่เพิ่ม/ลบในโฟลเดอร์ภายหลังเปลี่ยนตามทันที</div>' + state + list + '</div><div class="wk-attbtns">' + b.join('') + '</div></div>';
 }
+// ส่วนไฟล์แนบของคำขอ/ข้อความกระดาน (ไม่มีรอบ/ctx) — canAdd = แนบเพิ่มได้ไหม (สำเนาไว้ซ่อน/โชว์ปุ่ม ฐานตัดสินซ้ำ)
+function workTargetAttHtml(kind, row, canAdd) {
+  if (work.attMissing || !row) return '';
+  const files = workAttFor(kind, row.id), folders = workFAttFor(kind, row.id);
+  const add = canAdd ? '<p><button type="button" class="btn" data-act="att-add" data-kind="' + kind + '" data-task="' + escapeHtml(row.id) + '" data-which="">+ แนบจากคลังไฟล์</button></p>' : '';
+  if (!files.length && !folders.length && !add) return work.attErr ? '<div class="alert alert-red" role="alert"><strong>' + escapeHtml(work.attErr) + '</strong></div>' : '';
+  return '<h4 class="wk-sec-h">ไฟล์แนบจากคลังไฟล์</h4>' + (work.attErr ? '<div class="alert alert-red" role="alert"><strong>' + escapeHtml(work.attErr) + '</strong></div>' : '') +
+    files.map(a => workAttRowHtml(a, row)).join('') + folders.map(a => workFoldRowHtml(a, row)).join('') + add;
+}
 function workAttHtml(t) {
   if (work.attMissing) return '';
   const add = which => '<p><button type="button" class="btn" data-act="att-add" data-task="' + escapeHtml(t.id) + '" data-which="' + which + '">+ แนบจากคลังไฟล์</button></p>';
@@ -16617,17 +16671,22 @@ async function workAttRefresh() {
     if (uid !== currentUserId) return;
     workFAttApply(fr);
   }
-  if (sig() !== before) renderWork();
+  if (sig() !== before) workFFilesRerender();
   workFFilesLoad(workFFilesVisible());
 }
-const workFFilesVisible = () => { const s = new Set(); if (workDlgId) s.add(workDlgId); if (work.sel) s.add(work.sel); return [...s]; };
-async function workFFilesLoad(taskIds) {
+const workFFilesVisible = () => { const s = new Set(); if (workDlgId) s.add(workDlgId); if (work.sel) s.add(work.sel); if (work.reqSel) s.add(work.reqSel); if (current === 'board' && boardOpenId) s.add(boardOpenId); return [...s]; };
+// วาดใหม่หลังไฟล์สดมา: หมวดงาน + รายละเอียดข้อความกระดานที่เปิดอยู่ (กระดานใช้ส่วนไฟล์แนบชุดเดียวกัน)
+function workFFilesRerender() {
+  renderWork();
+  if (current === 'board' && detailOpen() && boardOpenId) { const m = boardMsgs.find(x => x.id === boardOpenId); if (m) renderBoardDetail(m); }
+}
+async function workFFilesFetch(atts, done) {
   if (!work.f059 || !currentUserId) return;
-  const uid = currentUserId, ids = work.fatt.filter(a => taskIds.includes(a.target_id)).map(a => a.id).slice(0, 100);
+  const uid = currentUserId, ids = atts.map(a => a.id).slice(0, 100);
   if (!ids.length) return;
   const had = ids.some(id => !work.ff[id]);
   ids.forEach(id => { if (!work.ff[id]) work.ff[id] = { rows: [], total: 0, loading: true, error: '' }; });
-  if (had) renderWork();
+  if (had) done();
   const r = await workRpc('transfer_folder_files', { p_att: ids });
   if (uid !== currentUserId) return;
   if (r.error) {
@@ -16638,8 +16697,9 @@ async function workFFilesLoad(taskIds) {
     (r.data || []).forEach(x => { (by[x.r_att] = by[x.r_att] || []).push(x); });
     ids.forEach(id => { const rows = by[id] || []; work.ff[id] = { rows, total: rows.length ? (Number(rows[0].r_total) || rows.length) : 0, loading: false, error: '' }; });
   }
-  renderWork();
+  done();
 }
+const workFFilesLoad = taskIds => workFFilesFetch(work.fatt.filter(a => taskIds.includes(a.target_id)), workFFilesRerender);
 // ข้อมูลไฟล์ที่เปิดได้จากหน้านี้ — ไฟล์แนบเดี่ยว หรือไฟล์ในโฟลเดอร์ลิงก์สด
 function workFileMeta(fileId) {
   const a = work.att.find(x => x.file_id === fileId);
@@ -16649,6 +16709,9 @@ function workFileMeta(fileId) {
     if (r) return { id: r.r_id, file_name: r.r_name, category: r.r_category };
   }
   return null;
+}
+async function workAttAfterChange(kind) {
+  if (kind === 'board' || (!kind && current === 'board')) await refreshBoard(); else await loadWork();
 }
 async function workAttOpen(fileId, purpose) {
   const f = workFileMeta(fileId);
@@ -16676,7 +16739,7 @@ async function workAttOpen(fileId, purpose) {
   } catch (e) {
     if (w) w.close();
     console.error('[Work att open]', e);
-    if (uid === currentUserId) { showFatalError((purpose === 'view' ? 'เปิดไฟล์' : 'ดาวน์โหลดไฟล์') + ' "' + f.file_name + '" ไม่สำเร็จ: ' + trErrText(e)); loadWork(); }      // ไฟล์อาจหมดอายุ/ถูกลบไปแล้ว — โหลดใหม่ให้ขึ้น "หมดอายุแล้ว"
+    if (uid === currentUserId) { showFatalError((purpose === 'view' ? 'เปิดไฟล์' : 'ดาวน์โหลดไฟล์') + ' "' + f.file_name + '" ไม่สำเร็จ: ' + trErrText(e)); workAttAfterChange(); }      // ไฟล์อาจหมดอายุ/ถูกลบไปแล้ว — โหลดใหม่ให้ขึ้น "หมดอายุแล้ว"
   } finally { workAttBusy.delete(fileId); }
 }
 function workAttAskDetach(aid) {
@@ -16687,9 +16750,9 @@ function workAttAskDetach(aid) {
     const { error } = await workRpc('transfer_detach', { p_id: aid });
     if (uid !== currentUserId) return;
     closeConfirm();
-    if (error) { console.error('[Work detach]', error); showFatalError('ถอดไฟล์แนบไม่สำเร็จ: ' + trErrText(error)); await loadWork(); return; }
+    if (error) { console.error('[Work detach]', error); showFatalError('ถอดไฟล์แนบไม่สำเร็จ: ' + trErrText(error)); await workAttAfterChange(a.target_kind); return; }
     showToast('✅ ถอดไฟล์แนบแล้ว');
-    await loadWork();
+    await workAttAfterChange(a.target_kind);
   });
 }
 function workFoldAskDetach(aid) {
@@ -16700,35 +16763,37 @@ function workFoldAskDetach(aid) {
     const { error } = await workRpc('transfer_detach_folder', { p_id: aid });
     if (uid !== currentUserId) return;
     closeConfirm();
-    if (error) { console.error('[Work detach folder]', error); showFatalError('ถอดลิงก์โฟลเดอร์ไม่สำเร็จ: ' + trErrText(error)); await loadWork(); return; }
+    if (error) { console.error('[Work detach folder]', error); showFatalError('ถอดลิงก์โฟลเดอร์ไม่สำเร็จ: ' + trErrText(error)); await workAttAfterChange(a.target_kind); return; }
     showToast('✅ ถอดลิงก์โฟลเดอร์แล้ว');
-    await loadWork();
+    await workAttAfterChange(a.target_kind);
   });
 }
 // แนบเพิ่มจากหน้ารายละเอียดงาน (ทันที — ต่างจากในฟอร์มสั่ง/ส่งงานที่เก็บไว้ก่อนแล้วแนบหลังบันทึก)
-function workAttAdd(taskId, which) {
-  const t = workTask(taskId);
+function workAttAdd(taskId, which, kind) {
+  kind = kind || 'task';
+  const t = kind === 'request' ? work.reqs.find(x => x.id === taskId) : kind === 'board' ? boardMsgs.find(x => x.id === taskId) : workTask(taskId);
   if (!t) return;
-  const n = workRound(taskId), ctx = which === 'brief' ? 'brief' : 'submit:' + n;
-  if (which !== 'brief' && n < 1) { showToast('⚠️ ยังไม่มีการส่งงาน — แนบได้หลังส่งงานแล้ว'); return; }
-  if (!(which === 'brief' ? workAttCanBrief(t) : workAttCanSubmit(t))) { showToast('⚠️ แนบไฟล์ให้ใบงานนี้ไม่ได้แล้ว — สถานะเปลี่ยนไปหรือไม่มีสิทธิ์'); return; }
-  const have = workAttOf(taskId, ctx), haveF = workFAttOf(taskId, ctx);
+  const n = kind === 'task' ? workRound(taskId) : 0, ctx = kind !== 'task' ? '' : which === 'brief' ? 'brief' : 'submit:' + n;
+  if (kind === 'task' && which !== 'brief' && n < 1) { showToast('⚠️ ยังไม่มีการส่งงาน — แนบได้หลังส่งงานแล้ว'); return; }
+  const can = kind !== 'task' ? workAttCanTarget(kind, t) : (which === 'brief' ? workAttCanBrief(t) : workAttCanSubmit(t));
+  if (!can) { showToast(kind === 'task' ? '⚠️ แนบไฟล์ให้ใบงานนี้ไม่ได้แล้ว — สถานะเปลี่ยนไปหรือไม่มีสิทธิ์' : '⚠️ แนบไฟล์ให้รายการนี้ไม่ได้แล้ว — คำขอถูกตัดสินแล้วหรือไม่มีสิทธิ์'); return; }
+  const have = work.att.filter(a => a.target_kind === kind && a.target_id === taskId && a.ctx === ctx), haveF = work.fatt.filter(a => a.target_kind === kind && a.target_id === taskId && a.ctx === ctx);
   workPickOpen({ taken: new Set(have.map(a => a.file_id)), have: have.length,
     folders: work.f059 ? { taken: new Set(haveF.map(a => workPathKey(a.folder_path))), have: haveF.length } : null,
     onDone: async (files, folders) => {
       const errs = [];
       let nf = 0, nd = 0;
       if (files.length) {
-        const r = await workRpc('transfer_attach', { p_kind: 'task', p_target: taskId, p_ctx: ctx, p_files: files.map(f => f.id) });
+        const r = await workRpc('transfer_attach', { p_kind: kind, p_target: taskId, p_ctx: ctx, p_files: files.map(f => f.id) });
         if (r.error) { console.error('[Work attach]', r.error); errs.push(trErrText(r.error)); } else nf = Number(r.data) || files.length;
       }
       for (const d of (folders || [])) {
-        const r = await workRpc('transfer_attach_folder', { p_kind: 'task', p_target: taskId, p_ctx: ctx, p_path: d.path });
+        const r = await workRpc('transfer_attach_folder', { p_kind: kind, p_target: taskId, p_ctx: ctx, p_path: d.path });
         if (r.error) { console.error('[Work attach folder]', r.error); errs.push('โฟลเดอร์ "' + d.path + '": ' + trErrText(r.error)); } else nd += Number(r.data) || 0;
       }
       if (nf || nd) {
         showToast(nf ? '✅ แนบไฟล์แล้ว ' + nf + ' ไฟล์' + (nd ? ' · แนบโฟลเดอร์ ' + nd + ' โฟลเดอร์' : '') : '✅ แนบโฟลเดอร์แล้ว ' + nd + ' โฟลเดอร์');
-        await loadWork();
+        await workAttAfterChange(kind);
       }
       return errs.length ? errs.join(' · ') : null;
     } });
@@ -16741,6 +16806,36 @@ async function workAttachMany(taskIds, ctx, fileIds) {
     if (r.error) { console.error('[Work attach]', r.error); failed.push({ id, msg: trErrText(r.error) }); }
   }
   return failed;
+}
+// แนบไฟล์/โฟลเดอร์เข้ารายการเดียว (คำขอ · ข้อความกระดาน) — คืนข้อความที่ล้ม (ว่าง = สำเร็จทั้งหมด) · ไม่ atomic: ไฟล์ล้มแล้วโฟลเดอร์ยังลองต่อ
+async function workAttachTo(kind, targetId, files, folders) {
+  const errs = [];
+  if (files.length) {
+    const r = await workRpc('transfer_attach', { p_kind: kind, p_target: targetId, p_ctx: '', p_files: files.map(f => f.id) });
+    if (r.error) { console.error('[Work attach]', r.error); errs.push(trErrText(r.error)); }
+  }
+  for (const d of folders) {
+    const r = await workRpc('transfer_attach_folder', { p_kind: kind, p_target: targetId, p_ctx: '', p_path: d.path });
+    if (r.error) { console.error('[Work attach folder]', r.error); errs.push('โฟลเดอร์ "' + d.path + '": ' + trErrText(r.error)); }
+  }
+  return errs;
+}
+// ฟอร์มทั่วไปที่เลือกไฟล์/โฟลเดอร์ไว้ก่อนบันทึก (คำขอ · ข้อความกระดาน): st = { files, folders } · listId/pickId = กล่องรายการ/ปุ่มเลือก
+function workStageRender(st, listId, pickId) {
+  document.getElementById(listId).innerHTML = workStageHtml(st.files, null, false, st.folders);
+  document.getElementById(pickId).disabled = st.files.length >= WORK_ATT_MAX && (!work.f059 || st.folders.length >= WORK_FOLD_MAX);
+}
+function workStagePick(st, rerender, have) {
+  have = have || { files: new Set(), folders: new Set() };
+  workPickOpen({ taken: new Set([...st.files.map(x => x.id), ...have.files]), have: st.files.length + have.files.size,
+    folders: work.f059 ? { taken: new Set([...st.folders.map(x => x.path.toLowerCase()), ...have.folders]), have: st.folders.length + have.folders.size } : null,
+    onDone: async (files, folders) => { st.files = st.files.concat(files); st.folders = st.folders.concat(folders || []); rerender(); return null; } });
+}
+function workStageRemove(st, e, rerender) {
+  const b = e.target.closest('[data-act="stg-rm"], [data-act="stg-frm"]');
+  if (!b) return;
+  (b.dataset.act === 'stg-frm' ? st.folders : st.files).splice(Number(b.dataset.i), 1);
+  rerender();
 }
 async function workAttachFoldersMany(taskIds, ctx, paths) {
   const failed = [];
@@ -16930,7 +17025,10 @@ function workReqSync() {
 function workReqOpen(taskId) {
   if (isOwner()) { showToast('เจ้าของร้านยื่นคำขอไม่ได้ — สั่งงานหรือย้ายงานได้เลย'); return; }
   const roles = workReqRoles();
-  workReq = { mode: 'group', group: roles[0] || '', busy: false };
+  workReq = { mode: 'group', group: roles[0] || '', files: [], folders: [], busy: false };
+  document.getElementById('workrFilesField').hidden = work.attMissing;
+  document.getElementById('workrFoldHint').textContent = work.f059 ? ' · เลือกแท็บ "โฟลเดอร์" ในหน้าต่างเลือก เพื่อแนบทั้งโฟลเดอร์เป็นลิงก์สด' : '';
+  workStageRender(workReq, 'workrFiles', 'workrPick');
   document.getElementById('workrGroups').innerHTML = roles.map(g => '<button type="button" class="wk-chipbtn" data-group="' + g + '" aria-pressed="false">' + escapeHtml(WORK_GROUP[g]) + '</button>').join('');
   const people = work.people.filter(p => p.is_active && p.id !== currentUserId && roles.includes(p.role));
   document.getElementById('workrUser').innerHTML = people.map(p => '<option value="' + escapeHtml(p.id) + '">' + escapeHtml(p.full_name) + ' · ' + escapeHtml(WORK_ROLE[p.role] || p.role) + '</option>').join('');
@@ -16952,14 +17050,19 @@ async function workReqSave() {
   if (!body) { err.textContent = 'ใส่ข้อความคำขอก่อน'; err.hidden = false; return; }
   const uid = currentUserId, task = document.getElementById('workrTask').value || null;
   r.busy = true; btn.disabled = true;
-  const { error } = await workRpc('work_request_create', { p_to_user: r.mode === 'user' ? document.getElementById('workrUser').value : null, p_to_group: r.mode === 'group' ? r.group : null, p_task: task, p_body: body });
+  const { data: reqId, error } = await workRpc('work_request_create', { p_to_user: r.mode === 'user' ? document.getElementById('workrUser').value : null, p_to_group: r.mode === 'group' ? r.group : null, p_task: task, p_body: body });
   if (uid !== currentUserId) return;
   r.busy = false;
   if (error) { console.error('[Work request]', error); err.textContent = 'ส่งคำขอไม่สำเร็จ: ' + error.message; err.hidden = false; workReqSync(); return; }
+  // คำขอสร้างแล้ว — จากนี้ห้ามกดส่งซ้ำ (ฟอร์มปิดเสมอ) · แนบไฟล์/โฟลเดอร์ทีหลัง ล้ม = บอกตรง ๆ + แนบซ้ำได้จากรายละเอียดคำขอ
+  const nF = r.files.length, nD = r.folders.length;
+  const errs = nF || nD ? (reqId ? await workAttachTo('request', reqId, r.files, r.folders) : ['ฐานข้อมูลไม่ส่งรหัสคำขอกลับมา']) : [];
+  if (uid !== currentUserId) return;
   document.getElementById('workReqDialog').close(); workReq = null;
-  showToast('✅ ส่งคำขอแล้ว — รอผู้รับตอบ');
-  work.reqBox = 'out'; work.reqSel = null; workTab('req');
+  showToast('✅ ส่งคำขอแล้ว — รอผู้รับตอบ' + (!errs.length && (nF || nD) ? ' · แนบ' + (nF ? 'ไฟล์ ' + nF + ' ไฟล์' : '') + (nF && nD ? ' · ' : '') + (nD ? 'โฟลเดอร์ ' + nD + ' โฟลเดอร์' : '') : ''));
+  work.reqBox = 'out'; work.reqSel = reqId || null; workTab('req');
   await loadWork();
+  if (errs.length) showFatalError('ส่งคำขอแล้ว แต่แนบไฟล์/โฟลเดอร์จากคลังไม่สำเร็จ: ' + errs.join(' · ') + ' — เปิดคำขอที่ยื่นแล้วกด "+ แนบจากคลังไฟล์" ซ้ำได้');
 }
 async function workReqDecide(id, verdict) {
   if (workBusy) return;
@@ -17000,6 +17103,16 @@ function workReqAskWithdraw(id) {
 }
 
 // ── เหตุการณ์ของหน้านี้ (กดแล้วทำงานด้วย data-act — ไม่ฝังข้อความของผู้ใช้ลงใน onclick) ──
+// ปุ่มไฟล์แนบ (ใช้ร่วมกับรายละเอียดข้อความกระดาน): แนบเพิ่ม · เปิดดู · ดาวน์โหลด · ถอดไฟล์ · ถอดโฟลเดอร์
+function workAttClick(a) {
+  const act = a.dataset.act;
+  if (act === 'att-add') workAttAdd(a.dataset.task, a.dataset.which, a.dataset.kind);
+  else if (act === 'att-view') workAttOpen(a.dataset.fid, 'view');
+  else if (act === 'att-dl') workAttOpen(a.dataset.fid, 'download');
+  else if (act === 'att-rm') workAttAskDetach(a.dataset.aid);
+  else if (act === 'att-frm') workFoldAskDetach(a.dataset.aid);
+}
+document.getElementById('detailBody').addEventListener('click', e => { const a = e.target.closest('[data-act^="att-"]'); if (a) workAttClick(a); });
 function workClick(e) {
   const a = e.target.closest('[data-act]');
   if (!a) return;
@@ -17026,11 +17139,7 @@ function workClick(e) {
   else if (act === 'req-reject') workReqDecide(id, 'reject');
   else if (act === 'req-withdraw') workReqAskWithdraw(id);
   else if (act === 'open-task') workOpenDetail(id);
-  else if (act === 'att-add') workAttAdd(a.dataset.task, a.dataset.which);
-  else if (act === 'att-view') workAttOpen(a.dataset.fid, 'view');
-  else if (act === 'att-dl') workAttOpen(a.dataset.fid, 'download');
-  else if (act === 'att-rm') workAttAskDetach(a.dataset.aid);
-  else if (act === 'att-frm') workFoldAskDetach(a.dataset.aid);
+  else if (act.indexOf('att-') === 0) workAttClick(a);
 }
 document.getElementById('sec-tasks').addEventListener('click', workClick);
 document.getElementById('sec-tasks').addEventListener('keydown', e => {
@@ -17131,6 +17240,14 @@ document.getElementById('workReqDialog').addEventListener('change', () => { if (
 document.getElementById('workReqForm').addEventListener('submit', e => { e.preventDefault(); workReqSave(); });
 document.getElementById('workrCancel').addEventListener('click', () => document.getElementById('workReqDialog').close());
 document.getElementById('workReqDialog').addEventListener('close', () => { workReq = null; });
+document.getElementById('workrPick').addEventListener('click', () => { const r = workReq; if (r) workStagePick(r, () => { if (workReq === r) workStageRender(r, 'workrFiles', 'workrPick'); }); });
+document.getElementById('workrFiles').addEventListener('click', e => { const r = workReq; if (r) workStageRemove(r, e, () => workStageRender(r, 'workrFiles', 'workrPick')); });
+document.getElementById('bfPick').addEventListener('click', () => {
+  const m = editingBoardId ? boardMsgs.find(x => x.id === editingBoardId) : null;
+  const have = { files: new Set(m ? workAttFor('board', m.id).map(a => a.file_id) : []), folders: new Set(m ? workFAttFor('board', m.id).map(a => a.folder_path.toLowerCase()) : []) };
+  workStagePick(boardForm, () => workStageRender(boardForm, 'bfFiles', 'bfPick'), have);
+});
+document.getElementById('bfFiles').addEventListener('click', e => workStageRemove(boardForm, e, () => workStageRender(boardForm, 'bfFiles', 'bfPick')));
 
 // ===========================================================================
 // แจ้งเตือนงานบนเครื่องนี้ (Web Push) — ปุ่ม "🔔 แจ้งเตือน" ในหน้า "งานของฉัน"

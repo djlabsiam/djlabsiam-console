@@ -105,14 +105,16 @@ const WORK = { tasks: [], events: [], reqs: [], files: new Map(), uploads: [], s
       rows = WORK.markers.filter(m => !m.deleted).map(m => Object.assign(clone(m), { creator: { full_name: nameOf(m.created_by) } }));
     } else if (table === 'transfer_folder_attachments') {
       if (!WORK.has059) return MISSING;
-      rows = WORK.fatt.filter(a => { const t = WORK.tasks.find(x => x.id === a.target_id); return !!t && taskVisible(who, t); });
+      rows = WORK.fatt.filter(a => targetVisible(who, a));
       st.eqs.forEach(([c, v]) => { rows = rows.filter(r => r[c] === v); });
+      st.ins.forEach(([c, v]) => { rows = rows.filter(r => v.indexOf(r[c]) >= 0); });
       rows = rows.map(clone);
     } else if (table === 'transfer_attachments') {
       if (WORK.noAtt) return MISSING;
       if (WORK.fail.att) return E(WORK.fail.att);
-      rows = WORK.att.filter(a => { const t = WORK.tasks.find(x => x.id === a.target_id); return !!t && taskVisible(who, t); });
+      rows = WORK.att.filter(a => targetVisible(who, a));
       st.eqs.forEach(([c, v]) => { rows = rows.filter(r => r[c] === v); });
+      st.ins.forEach(([c, v]) => { rows = rows.filter(r => v.indexOf(r[c]) >= 0); });
       rows = rows.map(a => Object.assign(clone(a), { file: libFile(a.file_id) }));
     } else {
       if (WORK.fail.lib) return E(WORK.fail.lib);
@@ -127,8 +129,19 @@ const WORK = { tasks: [], events: [], reqs: [], files: new Map(), uploads: [], s
   }
   const cleanPath = p => String(p == null ? '' : p).split(String.fromCharCode(92)).join('/').split('/').map(x => x.trim()).filter(x => x && x !== '.' && x !== '..').join('/') || null;
   const folderUnder = (fp, path) => fp != null && (String(fp).toLowerCase() === path.toLowerCase() || String(fp).toLowerCase().indexOf(path.toLowerCase() + '/') === 0);
+  // เป้าหมายของไฟล์แนบ: ใบงาน (เห็นตามสิทธิ์ใบงาน) · คำขอ (เห็นตามสิทธิ์คำขอ) · ข้อความกระดาน (ทีมงานเห็นหมด ใน FAKE.board_messages)
+  const boardRow = id => (FAKE.board_messages || []).find(x => x.id === id);
+  const targetRow = (kind, id) => kind === 'task' ? WORK.tasks.find(x => x.id === id) : kind === 'request' ? WORK.reqs.find(x => x.id === id) : kind === 'board' ? boardRow(id) : null;
+  const targetVisible = (who, a) => {
+    const row = targetRow(a.target_kind || 'task', a.target_id);
+    if (!row) return false;
+    return a.target_kind === 'request' ? reqVisible(who, row) : a.target_kind === 'board' ? true : taskVisible(who, row);
+  };
   // สำเนาของ transfer_attach_ok (053) — ใบที่ยกเลิกแล้วแนบ/ถอดเพิ่มไม่ได้ · brief = ผู้สั่ง/เจ้าของ/ผู้ดูแล(ใบของพนักงาน) · submit:N = ผู้รับ/เจ้าของ
-  function attachOk(me, t, ctx) {
+  function attachOk(me, t, ctx, kind) {
+    const m0 = role(me);
+    if (kind === 'request') return !!t && ctx === '' && (t.requester_id === me || m0 === 'owner');
+    if (kind === 'board') return !!t && ctx === '' && (t.author_id === me || m0 === 'owner' || m0 === 'admin');
     if (!t || t.status === 'cancelled') return false;
     const m = role(me);
     if (ctx === 'brief') return t.created_by === me || m === 'owner' || (m === 'admin' && role(t.assignee_id) === 'staff');
@@ -138,11 +151,11 @@ const WORK = { tasks: [], events: [], reqs: [], files: new Map(), uploads: [], s
 
   // ── เบราว์เซอร์อ่านได้อย่างเดียว ──
   function builder(client, table) {
-    const st = { op: 'select', order: null, limit: null, payload: null, cols: '', eqs: [] };
+    const st = { op: 'select', order: null, limit: null, payload: null, cols: '', eqs: [], ins: [] };
     const me = () => client.session && client.session.user.id;
     const q = {
       select(c) { if (typeof c === 'string') st.cols = c; return q; }, order(c, o) { st.order = { c, asc: !(o && o.ascending === false) }; return q; }, limit(n) { st.limit = n; return q; },
-      insert(p) { st.op = 'insert'; st.payload = p; return q; }, update(p) { st.op = 'update'; st.payload = p; return q; }, delete() { st.op = 'delete'; return q; }, eq(c, v) { st.eqs.push([c, v]); return q; },
+      insert(p) { st.op = 'insert'; st.payload = p; return q; }, update(p) { st.op = 'update'; st.payload = p; return q; }, delete() { st.op = 'delete'; return q; }, eq(c, v) { st.eqs.push([c, v]); return q; }, in(c, v) { st.ins.push([c, v]); return q; },
       then(res, rej) { return run().then(res, rej); },
     };
     async function run() {
@@ -314,9 +327,10 @@ const WORK = { tasks: [], events: [], reqs: [], files: new Map(), uploads: [], s
     transfer_attach(me, a) {
       if (!role(me)) return E('ไม่มีสิทธิ์ใช้งาน (ต้องเป็นทีมงานที่ยังใช้งานอยู่)');
       const kind = a.p_kind, ctx = a.p_ctx || '', target = a.p_target;
-      if (kind !== 'task') return E('ชนิดรายการที่แนบไม่ถูกต้อง');
-      if (!(ctx === 'brief' || /^submit:[0-9]{1,3}$/.test(ctx))) return E('ใบงานแนบได้เฉพาะตอนสั่ง (brief) หรือตอนส่งงาน (submit:N)');
-      if (!attachOk(me, find(target), ctx)) return E('แนบไฟล์ไม่ได้ — ไม่มีสิทธิ์กับรายการนี้ หรือรายการถูกลบ/ยกเลิกไปแล้ว');
+      if (kind !== 'task' && kind !== 'request' && kind !== 'board') return E('ชนิดรายการที่แนบไม่ถูกต้อง');
+      if (kind === 'task' && !(ctx === 'brief' || /^submit:[0-9]{1,3}$/.test(ctx))) return E('ใบงานแนบได้เฉพาะตอนสั่ง (brief) หรือตอนส่งงาน (submit:N)');
+      if (kind !== 'task' && ctx !== '') return E('ชนิดนี้ไม่มี ctx');
+      if (!attachOk(me, targetRow(kind, target), ctx, kind)) return E('แนบไฟล์ไม่ได้ — ไม่มีสิทธิ์กับรายการนี้ หรือรายการถูกลบ/ยกเลิกไปแล้ว');
       const ids = [...new Set((a.p_files || []).filter(Boolean))];
       if (!ids.length) return OK(0);
       if (ids.length > 20) return E('แนบได้ไม่เกิน 20 ไฟล์ต่อครั้ง');
@@ -331,7 +345,7 @@ const WORK = { tasks: [], events: [], reqs: [], files: new Map(), uploads: [], s
       if (!role(me)) return E('ไม่มีสิทธิ์ใช้งาน');
       const x = WORK.att.find(r => r.id === a.p_id);
       if (!x) return E('ไม่พบไฟล์แนบนี้ (อาจถูกถอดไปแล้ว)');
-      if (x.attached_by !== me && !attachOk(me, find(x.target_id), x.ctx)) return E('ถอดไฟล์แนบไม่ได้ — ถอดได้เฉพาะคนที่แนบ หรือผู้ที่แก้รายการนั้นได้');
+      if (x.attached_by !== me && !attachOk(me, targetRow(x.target_kind, x.target_id), x.ctx, x.target_kind)) return E('ถอดไฟล์แนบไม่ได้ — ถอดได้เฉพาะคนที่แนบ หรือผู้ที่แก้รายการนั้นได้');
       WORK.att = WORK.att.filter(r => r.id !== a.p_id);
       return OK();
     },
@@ -340,9 +354,10 @@ const WORK = { tasks: [], events: [], reqs: [], files: new Map(), uploads: [], s
       if (!WORK.has059) return E('Could not find the function public.transfer_attach_folder(p_ctx, p_kind, p_path, p_target) in the schema cache');
       if (!role(me)) return E('ไม่มีสิทธิ์ใช้งาน (ต้องเป็นทีมงานที่ยังใช้งานอยู่)');
       const kind = a.p_kind, ctx = a.p_ctx || '', target = a.p_target;
-      if (kind !== 'task') return E('ชนิดรายการที่แนบไม่ถูกต้อง');
-      if (!(ctx === 'brief' || /^submit:[0-9]{1,3}$/.test(ctx))) return E('ใบงานแนบได้เฉพาะตอนสั่ง (brief) หรือตอนส่งงาน (submit:N)');
-      if (!attachOk(me, find(target), ctx)) return E('แนบโฟลเดอร์ไม่ได้ — ไม่มีสิทธิ์กับรายการนี้ หรือรายการถูกลบ/ยกเลิกไปแล้ว');
+      if (kind !== 'task' && kind !== 'request' && kind !== 'board') return E('ชนิดรายการที่แนบไม่ถูกต้อง');
+      if (kind === 'task' && !(ctx === 'brief' || /^submit:[0-9]{1,3}$/.test(ctx))) return E('ใบงานแนบได้เฉพาะตอนสั่ง (brief) หรือตอนส่งงาน (submit:N)');
+      if (kind !== 'task' && ctx !== '') return E('ชนิดนี้ไม่มี ctx');
+      if (!attachOk(me, targetRow(kind, target), ctx, kind)) return E('แนบโฟลเดอร์ไม่ได้ — ไม่มีสิทธิ์กับรายการนี้ หรือรายการถูกลบ/ยกเลิกไปแล้ว');
       const clean = cleanPath(a.p_path);
       if (!clean) return E('ชื่อโฟลเดอร์ไม่ถูกต้อง');
       const exists = WORK.lib.some(f => libAlive(f) && folderUnder(f.folder_path, clean)) || WORK.markers.some(m => !m.deleted && folderUnder(m.path, clean));
@@ -358,7 +373,7 @@ const WORK = { tasks: [], events: [], reqs: [], files: new Map(), uploads: [], s
       if (!role(me)) return E('ไม่มีสิทธิ์ใช้งาน');
       const x = WORK.fatt.find(r => r.id === a.p_id);
       if (!x) return E('ไม่พบลิงก์โฟลเดอร์นี้ (อาจถูกถอดไปแล้ว)');
-      if (x.attached_by !== me && !attachOk(me, find(x.target_id), x.ctx)) return E('ถอดลิงก์โฟลเดอร์ไม่ได้ — ถอดได้เฉพาะคนที่แนบ หรือผู้ที่แก้รายการนั้นได้');
+      if (x.attached_by !== me && !attachOk(me, targetRow(x.target_kind, x.target_id), x.ctx, x.target_kind)) return E('ถอดลิงก์โฟลเดอร์ไม่ได้ — ถอดได้เฉพาะคนที่แนบ หรือผู้ที่แก้รายการนั้นได้');
       WORK.fatt = WORK.fatt.filter(r => r.id !== a.p_id);
       return OK();
     },
@@ -369,8 +384,8 @@ const WORK = { tasks: [], events: [], reqs: [], files: new Map(), uploads: [], s
       if (ids.length > 100) return E('ขอรายการโฟลเดอร์ได้ไม่เกิน 100 ลิงก์ต่อครั้ง');
       const out = [];
       ids.forEach(id => {
-        const x = WORK.fatt.find(r => r.id === id), t = x && find(x.target_id);
-        if (!x || !t || !taskVisible(me, t)) return;
+        const x = WORK.fatt.find(r => r.id === id);
+        if (!x || !targetVisible(me, x)) return;
         const hits = WORK.lib.filter(f => libAlive(f) && folderUnder(f.folder_path, x.folder_path)).sort((p, q) => String(p.folder_path).toLowerCase().localeCompare(String(q.folder_path).toLowerCase()) || p.file_name.localeCompare(q.file_name));
         hits.slice(0, 300).forEach(f => out.push({ r_att: x.id, r_id: f.id, r_name: f.file_name, r_category: f.category, r_size: f.size_bytes, r_folder: f.folder_path, r_permanent: !!f.is_permanent, r_expires: f.expires_at, r_total: hits.length }));
       });
@@ -420,7 +435,12 @@ const WORK = { tasks: [], events: [], reqs: [], files: new Map(), uploads: [], s
   const create = window.supabase.createClient;
   window.supabase.createClient = (u, k, o) => {
     const c = create(u, k, o), from = c.from, rpc = c.rpc, ch0 = c.channel;
-    c.from = t => (t === 'work_tasks' || t === 'work_task_events' || t === 'work_requests' || t === 'transfer_attachments' || t === 'transfer_files' || t === 'transfer_folder_attachments' || t === 'transfer_folders') ? builder(c, t) : from(t);
+    const boardFrom = t => {
+      const q = from(t), ins = q.insert;
+      q.insert = function (p) { const r0 = ins.call(q, p); const row = Object.assign({ id: 'bm' + (++WORK.seq), created_at: nowIso(), updated_at: nowIso(), pinned: false, target_admin_id: null }, p); FAKE.board_messages.push(row); q._rows = [row]; return r0; };
+      return q;
+    };
+    c.from = t => t === 'board_messages' ? boardFrom(t) : (t === 'work_tasks' || t === 'work_task_events' || t === 'work_requests' || t === 'transfer_attachments' || t === 'transfer_files' || t === 'transfer_folder_attachments' || t === 'transfer_folders') ? builder(c, t) : from(t);
     c.rpc = async (fn, args) => {
       if (!RPC[fn]) return rpc(fn, args);
       const me = c.session && c.session.user.id;
