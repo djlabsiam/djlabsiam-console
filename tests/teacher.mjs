@@ -10,6 +10,8 @@
  *  2. ทำงาน: สอนแล้ว · ยกเลิก/ไม่มา · บันทึกการสอน · นัดรอบ · ขอขยายอายุ
  *  3. ตารางสอน · Realtime · ออกจากระบบ · สลับบัญชีกลางโหลด · ครูที่เป็นพนักงาน · XSS
  *  4. iPhone (390px)
+ *  5. เพิ่มนักเรียนเอง · ผูกนัดปฏิทิน (060)
+ *  6. เพิ่มนักเรียนย้อนหลัง (062): สวิตช์ · วันที่เรียน · ส่งลงเรียน→ลงรอบ · ล้มกลางทางแล้วทำต่อ · ครูที่เป็นพนักงานโดนฐานปฏิเสธ
  */
 
 import { dirname, join } from 'node:path';
@@ -366,8 +368,8 @@ async function runTests() {
   aact('add-pick', '[data-i="0"]'); await settle(200);
   ok('เลือกแล้ว: ขึ้นฟอร์มคอร์ส · ตัวเลือกคอร์สมีเฉพาะที่ Maniac สอน (Basic DJ — ไม่มี Advance Scratch/คอร์สที่ปิด)', !!$('a_course')
     && [...$('a_course').options].map(o => o.textContent).join('|') === '— เลือกคอร์ส —|Basic DJ Class', [...$('a_course').options].map(o => o.textContent).join('|'));
-  ok('ปุ่มลงเรียนปิดอยู่จนกว่าจะเลือกคอร์ส · ไม่มีช่องกรอกราคา/ชำระ/ย้อนหลัง/วันเริ่ม', $('app').querySelector('[data-act="add-submit"]').disabled === true
-    && [...$('addStu').querySelectorAll('input, textarea')].map(e => e.id).join() === 'a_phone' && !/ย้อนหลัง/.test($('addStu').textContent));
+  ok('ปุ่มลงเรียนปิดอยู่จนกว่าจะเลือกคอร์ส · มีแค่สวิตช์ "ย้อนหลัง" (ปิดอยู่) — ไม่มีช่องกรอกราคา/ชำระ/วันเริ่มจนกว่าจะเปิดสวิตช์', $('app').querySelector('[data-act="add-submit"]').disabled === true
+    && [...$('addStu').querySelectorAll('input, textarea')].map(e => e.id).join() === 'a_phone,a_back' && $('a_back').checked === false && !$('backForm') && !$('a_started') && !$('a_paid'));
   $('a_course').value = 'basic-dj-class'; $('a_course').dispatchEvent(new Event('change', { bubbles: true })); await settle(150);
   ok('เลือกคอร์ส: เห็นราคาตั้ง 20,000 บาท อ่านอย่างเดียว · จำนวนครั้ง/อายุ · ข้อความแดงตัวหนา "ต้องรอเจ้าของ/ผู้ดูแลบันทึกชำระ"',
     /20,000 บาท/.test($('coursePrice').textContent) && /แก้ไม่ได้/.test($('coursePrice').textContent) && isRed($('payNote')) && /บันทึกชำระ/.test($('payNote').textContent)
@@ -478,6 +480,147 @@ async function runTests() {
 async function shot(name) { await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))); await sleep(150); await new Promise(r => { window.__shot = r; console.log('[SHOT] ' + name); }); }
 </script>`;
 
+const T6 = `<script>
+window.addEventListener('load', () => setTimeout(runTests, 300));
+${COMMON}
+const aact = (a, extra) => { const b = $('app').querySelector('[data-act="' + a + '"]' + (extra || '')); if (!b) throw new Error('ไม่พบปุ่ม ' + a + (extra || '')); b.click(); };
+const typePhone = v => { const e = $('a_phone'); e.value = v; e.dispatchEvent(new Event('input', { bubbles: true })); };
+const setCourse = v => { $('a_course').value = v; $('a_course').dispatchEvent(new Event('change', { bubbles: true })); };
+const tick = id => { const e = $(id); e.checked = !e.checked; e.dispatchEvent(new Event('input', { bubbles: true })); e.dispatchEvent(new Event('change', { bubbles: true })); };
+const setDate = (i, v) => { const e = $('app').querySelector('[data-ad="' + i + '"]'); e.value = v; e.dispatchEvent(new Event('input', { bubbles: true })); e.dispatchEvent(new Event('change', { bubbles: true })); };
+const setStarted = v => { const e = $('a_started'); e.value = v; e.dispatchEvent(new Event('input', { bubbles: true })); e.dispatchEvent(new Event('change', { bubbles: true })); };
+const addDate = () => aact('add-adddate');
+const enrolls = () => rpcCalls('teach_enroll_create'), backs = () => rpcCalls('teach_session_backfill');
+const errT = () => ($('addErr') || {}).textContent || '';
+async function openForm(phone, cid) {
+  $('addOpen').click(); await settle(300);
+  typePhone(phone); aact('add-find'); await settle(400);
+  aact('add-pick', '[data-i="0"]'); await settle(200);
+  setCourse('basic-dj-class'); await settle(150);
+}
+async function runTests() {
+  L('=== หน้าครู (6\/6): เพิ่มนักเรียนย้อนหลัง (062) ===');
+  seedManiac();
+  FAKE.customers.find(c => c.id === 'c2').phone = '0877772222';
+  FAKE.customers.find(c => c.id === 'c4').phone = '0899991111';
+  FAKE.customers.find(c => c.id === 'c5').phone = '0866665555';
+  await sleep(300);
+  await signIn('maniac');
+
+  \/\/ ── 1. สวิตช์ + ฟอร์มย้อนหลัง ──
+  await openForm('0877772222');
+  ok('มีสวิตช์ "นักเรียนเรียนไปแล้ว (กรอกย้อนหลัง)" ปิดอยู่ · สูง ≥ 44px · ยังไม่มีช่องวันเริ่ม\/ชำระ\/วันที่เรียน · ข้อความเดิม "รอเจ้าของ\/ผู้ดูแลบันทึกชำระก่อน"',
+    !!$('a_back') && $('a_back').checked === false && $('a_back').closest('label').getBoundingClientRect().height >= 43.5 && !$('backForm') && \/รอเจ้าของ\\/ผู้ดูแลบันทึกชำระก่อน จึงนัดรอบเรียนได้\/.test($('payNote').textContent));
+  ok('คำอธิบายใต้สวิตช์: ลงให้ตัวเองเท่านั้น · ไม่ต้องกรอกราคา · ครูที่เป็นพนักงานลงย้อนหลังที่หน้านี้ไม่ได้', \/ลงให้ตัวเองเป็นครูเท่านั้น\/.test($('addForm').textContent) && \/ไม่ต้องกรอกราคา\/.test($('addForm').textContent) && \/ครูที่เป็นพนักงานด้วยลงย้อนหลังที่หน้านี้ไม่ได้\/.test($('addForm').textContent));
+  tick('a_back'); await settle(100);
+  ok('เปิดสวิตช์: ขึ้นวันเริ่มเรียน (max = วันนี้) · ติ๊กชำระครบ · วันที่เรียนไปแล้ว 0 ครั้ง · ปุ่ม "+ เพิ่มวันที่เรียน" · ปุ่มส่งเป็น "ลงเรียนย้อนหลัง"',
+    !!$('backForm') && $('a_started').max === TODAY && $('a_paid').checked === false && \/0\\/6 ครั้ง\/.test($('datesN').textContent) && !!$('app').querySelector('[data-act="add-adddate"]')
+    && \/ลงเรียนย้อนหลัง\/.test($('app').querySelector('[data-act="add-submit"]').textContent), $('addForm').textContent.slice(0, 200));
+  ok('ไม่มีช่องกรอกราคา\/ยอดชำระ\/สลิปเลย (ราคาที่ตกลงว่างไว้ให้เจ้าของ\/ผู้ดูแล)', ![...$('addStu').querySelectorAll('input')].some(e => \/price|amount|slip|baht|ราคา|ยอด\/i.test(e.id + ' ' + (e.getAttribute('aria-label') || '') + ' ' + (e.placeholder || ''))) && !\/สลิป\/.test($('addStu').textContent));
+  ok('ยังไม่ติ๊กชำระ: ข้อความแดงตัวหนา "สถานะจะเป็นรอชำระ… ยังนัดรอบเรียนได้"', isRed($('payNote')) && \/รอชำระ\/.test($('payNote').textContent) && \/ยังนัดรอบเรียนได้\/.test($('payNote').textContent));
+  tick('a_paid'); await settle(100);
+  ok('ติ๊กชำระครบ: ข้อความเปลี่ยนเป็น "ไม่ต้องรอบันทึกชำระ" (ไม่แดง)', !isRed($('payNote')) && \/ไม่ต้องรอบันทึกชำระ\/.test($('payNote').textContent) && $('a_paid').checked === true);
+  tick('a_paid'); await settle(100);
+  ok('ติ๊กออก: กลับเป็นข้อความแดงอีกครั้ง', isRed($('payNote')) && $('a_paid').checked === false);
+  await shot('t6-back-form');
+
+  \/\/ ── 2. วันที่เรียนไปแล้ว: เพิ่ม\/เอาออก\/เพดาน ──
+  addDate(); await settle(60);
+  ok('เพิ่มวันที่: ช่องวันที่ 1 ช่อง (max = วันนี้) · ปุ่ม "เอาออก" สูง ≥ 44px', $('app').querySelectorAll('[data-ad]').length === 1 && $('app').querySelector('[data-ad="0"]').max === TODAY
+    && $('app').querySelector('[data-act="add-deldate"]').getBoundingClientRect().height >= 43.5);
+  const nE0 = enrolls().length;
+  aact('add-submit'); await settle(100);
+  ok('วันที่ว่างอยู่: ไม่ส่งฐาน · แดงตัวหนา "ใส่วันที่เรียนให้ครบทุกช่อง"', enrolls().length === nE0 && isRed($('addErr')) && \/ใส่วันที่เรียนให้ครบทุกช่อง\/.test(errT()), errT());
+  setDate(0, day(2));
+  aact('add-submit'); await settle(100);
+  ok('วันที่เรียนในอนาคต (ใส่ผ่านโค้ด ข้ามขีดจำกัดของช่อง): ไม่ส่งฐาน · "ต้องไม่เกินวันนี้"', enrolls().length === nE0 && \/วันที่เรียนต้องไม่เกินวันนี้\/.test(errT()), errT());
+  setDate(0, day(-10));
+  setStarted(day(3));
+  aact('add-submit'); await settle(100);
+  ok('วันเริ่มเรียนในอนาคต: ไม่ส่งฐาน · "วันเริ่มเรียนต้องไม่เกินวันนี้"', enrolls().length === nE0 && \/วันเริ่มเรียนต้องไม่เกินวันนี้\/.test(errT()), errT());
+  setStarted('');
+  for (let i = 1; i < 6; i++) { addDate(); await settle(30); setDate(i, day(-10 - i)); }
+  ok('ครบ 6 ครั้ง (= จำนวนครั้งของคอร์ส): ปุ่ม "+ เพิ่มวันที่เรียน" หายไป', $('app').querySelectorAll('[data-ad]').length === 6 && !$('app').querySelector('[data-act="add-adddate"]') && \/6\\/6 ครั้ง\/.test($('datesN').textContent));
+  aact('add-deldate', '[data-i="5"]'); await settle(60);
+  ok('เอาออก: เหลือ 5 ช่อง · ปุ่มเพิ่มกลับมา · ค่าที่กรอกไว้ของช่องอื่นไม่หาย', $('app').querySelectorAll('[data-ad]').length === 5 && !!$('app').querySelector('[data-act="add-adddate"]')
+    && $('app').querySelector('[data-ad="0"]').value === day(-10) && $('app').querySelector('[data-ad="3"]').value === day(-13));
+
+  \/\/ ── 3. ส่งสำเร็จ: ลงเรียน (backfill) → ลงรอบ ──
+  \/\/ (จัดสถานะให้ชัด: เอาออกทั้งหมดแล้วใส่ 2 วัน)
+  // เกินจำนวนครั้งของคอร์ส (ปุ่มเพิ่มหยุดที่ 6 อยู่แล้ว — ดันค่าเข้า state ตรง ๆ เพื่อตรวจด่านตอนส่ง)
+  st.add.dates.push(day(-3), day(-4)); render(); await settle(60);
+  const nE9 = enrolls().length;
+  aact('add-submit'); await settle(100);
+  ok('วันที่เรียน 7 ครั้งเกินจำนวนครั้งของคอร์ส (6): ไม่ส่งฐาน · แดงตัวหนา "เกินจำนวนครั้งของคอร์ส (6 ครั้ง)"', enrolls().length === nE9 && isRed($('addErr')) && /เกินจำนวนครั้งของคอร์ส \\(6 ครั้ง\\)/.test(errT()), errT());
+  st.add.dates.splice(5, 2); render(); await settle(60);
+  while ($('app').querySelector('[data-act="add-deldate"]')) { aact('add-deldate', '[data-i="0"]'); await settle(20); }
+  addDate(); addDate(); await settle(60);
+  setDate(0, day(-20)); setDate(1, day(-10));
+  setStarted(day(-30));
+  if (!$('a_paid').checked) tick('a_paid');
+  await settle(100);
+  const nB0 = backs().length;
+  aact('add-submit'); await settle(800);
+  const ce = enrolls()[enrolls().length - 1].args, cb = backs()[backs().length - 1];
+  ok('ส่ง: teach_enroll_create ครั้งเดียว · ตัวเอง(t3) · source backfill · th · ราคาที่ตกลงว่าง (null) · วันเริ่ม · ชำระครบไม่ทราบวันที่ · ไม่มีราคาตั้งเอง',
+    enrolls().length === nE0 + 1 && ce.p_teacher === 't3' && ce.p_source === 'backfill' && ce.p_teach_lang === 'th' && ce.p_price_agreed === null && ce.p_started_on === day(-30)
+    && ce.p_paid_unknown === true && ce.p_list_price === null && ce.p_customer === 'c2' && ce.p_course === 'basic-dj-class', J(ce));
+  ok('แล้ว teach_session_backfill ครั้งเดียว · ใบที่เพิ่งสร้าง · วันที่ตามที่กรอก · ไม่ระบุครู\/ชั่วโมง (ใช้ตัวเอง\/ค่าตั้งต้น)',
+    backs().length === nB0 + 1 && cb.args.p_enrollment === TEACH.created[TEACH.created.length - 1].id && J(cb.args.p_dates) === J([day(-20), day(-10)]) && cb.args.p_teacher === null && cb.args.p_hours === null, J(cb.args));
+  ok('ลำดับ: ลงเรียนก่อนแล้วจึงลงรอบ', CALLS.indexOf(enrolls()[enrolls().length - 1]) < CALLS.indexOf(cb));
+  ok('สำเร็จ: กลับหน้ารายชื่อ · แถบเขียวบอกลงเรียนย้อนหลัง + ลงรอบ 2 ครั้ง · (ติ๊กชำระแล้ว) ไม่ขึ้นเตือนรอชำระ',
+    !$('addStu') && \/ลงเรียนย้อนหลังให้ มานี มีนา\/.test(($('flash') || {}).textContent) && \/ลงรอบที่เรียนไปแล้ว 2 ครั้ง\/.test($('flash').textContent) && !\/ยังไม่ได้ติ๊กชำระครบ\/.test($('flash').textContent), ($('flash') || {}).textContent);
+  const made = TEACH.rows.find(r => r.id === TEACH.created[TEACH.created.length - 1].id);
+  ok('ผลในฐานปลอม: ใบ source backfill · ครู Maniac · ชำระครบ (paid_unknown) · เริ่มเรียนแล้ว (active) · นับ 2 ครั้ง', !!made && made.source === 'backfill' && made.teacher_id === 't3' && made.paid_unknown === true && made.sessions_used === 2 && made.state === 'active', J(made));
+
+  \/\/ ── 4. ไม่ติ๊กอะไร \/ ไม่ใส่วันที่: ไม่เรียกลงรอบ ──
+  await openForm('0899991111');
+  tick('a_back'); await settle(100);
+  const nE1 = enrolls().length, nB1 = backs().length;
+  aact('add-submit'); await settle(700);
+  const c2 = enrolls()[enrolls().length - 1].args;
+  ok('ย้อนหลังแบบไม่ใส่อะไรเลย: ส่งลงเรียน backfill (ไม่มีวันเริ่ม · ไม่ชำระครบ · ราคาว่าง) · ไม่เรียก teach_session_backfill',
+    enrolls().length === nE1 + 1 && backs().length === nB1 && c2.p_source === 'backfill' && c2.p_started_on === null && c2.p_paid_unknown === false && c2.p_price_agreed === null, J(c2));
+  ok('แถบเขียวเตือนว่ายังไม่ได้ติ๊กชำระครบ · รอเจ้าของ\/ผู้ดูแลบันทึก', \/ยังไม่ได้ติ๊กชำระครบ\/.test(($('flash') || {}).textContent || '') && !\/ลงรอบที่เรียนไปแล้ว\/.test($('flash').textContent), ($('flash') || {}).textContent);
+
+  \/\/ ── 5. ลงเรียนสำเร็จแต่ลงรอบล้ม → กดซ้ำทำต่อเฉพาะขั้นที่ค้าง (ไม่สร้างใบซ้ำ) ──
+  await openForm('0866665555');
+  tick('a_back'); await settle(100); tick('a_paid'); await settle(50);
+  addDate(); await settle(40); setDate(0, day(-8));
+  TEACH.fail.rpc_teach_session_backfill = 'จำนวนครั้งที่เรียนรวมเกินจำนวนครั้งของคอร์ส (6 ครั้ง)';
+  const nE2 = enrolls().length, nB2 = backs().length;
+  aact('add-submit'); await settle(700);
+  ok('ลงรอบล้ม: ลงเรียนไปแล้ว 1 ใบ · ข้อความแดง "ลงเรียนแล้ว แต่ลงรอบย้อนหลังไม่สำเร็จ" + ข้อความไทยของฐาน · ฟอร์มยังอยู่',
+    enrolls().length === nE2 + 1 && backs().length === nB2 + 1 && isRed($('addErr')) && \/ลงเรียนแล้ว แต่ลงรอบย้อนหลังไม่สำเร็จ\/.test(errT()) && \/เกินจำนวนครั้งของคอร์ส\/.test(errT()) && !!$('addForm'), errT());
+  ok('หลังสร้างใบแล้ว: ล็อกคอร์ส\/สวิตช์\/วันเริ่ม\/ชำระ (กันเปลี่ยนค่าที่ส่งไปแล้ว) · ปุ่มเป็น "ลงรอบย้อนหลังที่ค้างอีกครั้ง"',
+    $('a_course').disabled && $('a_back').disabled && $('a_started').disabled && $('a_paid').disabled && \/ลงรอบย้อนหลังที่ค้างอีกครั้ง\/.test($('app').querySelector('[data-act="add-submit"]').textContent));
+  TEACH.fail = {};
+  aact('add-submit'); await settle(700);
+  ok('กดซ้ำ: ไม่สร้างใบซ้ำ (teach_enroll_create ยังเท่าเดิม) · ลงรอบอีก 1 ครั้งเรียกด้วยใบเดิม · สำเร็จ',
+    enrolls().length === nE2 + 1 && backs().length === nB2 + 2 && backs()[backs().length - 1].args.p_enrollment === backs()[backs().length - 2].args.p_enrollment && !$('addStu') && \/ลงเรียนย้อนหลังให้\/.test(($('flash') || {}).textContent || ''));
+
+  \/\/ ── 6. ฐานปฏิเสธ (ครูที่เป็นพนักงาน = ใช้กติกาพนักงาน) ──
+  await signOut();
+  await signIn('nutty');
+  await openForm('0877772222');
+  tick('a_back'); await settle(80);
+  const nE3 = enrolls().length;
+  aact('add-submit'); await settle(600);
+  ok('ครูที่เป็นพนักงาน: ฐานปฏิเสธ · ข้อความไทยของฐานแสดงตามจริง · ไม่มีใบเกิด · ไม่ลงรอบ · ฟอร์มยังอยู่',
+    enrolls().length === nE3 + 1 && \/ลงเรียนไม่สำเร็จ: กรอกย้อนหลังได้เฉพาะเจ้าของ ผู้ดูแล\/.test(errT()) && !TEACH.created.some(x => x.args.p_teacher === 't2' && x.args.p_source === 'backfill') && !!$('addForm') && backs().length === nB2 + 2, errT());
+  await signOut();
+
+  \/\/ ── 7. ไม่ดึง\/ไม่วาดของที่ไม่ใช่ของครู ──
+  ok('ตลอดการใช้งาน: เขียนผ่านฟังก์ชันเท่านั้น (ลงเรียน\/ลงรอบย้อนหลัง) · ไม่แตะตารางตรง ๆ · ไม่ดึงเงิน\/ลูกค้า\/สมาชิก',
+    !CALLS.some(c => c.op === 'insert' || c.op === 'update' || c.op === 'delete' || c.op === 'upsert')
+    && [...new Set(CALLS.filter(c => c.op === 'rpc').map(c => c.fn))].every(f => \/^(my_teacher_id|teach_my_students|teach_student_find|teach_enroll_create|teach_session_backfill)$\/.test(f))
+    && !CALLS.some(c => \/^(enrollment_money|enrollment_payments|customers|members)$\/.test(c.table || '')));
+  ok('ออกจากระบบ: ฟอร์ม\/วันที่\/สวิตช์ ไม่ค้างใน DOM', !!$('loginForm') && !$('addStu') && !$('backForm') && !$('a_back'));
+  L('RESULT:' + (fail ? 'FAIL' : 'PASS') + ' pass=' + pass + ' fail=' + fail);
+}
+async function shot(name) { await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))); await sleep(150); await new Promise(r => { window.__shot = r; console.log('[SHOT] ' + name); }); }
+<\/script>`;
+
 const mock = MOCK3 + '\n' + TEACH_MOCK;
 let allOk = true;
 for (const [label, tests, opts] of [
@@ -486,6 +629,7 @@ for (const [label, tests, opts] of [
   ['3 ตารางสอน · realtime · สลับบัญชี · XSS', T3, { width: 1100, height: 900, coarse: false }],
   ['4 iPhone 390×844', T4, { width: 390, height: 844, coarse: true }],
   ['5 เพิ่มนักเรียนเอง · ผูกนัดปฏิทิน (060)', T5, { width: 1100, height: 900, coarse: false }],
+  ['6 เพิ่มนักเรียนย้อนหลัง (062)', T6, { width: 1100, height: 900, coarse: false }],
 ]) {
   if (ONLY && !ONLY.test(label)) continue;
   console.log('\n--- ' + label + ' ---');

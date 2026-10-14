@@ -227,7 +227,7 @@ const TEACH = { rows: [], profiles: [], sessions: [], ext: [], subs: [], status:
       if (!role && !tid) return E('ต้องเข้าสู่ระบบด้วยบัญชีทีมงานหรืออาจารย์ที่ยังใช้งานอยู่');
       const lang = a.p_teach_lang || 'th', source = a.p_source || 'console';
       if (['console', 'backfill'].indexOf(source) < 0) return E('แหล่งที่มาของการลงเรียนไม่ถูกต้อง');
-      if (source === 'backfill' && !priv) return E('กรอกย้อนหลังได้เฉพาะเจ้าของหรือผู้ดูแล');
+      if (source === 'backfill' && !priv && !tonly) return E('กรอกย้อนหลังได้เฉพาะเจ้าของ ผู้ดูแล หรืออาจารย์ (ลงให้นักเรียนของตัวเอง)');      // 062: ครูล้วนผ่านได้ (ลงให้ตัวเองเท่านั้น — เช็กบรรทัดถัดไป)
       if (tonly && a.p_teacher !== tid) return E('อาจารย์ลงเรียนได้เฉพาะให้ตัวเองเป็นครู');
       const cust = FAKE.customers.find(c => c.id === a.p_customer);
       if (!cust) return E('ไม่พบนักเรียน (ลูกค้า) คนนี้');
@@ -242,7 +242,7 @@ const TEACH = { rows: [], profiles: [], sessions: [], ext: [], subs: [], status:
         list = a.p_list_price;
       } else if (a.p_list_price != null) return E('ตั้งราคาตั้งเองได้เฉพาะคอร์สภาษาอังกฤษ');
       let agreed = a.p_price_agreed;
-      if (tonly) agreed = list;
+      if (tonly) agreed = source === 'backfill' ? null : list;                    // 062: ครูล้วนย้อนหลัง = ไม่มีราคาที่ตกลง · console = ราคาตั้ง
       else if (!priv && agreed != null && agreed !== list) return E('ราคาแก้ได้เฉพาะเจ้าของหรือผู้ดูแล');
       if (agreed == null && source !== 'backfill') return E('ต้องระบุราคาที่ตกลง');
       if (agreed != null && agreed < 0) return E('ราคาที่ตกลงต้องไม่ติดลบ');
@@ -259,9 +259,12 @@ const TEACH = { rows: [], profiles: [], sessions: [], ext: [], subs: [], status:
       return OK(id);
     },
     teach_session_backfill(me, a) {
-      if (!isMgr(roleOf(me))) return E('ลงรอบย้อนหลังได้เฉพาะเจ้าของหรือผู้ดูแล');
+      // 062: เจ้าของ/ผู้ดูแล = เดิม · ครูล้วน = เฉพาะใบ backfill ที่ teacher_id = ตัวเอง (ใบของคนอื่น = "ไม่พบ" เหมือนไม่มีจริง) · พนักงาน = ปฏิเสธ
+      const role = roleOf(me), tid = myTid(me), tonly = !role && !!tid;
+      if (!isMgr(role) && !tonly) return E('ลงรอบย้อนหลังได้เฉพาะเจ้าของ ผู้ดูแล หรืออาจารย์ของนักเรียนคนนั้น');
       const e = TEACH.rows.find(r => r.id === a.p_enrollment);
-      if (!e) return E('ไม่พบการลงเรียนนี้');
+      if (!e || (tonly && e.teacher_id !== tid)) return E('ไม่พบการลงเรียนนี้');
+      if (tonly && a.p_teacher && a.p_teacher !== tid) return E('อาจารย์ลงรอบย้อนหลังได้เฉพาะให้ตัวเองเป็นครู');
       if (e.source !== 'backfill') return E('ลงรอบย้อนหลังได้เฉพาะการลงเรียนที่กรอกย้อนหลัง');
       const ds = a.p_dates || [];
       if (!ds.length) return E('ต้องใส่วันที่เรียนอย่างน้อย 1 วัน');

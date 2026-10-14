@@ -43,6 +43,8 @@
   .lbl { display: block; font-weight: 600; margin-bottom: 4px; font-size: 14px; }
   .input { width: 100%; min-height: 44px; padding: 8px 10px; border: 1px solid var(--line-strong); background: var(--surface); font-size: 16px; border-radius: 0; }
   textarea.input { min-height: 96px; }
+  .chk { display: flex; align-items: center; gap: 10px; min-height: 44px; font-weight: 600; font-size: 16px; }
+  .chk input { width: 22px; height: 22px; flex: none; }
   .hint { font-size: 14px; color: var(--text2); margin-top: 4px; }
   .wk-red { color: var(--red); font-weight: 700; }
   .alert { padding: 10px 14px; border: 1px solid var(--line-strong); background: var(--surface); margin-bottom: 14px; font-size: 14px; overflow-wrap: anywhere; }
@@ -109,10 +111,13 @@
 //     ไม่มี ปิดคอร์ส/ขยายอายุเอง/แก้ราคา/แก้ข้อมูลการลงเรียน — ขอขยายอายุได้ทางคำขอ (เจ้าของตัดสิน) เท่านั้น
 //   เพิ่ม 14 ต.ค. 69 (เจ้าของสั่ง · migration 060 + gcal): ครูค้นนักเรียนด้วยเบอร์เต็ม → ลงเรียนให้ตัวเอง (ราคา = ราคาตั้งของคอร์ส อ่านอย่างเดียว ฐานบังคับ) ·
 //     นัดรอบได้เมื่อเจ้าของ/ผู้ดูแลบันทึกชำระครบแล้ว (ฐานบล็อก — ข้อความไทยจากฐาน) · ผูก/ถอดนัดปฏิทิน Google ของรอบตัวเอง (gcal คืนเฉพาะนัดที่ชื่อครูตรงตัวเอง)
-//     ไม่มี: ช่องราคา/ชำระ/ย้อนหลัง/สร้างลูกค้าใหม่ — ถ้าไม่พบนักเรียนให้ทีมงานสร้างลูกค้าก่อน
+//     ไม่มี: ช่องราคา/บันทึกชำระ/สร้างลูกค้าใหม่ — ถ้าไม่พบนักเรียนให้ทีมงานสร้างลูกค้าก่อน
+//   เพิ่ม 14 ต.ค. 69 (เจ้าของสั่ง "ให้ครูเพิ่ม ลงเรียน/ย้อนหลัง ได้" · migration 062): สวิตช์ "นักเรียนเรียนไปแล้ว" ในฟอร์มเพิ่มนักเรียน —
+//     วันเริ่มเรียน · ติ๊กชำระครบ (ไม่ทราบวันที่) · วันที่เรียนไปแล้ว (ไม่เกินวันนี้ · ไม่เกินจำนวนครั้งของคอร์ส) · ลงให้ตัวเองเป็นครูเท่านั้น ·
+//     ไม่มีช่องราคา (ครูไม่รู้ราคาจริงของนักเรียนเก่า → ราคาที่ตกลงว่างไว้ ให้เจ้าของ/ผู้ดูแลกรอกภายหลัง) · พนักงานที่เป็นครู (Tibass/Nutty/Zlex) ฐานยังปฏิเสธ — ใช้คอนโซลผ่านผู้ดูแล
 //   อ่านผ่าน: rpc my_teacher_id · rpc teach_my_students · class_sessions · session_notes · enrollment_extension_requests · teachers (ชื่อตัวเอง)
 //     + (เฉพาะตอนเปิดฟอร์มเพิ่มนักเรียน) courses · course_teachers + rpc teach_student_find + Edge Function gcal (เฉพาะตอนผูกนัด)
-//   เขียนผ่าน: teach_session_done · teach_session_cancel · teach_session_schedule · teach_note_save · teach_extend_request · teach_enroll_create · teach_gcal_link · teach_gcal_unlink
+//   เขียนผ่าน: teach_session_done · teach_session_cancel · teach_session_schedule · teach_note_save · teach_extend_request · teach_enroll_create · teach_session_backfill (062) · teach_gcal_link · teach_gcal_unlink
 // ⚠️ ข้อความจากผู้ใช้/ฐาน (ชื่อ · ชื่อเล่น · LINE · IG · ผู้ปกครอง · เหตุผล · บันทึกการสอน) = escapeHtml เสมอ · ห้าม console.log ข้อมูลนักเรียน
 // ⚠️ ออกจากระบบ/สลับบัญชี → reset() ล้างข้อมูลทั้งหมด · ผลโหลดที่มาช้าถูกทิ้ง (uid + tok)
 // ⚠️ ตัวแปรฐานข้อมูลชื่อ db เท่านั้น (ห้ามชื่อ supabase)
@@ -372,7 +377,7 @@ function scheduleHtml() {
 
 // ── เพิ่มนักเรียน (ครูลงเรียนให้ตัวเอง · 060) ──
 // พิมพ์เบอร์เต็ม → ฐานคืนชื่อ + เบอร์ 4 ตัวท้าย → เลือกคอร์สที่ตัวเองสอน → ราคาตั้งอ่านอย่างเดียว (ฐานบังคับราคา = ราคาตั้งเอง ค่าที่ส่งไปถูกข้าม)
-function addBlank() { return { phone: '', res: null, pick: null, course: '', courses: null, coursesErr: '', busy: '', err: '' }; }
+function addBlank() { return { phone: '', res: null, pick: null, course: '', courses: null, coursesErr: '', busy: '', err: '', back: false, started: '', paid: false, dates: [], createdId: '' }; }
 const baht = v => Number(v).toLocaleString('th-TH', { maximumFractionDigits: 2 });
 async function loadCourses() {
   const a = st.add, uid = st.uid;
@@ -407,13 +412,30 @@ function addHtml() {
     else if (a.courses === null) h += '<div class="empty">กำลังโหลดคอร์สที่คุณสอน…</div>';
     else if (!a.courses.length) h += '<div class="alert alert-warn" id="noCourse">ยังไม่มีคอร์สที่เปิดให้คุณสอน — แจ้งเจ้าของร้าน</div>';
     else {
-      h += '<div class="field"><label class="lbl" for="a_course">คอร์ส</label><select id="a_course" class="input" data-a="course"><option value="">— เลือกคอร์ส —</option>' +
+      h += '<div class="field"><label class="lbl" for="a_course">คอร์ส</label><select id="a_course" class="input" data-a="course"' + (busy || a.createdId ? ' disabled' : '') + '><option value="">— เลือกคอร์ส —</option>' +
         a.courses.map(c => '<option value="' + esc(c.id) + '"' + (c.id === a.course ? ' selected' : '') + '>' + esc(c.title) + '</option>').join('') + '</select></div>';
       const c = a.courses.find(x => x.id === a.course);
       if (c) h += '<dl class="dl" id="coursePrice"><dt>ราคาคอร์ส</dt><dd><strong>' + baht(c.list_price) + ' บาท</strong> <span class="sub">(ราคาตั้ง แก้ไม่ได้)</span></dd>' +
         '<dt>จำนวนครั้ง</dt><dd>' + Number(c.sessions_total) + ' ครั้ง</dd><dt>อายุคอร์ส</dt><dd>' + Number(c.valid_months) + ' เดือน</dd></dl>';
-      h += '<div class="hint wk-red" id="payNote">ลงเรียนแล้วต้องรอเจ้าของ/ผู้ดูแลบันทึกชำระก่อน จึงนัดรอบเรียนได้</div>' +
-        '<div class="acts"><button class="btn btn-primary" type="button" data-act="add-submit"' + (busy || !c ? ' disabled' : '') + '>' + (a.busy === 'create' ? 'กำลังลงเรียน…' : 'ลงเรียน') + '</button></div>';
+      const lock = busy || !!a.createdId, today = todayBkk();
+      h += '<div class="field"><label class="chk"><input type="checkbox" id="a_back" data-ab="back"' + (a.back ? ' checked' : '') + (lock ? ' disabled' : '') + '> นักเรียนเรียนไปแล้ว (กรอกย้อนหลัง)</label>' +
+        '<div class="hint">ใช้กับนักเรียนเก่าที่เรียนกับคุณมาก่อนระบบนี้ — ลงให้ตัวเองเป็นครูเท่านั้น · ไม่ต้องกรอกราคา (เจ้าของ/ผู้ดูแลกรอกภายหลัง) · บัญชีครูที่เป็นพนักงานด้วยลงย้อนหลังที่หน้านี้ไม่ได้ ให้แจ้งผู้ดูแลลงที่คอนโซล</div></div>';
+      if (a.back) {
+        h += '<div id="backForm"><div class="field"><label class="lbl" for="a_started">วันเริ่มเรียน (ถ้าทราบ)</label><input id="a_started" class="input" type="date" data-a="started" max="' + today + '" value="' + esc(a.started) + '"' + (lock ? ' disabled' : '') + '></div>' +
+          '<div class="field"><label class="chk"><input type="checkbox" id="a_paid" data-ab="paid"' + (a.paid ? ' checked' : '') + (lock ? ' disabled' : '') + '> ชำระครบแล้ว (ไม่ทราบวันที่)</label></div>' +
+          '<div class="field"><span class="lbl">วันที่เรียนไปแล้ว <span id="datesN">(' + a.dates.length + (c ? '/' + Number(c.sessions_total) : '') + ' ครั้ง)</span></span>' +
+          a.dates.map((d, i) => '<div class="bar"><input type="date" class="input grow" data-ad="' + i + '" max="' + today + '" value="' + esc(d) + '" aria-label="วันที่เรียนไปแล้ว ครั้งที่ ' + (i + 1) + '"' + (busy ? ' disabled' : '') + '>' +
+            '<button class="btn btn-sm" type="button" data-act="add-deldate" data-i="' + i + '"' + (busy ? ' disabled' : '') + '>เอาออก</button></div>').join('') +
+          (c && a.dates.length >= Number(c.sessions_total) ? '' : '<div class="acts"><button class="btn btn-sm" type="button" data-act="add-adddate"' + (busy ? ' disabled' : '') + '>+ เพิ่มวันที่เรียน</button></div>') +
+          '<div class="hint">ไม่ทราบวันที่แน่นอนใส่วันโดยประมาณได้ · ไม่ใส่เลยก็ได้ (ลงรอบทีหลังไม่ได้ ต้องให้ผู้ดูแลลง)</div></div></div>';
+        h += a.paid
+          ? '<div class="hint" id="payNote">ติ๊กชำระครบแล้ว — ไม่ต้องรอบันทึกชำระ</div>'
+          : '<div class="hint wk-red" id="payNote">ยังไม่ได้ติ๊กชำระครบ — สถานะจะเป็น "รอชำระ" จนกว่าเจ้าของ/ผู้ดูแลบันทึก (ยังนัดรอบเรียนได้)</div>';
+      } else {
+        h += '<div class="hint wk-red" id="payNote">ลงเรียนแล้วต้องรอเจ้าของ/ผู้ดูแลบันทึกชำระก่อน จึงนัดรอบเรียนได้</div>';
+      }
+      h += '<div class="acts"><button class="btn btn-primary" type="button" data-act="add-submit"' + (busy || !c ? ' disabled' : '') + '>' +
+        (a.busy === 'create' ? 'กำลังลงเรียน…' : a.createdId ? 'ลงรอบย้อนหลังที่ค้างอีกครั้ง' : a.back ? 'ลงเรียนย้อนหลัง' : 'ลงเรียน') + '</button></div>';
     }
     h += '</div>';
   }
@@ -427,6 +449,8 @@ function addAct(act, b) {
   else if (act === 'add-find') addFind();
   else if (act === 'add-pick') { const r = a.res && a.res[Number(b.dataset.i)]; if (r && r.customer_id) { a.pick = r; a.err = ''; render(); } }
   else if (act === 'add-submit') addSubmit();
+  else if (act === 'add-adddate') { a.dates.push(''); render(); }
+  else if (act === 'add-deldate') { a.dates.splice(Number(b.dataset.i), 1); render(); }
 }
 async function addFind() {
   const a = st.add, uid = st.uid, raw = String(a.phone || '').trim();
@@ -448,19 +472,43 @@ async function addSubmit() {
   const a = st.add, uid = st.uid, c = a.courses && a.courses.find(x => x.id === a.course);
   if (!a.pick || !a.pick.customer_id) return;
   if (!c) { a.err = 'เลือกคอร์สก่อน'; render(); return; }
+  // ย้อนหลัง (062): ตรวจฝั่งหน้าให้ตรงกติกาของฐาน (ฐานตรวจซ้ำ) — ราคาที่ตกลงไม่ส่ง (ครูไม่รู้ราคาจริง)
+  let dates = [], started = null;
+  if (a.back) {
+    const today = todayBkk();
+    started = a.started ? String(a.started).trim() : null;
+    dates = a.dates.map(x => String(x || '').trim());
+    const why = started && started > today ? 'วันเริ่มเรียนต้องไม่เกินวันนี้'
+      : dates.some(x => !/^\d{4}-\d{2}-\d{2}$/.test(x)) ? 'ใส่วันที่เรียนให้ครบทุกช่อง (ช่องที่ไม่ใช้กด "เอาออก")'
+      : dates.some(x => x > today) ? 'วันที่เรียนต้องไม่เกินวันนี้'
+      : dates.length > Number(c.sessions_total) ? 'วันที่เรียนเกินจำนวนครั้งของคอร์ส (' + Number(c.sessions_total) + ' ครั้ง)' : '';
+    if (why) { a.err = why; render(); return; }
+  }
   a.err = ''; a.busy = 'create'; render();
   try {
-    await rpc('teach_enroll_create', { p_customer: a.pick.customer_id, p_course: c.id, p_teacher: st.tid, p_price_agreed: Number(c.list_price), p_track: null, p_equipment: null,
-      p_started_on: null, p_note: null, p_source: 'console', p_teach_lang: 'th', p_list_price: null, p_paid_unknown: false });
-    if (uid !== st.uid || st.add !== a) return;
-    st.flash = 'ลงเรียนให้ ' + a.pick.full_name + ' (' + c.title + ') แล้ว ✓ — รอเจ้าของ/ผู้ดูแลบันทึกชำระก่อน จึงนัดรอบเรียนได้';
+    // ลำดับ: ลงเรียน → (ย้อนหลัง) ลงรอบ · ล้มกลางทาง → กดซ้ำทำต่อเฉพาะขั้นที่ค้าง (a.createdId) ไม่สร้างใบซ้ำ
+    if (!a.createdId) {
+      a.createdId = await rpc('teach_enroll_create', { p_customer: a.pick.customer_id, p_course: c.id, p_teacher: st.tid, p_price_agreed: a.back ? null : Number(c.list_price),
+        p_track: null, p_equipment: null, p_started_on: started, p_note: null, p_source: a.back ? 'backfill' : 'console', p_teach_lang: 'th', p_list_price: null,
+        p_paid_unknown: !!(a.back && a.paid) });
+      if (uid !== st.uid || st.add !== a) return;
+    }
+    if (a.back && dates.length) {
+      await rpc('teach_session_backfill', { p_enrollment: a.createdId, p_dates: dates, p_hours: null, p_teacher: null });
+      if (uid !== st.uid || st.add !== a) return;
+    }
+    st.flash = a.back
+      ? 'ลงเรียนย้อนหลังให้ ' + a.pick.full_name + ' (' + c.title + ') แล้ว ✓' + (dates.length ? ' · ลงรอบที่เรียนไปแล้ว ' + dates.length + ' ครั้ง' : '') +
+        (a.paid ? '' : ' — ยังไม่ได้ติ๊กชำระครบ: รอเจ้าของ/ผู้ดูแลบันทึกชำระ')
+      : 'ลงเรียนให้ ' + a.pick.full_name + ' (' + c.title + ') แล้ว ✓ — รอเจ้าของ/ผู้ดูแลบันทึกชำระก่อน จึงนัดรอบเรียนได้';
     st.add = null;
     render();
     loadAll();
   } catch (e) {
     if (uid !== st.uid || st.add !== a) return;
     console.error('[Teacher enroll]', e && e.code || '');
-    a.busy = ''; a.err = 'ลงเรียนไม่สำเร็จ: ' + errText(e);
+    a.busy = '';
+    a.err = a.createdId ? 'ลงเรียนแล้ว แต่ลงรอบย้อนหลังไม่สำเร็จ: ' + errText(e) + ' — แก้แล้วกดปุ่มอีกครั้งเพื่อลงรอบที่ค้าง (ไม่สร้างใบซ้ำ)' : 'ลงเรียนไม่สำเร็จ: ' + errText(e);
     render();
   }
 }
@@ -801,6 +849,7 @@ $app.addEventListener('keydown', e => {
 });
 $app.addEventListener('input', e => {
   const t = e.target;
+  if (st.add && t.dataset.ad !== undefined) { st.add.dates[Number(t.dataset.ad)] = t.value; return; }          // วันที่เรียนไปแล้ว (ไม่วาดใหม่ระหว่างพิมพ์)
   if (st.add && t.dataset.a) { st.add[t.dataset.a] = t.value; return; }
   if (t.id === 'q') { st.q = t.value; const pos = t.selectionStart; render(); const q = document.getElementById('q'); if (q) { q.focus(); try { q.setSelectionRange(pos, pos); } catch (x) { /* search input */ } } return; }
   if (!st.det || !t.dataset.f) return;
@@ -812,6 +861,8 @@ $app.addEventListener('input', e => {
 });
 $app.addEventListener('change', e => {
   const t = e.target;
+  if (st.add && t.dataset.ab) { st.add[t.dataset.ab] = t.checked; render(); return; }                          // สวิตช์ย้อนหลัง · ติ๊กชำระครบ
+  if (st.add && t.dataset.ad !== undefined) { st.add.dates[Number(t.dataset.ad)] = t.value; return; }
   if (st.add && t.dataset.a) { st.add[t.dataset.a] = t.value; if (t.dataset.a === 'course') render(); return; }
   if (!st.det || !t.dataset.f) return;
   st.det.fv[t.dataset.f] = t.value;
