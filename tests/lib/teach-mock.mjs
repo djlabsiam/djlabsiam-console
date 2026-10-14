@@ -41,7 +41,7 @@ const TEACH = { rows: [], profiles: [], sessions: [], ext: [], subs: [], status:
     sessions_done: 0, sessions_used: 0, hours_done: '0', sessions_remaining: 6, last_session_on: null, next_session_at: null,
     paid_in_full: true, payment_count: 1, state: 'queued' }, o);
   TEACH.seed = () => {
-    TEACH.fail = {}; TEACH.missing = false; TEACH.noSource = false; TEACH.noCourseWrite = false; TEACH.priceWrites = []; TEACH.gate = null; TEACH.loads = 0;
+    TEACH.fail = {}; TEACH.missing = false; TEACH.noSource = false; TEACH.noCourseWrite = false; TEACH.priceWrites = []; TEACH.cal = { mode: 'ok', busy: [], failUpsert: null, failRemove: null, raceConflict: false, events: [] }; TEACH.gate = null; TEACH.loads = 0;
     TEACH.rows = [
       // กำลังเรียน: เหลือ 50 วัน · 3/6
       R('e-active', { customer_id: 'c1', state: 'active', started_on: day(-40), expires_on: day(50), effective_expiry: day(50), sessions_done: 3, sessions_used: 3, sessions_remaining: 3,
@@ -580,6 +580,44 @@ const TEACH = { rows: [], profiles: [], sessions: [], ext: [], subs: [], status:
       TEACH.newCust.push({ id, member_id: p.member_id || null });
       return OK([row]);
     }),
+  };
+  // ── gcal-sync (นัดสอนที่เดียว · 063): TEACH.cal = { mode: 'ok' | 'not_configured' | 'throw', busy: [{room,start,end}], failUpsert, failRemove, raceConflict, events } ──
+  const CAL_ROOMS = ['ห้องใหญ่', 'ห้องเล็ก1', 'ห้องเล็ก2', 'ห้องซ้อม'];
+  const calErr = (code, message) => ({ error: { code, message } });
+  const overlap = (a0, a1, b0, b1) => Date.parse(a0) < Date.parse(b1) && Date.parse(a1) > Date.parse(b0);
+  window.FN['gcal-sync'] = async body => {
+    const C = TEACH.cal;
+    if (C.mode === 'not_configured') return calErr('not_configured', 'ยังไม่ได้ตั้งค่าปฏิทิน (ต้องตั้ง GOOGLE_SERVICE_ACCOUNT_EMAIL / GOOGLE_PRIVATE_KEY / GOOGLE_CALENDAR_ID ใน Edge Functions → Secrets)');
+    if (C.mode === 'throw') throw new Error('boom');
+    const conflictOf = (room, a, b, exceptSid) => (C.busy || []).find(x => x.room === room && overlap(a, b, x.start, x.end))
+      || TEACH.sessions.find(x => x.status === 'scheduled' && x.room === room && x.id !== exceptSid && x.starts_at && overlap(a, b, x.starts_at, x.ends_at));
+    if (body.action === 'check') {
+      if (CAL_ROOMS.indexOf(body.room) < 0) return calErr('room_invalid', 'ห้องนี้ลงปฏิทินไม่ได้ — เลือกจาก ' + CAL_ROOMS.join(' · '));
+      if (conflictOf(body.room, body.starts, body.ends, null)) return calErr('conflict', '❌ ลงปฏิทินไม่ได้ — ' + body.room + ' ไม่ว่าง · ในปฏิทินมีนัดซ้อนช่วงนี้ · เลือกเวลาหรือห้องอื่น');
+      return { ok: true };
+    }
+    const sess = TEACH.sessions.find(x => x.id === body.session_id);
+    if (!sess) return calErr('not_found', 'ไม่พบรอบเรียนนี้');
+    if (body.action === 'upsert') {
+      if (sess.status !== 'scheduled') return calErr('not_scheduled', 'รอบนี้ไม่ได้อยู่ในสถานะนัดไว้ — ไม่ลงปฏิทิน');
+      if (!sess.room) return calErr('no_room', 'รอบนี้ยังไม่ได้ระบุห้อง — เลือกห้องก่อนจึงลงปฏิทินได้');
+      if (C.failUpsert) return calErr(C.failUpsert, 'Google ตอบช้า/ขัดข้องชั่วคราว — ลองใหม่อีกครั้ง');
+      if (C.raceConflict || conflictOf(sess.room, sess.starts_at, sess.ends_at, sess.id)) return calErr('conflict', '❌ ลงปฏิทินไม่ได้ — ' + sess.room + ' ไม่ว่าง · มีนัดอื่นเข้ามาในช่วงเดียวกัน');
+      if (sess.gcal_uid && String(sess.gcal_uid).indexOf('djlab') !== 0) return { ok: true, created: false, reason: 'linked_external', message: 'รอบนี้ผูกกับนัดในปฏิทินอยู่แล้ว (ลงจาก Discord/ปฏิทินโดยตรง) — ไม่สร้างซ้ำ' };
+      const id = 'djlab' + sess.id.replace(/-/g, '');
+      sess.gcal_uid = id + '@google.com'; sess.gcal_start = sess.starts_at;
+      C.events = (C.events || []).filter(e => e.id !== id).concat([{ id, room: sess.room, session: sess.id }]);
+      return { ok: true, created: true, link: { uid: sess.gcal_uid, start: sess.starts_at } };
+    }
+    if (body.action === 'remove') {
+      if (!sess.gcal_uid) return { ok: true, removed: false, reason: 'no_link' };
+      if (String(sess.gcal_uid).indexOf('djlab') !== 0) return { ok: true, removed: false, reason: 'external', message: 'นัดนี้ลงมาจาก Discord/ปฏิทินโดยตรง ระบบไม่ลบให้ — ลบเองในปฏิทิน' };
+      if (C.failRemove) return calErr(C.failRemove, 'Google ตอบช้า/ขัดข้องชั่วคราว — ลองใหม่อีกครั้ง');
+      C.events = (C.events || []).filter(e => e.session !== sess.id);
+      sess.gcal_uid = null; sess.gcal_start = null;
+      return { ok: true, removed: true };
+    }
+    return calErr('bad_request', 'ไม่รู้จักคำสั่งนี้');
   };
   const create = window.supabase.createClient;
   window.supabase.createClient = (u, k, o) => {

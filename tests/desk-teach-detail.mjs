@@ -18,7 +18,7 @@
 
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, readFileSync, existsSync } from 'node:fs';
 import { HARNESS } from './lib/page-test.mjs';
 import { runCdpPage } from './lib/cdp-page.mjs';
 import { TEACH_MOCK } from './lib/teach-mock.mjs';
@@ -191,8 +191,10 @@ async function runTests() {
   submit('sched'); await settle(500);
   ok('นัดหลังวันหมดอายุ: คำเตือนแดงตัวหนา "หลังวันหมดอายุ" ด้วย (ไม่บล็อก)', ssIds().length === 8 && /หลังวันหมดอายุ/.test(detWarn()) && /เกินจำนวนครั้ง/.test(detWarn()), detWarn());
   const room = '<img src=x onerror="window.__xss=4">';
-  openForm('sched'); dfill('date', day(12)); dfill('start', '10:00'); dfill('end', '12:00'); dfill('room', room);
+  openForm('sched'); dfill('date', day(12)); dfill('start', '10:00'); dfill('end', '12:00');
   submit('sched'); await settle(500);
+  TEACH.sessions.filter(x => x.status === 'scheduled').slice(-1)[0].room = room;      // ห้องในฐานเป็นข้อความอิสระ (ข้อมูลเก่า/ลงตรง ๆ) — ต้องแสดงเป็นข้อความ
+  TEACH.fireRt('class_sessions'); await settle(700);
   ok('ชื่อห้องที่เป็น HTML แสดงเป็นข้อความ (XSS)', !D().querySelector('img') && /<img src=x/.test(dt()) && !window.__xss);
 
   // ── ทำเครื่องหมายสอนแล้ว ──
@@ -585,6 +587,140 @@ async function runTests() {
 }
 </script>`;
 
+const T8 = `<script>
+window.addEventListener('load', () => setTimeout(runTests, 300));
+${COMMON}
+const FNC = () => CALLS.filter(c => c.op === 'fn' && c.name === 'gcal-sync');
+const FNA = a => FNC().filter(c => c.body.action === a);
+const schedRoom = async (d, room, start = '10:00', end = '12:00') => {
+  openForm('sched'); await settle(100);
+  dfill('date', day(d)); dfill('start', start); dfill('end', end); dfill('room', room);
+  submit('sched'); await settle(700);
+};
+async function runTests() {
+  L('=== คอร์สเรียน ก้อน C (8/8): นัดสอนที่เดียว — ลงฐาน + Google Calendar (gcal-sync · 063) ===');
+  TEACH.seed();
+  await login('TiBass');
+  await open();
+  await openEnroll('active', 'e-active');
+  await sleep(300);
+
+  // ── 1. ฟอร์ม ──
+  openForm('sched'); await settle(200);
+  const opts = [...$('teD_room').options].map(o => o.value);
+  ok('ช่องห้องเป็นตัวเลือก: ว่าง (ลงฐานอย่างเดียว) + ห้องใหญ่ · ห้องเล็ก1 · ห้องเล็ก2 · ห้องซ้อม', $('teD_room').tagName === 'SELECT' && J(opts) === J(['', 'ห้องใหญ่', 'ห้องเล็ก1', 'ห้องเล็ก2', 'ห้องซ้อม']), J(opts));
+  ok('ข้อความใต้ฟอร์มบอกว่าห้องชนแล้วไม่สร้างนัด (ระบบตรวจกับปฏิทิน)', /ห้องชนนัดอื่น = ไม่สร้างนัด/.test(dt()));
+  dact('close-form'); await settle(100);
+
+  // ── 2. สำเร็จ: เช็ก → นัดฐาน → ลงปฏิทิน ──
+  await schedRoom(20, 'ห้องเล็ก1');
+  const ck = FNA('check')[0], up = FNA('upsert')[0], sc = lastArgs('teach_session_schedule');
+  const made = sessByStart(20, '10:00');
+  ok('ลำดับ: check ก่อน → teach_session_schedule → upsert', !!ck && !!up && CALLS.indexOf(ck) < CALLS.findIndex(c => c.op === 'rpc' && c.fn === 'teach_session_schedule' && c.args.p_starts === day(20) + 'T10:00:00+07:00') && CALLS.indexOf(up) > CALLS.findIndex(c => c.op === 'rpc' && c.fn === 'teach_session_schedule' && c.args.p_starts === day(20) + 'T10:00:00+07:00'));
+  ok('check ส่งแค่ action + ห้อง + เวลา (+07:00) · upsert ส่งแค่ action + session_id (ไม่ส่ง title/เวลา/ห้อง)',
+    J(Object.keys(ck.body).sort()) === J(['action', 'ends', 'room', 'starts']) && ck.body.room === 'ห้องเล็ก1' && ck.body.starts === day(20) + 'T10:00:00+07:00'
+    && J(Object.keys(up.body).sort()) === J(['action', 'session_id']) && up.body.session_id === made.id, J([ck.body, up.body]));
+  ok('นัดฐานส่งห้องเดียวกัน · ข้อความเขียว "นัดรอบเรียนแล้ว ✓ · ลงปฏิทินแล้ว ✓" · ไม่มีคำเตือน', sc.p_room === 'ห้องเล็ก1' && /นัดรอบเรียนแล้ว ✓ · ลงปฏิทินแล้ว ✓/.test(detOk()) && !E('teDetWarn'), detOk());
+  ok('รอบขึ้น "ผูกปฏิทินแล้ว ✓" · ไม่มีปุ่ม "ลงปฏิทิน" (ผูกแล้ว)', /ผูกปฏิทินแล้ว ✓/.test(ss(made.id).textContent) && !ss(made.id).querySelector('[data-act="cal-sync"]'));
+  ok('ฐานปลอมมี event เดียวของรอบนี้ (id คงที่ djlab…)', TEACH.cal.events.length === 1 && TEACH.cal.events[0].session === made.id && /^djlab/.test(TEACH.cal.events[0].id));
+
+  // ── 3. ห้องชน: ไม่สร้างนัดเลย ──
+  TEACH.cal.busy.push({ room: 'ห้องเล็ก2', start: day(21) + 'T09:30:00+07:00', end: day(21) + 'T11:30:00+07:00' });
+  const nS = rpcCalls('teach_session_schedule').length, nSess = TEACH.sessions.length, nUp = FNA('upsert').length;
+  await schedRoom(21, 'ห้องเล็ก2');
+  ok('ห้องชนนัดในปฏิทิน: แถบแดงตัวหนาข้อความไทย "ไม่ว่าง" · ไม่เรียก teach_session_schedule · ไม่มีรอบเกิดในฐาน · ไม่เรียก upsert',
+    isRed(E('teDetErr')) && /ไม่ว่าง/.test(detErr()) && rpcCalls('teach_session_schedule').length === nS && TEACH.sessions.length === nSess && FNA('upsert').length === nUp, detErr());
+  ok('ฟอร์มยังเปิดค้างให้แก้เวลา/ห้อง', !!E('teFormSched'));
+  dact('close-form'); await settle(100);
+  await schedRoom(21, 'ห้องเล็ก2', '13:00', '15:00');
+  ok('เปลี่ยนเวลาให้ไม่ชน → นัดและลงปฏิทินสำเร็จ', /ลงปฏิทินแล้ว ✓/.test(detOk()) && TEACH.cal.events.length === 2, detOk());
+
+  // ── 4. ไม่ระบุห้อง = ลงฐานอย่างเดียว ──
+  const nF = FNC().length;
+  await schedRoom(22, '');
+  ok('ไม่ระบุห้อง: ไม่เรียก gcal-sync เลย · นัดฐานสำเร็จ · ข้อความไม่พูดถึงปฏิทิน', FNC().length === nF && /นัดรอบเรียนแล้ว ✓/.test(detOk()) && !/ลงปฏิทิน/.test(detOk()) && !/ปฏิทิน/.test(detWarn()), detOk() + ' | ' + detWarn());
+
+  // ── 5. ปฏิทินยังไม่ตั้งค่า (ขาด secret) → ถอยกลับลงฐานอย่างเดียว ไม่ขวางนัด ──
+  TEACH.cal.mode = 'not_configured';
+  const nUp2 = FNA('upsert').length;
+  await schedRoom(23, 'ห้องใหญ่');
+  const ncs = sessByStart(23, '10:00');
+  ok('ยังไม่ตั้งค่าปฏิทิน: นัดฐานสำเร็จ · ไม่เรียก upsert · แถบแดงตัวหนา "ยังไม่ได้ลงปฏิทิน — ระบบปฏิทินยังไม่พร้อม"',
+    !!ncs && FNA('upsert').length === nUp2 && isRed(D().querySelector('#teDetWarn .wk-red')) && /ยังไม่ได้ลงปฏิทิน — ระบบปฏิทินยังไม่พร้อม/.test(detWarn()), detWarn());
+  ok('รอบนั้นขึ้นปุ่ม "ลงปฏิทิน" (ลองภายหลัง) + "ยังไม่ผูกปฏิทิน"', !!ss(ncs.id).querySelector('[data-act="cal-sync"]') && /ยังไม่ผูกปฏิทิน/.test(ss(ncs.id).textContent));
+  TEACH.cal.mode = 'throw';
+  await schedRoom(24, 'ห้องใหญ่');
+  ok('ติดต่อฟังก์ชันไม่ได้ (เน็ต/ล่ม): ก็ลงฐานอย่างเดียว + แถบแดง ไม่ error ดิบ', !!sessByStart(24, '10:00') && /ยังไม่ได้ลงปฏิทิน/.test(detWarn()) && !/boom/.test(dt()), detWarn());
+  TEACH.cal.mode = 'ok';
+
+  // ── 6. ลงปฏิทินล้มหลังสร้างนัด → แดง + ปุ่มลองอีกครั้ง ──
+  TEACH.cal.failUpsert = 'google_busy';
+  await schedRoom(25, 'ห้องเล็ก1');
+  const fs1 = sessByStart(25, '10:00');
+  ok('ลงปฏิทินล้ม: นัดฐานอยู่ · แถบแดงตัวหนา "นัดบันทึกแล้ว แต่ลงปฏิทินไม่สำเร็จ" + เหตุผลไทย + "กดปุ่ม ลงปฏิทิน"',
+    !!fs1 && isRed(D().querySelector('#teDetWarn .wk-red')) && /นัดบันทึกแล้ว แต่ลงปฏิทินไม่สำเร็จ/.test(detWarn()) && /กดปุ่ม "ลงปฏิทิน"/.test(detWarn()) && /ขัดข้องชั่วคราว/.test(detWarn()), detWarn());
+  ok('รอบนั้นมีปุ่ม "ลงปฏิทิน" (≥ 44px บน touch ตามปุ่มเล็กทั่วไป) · ยังไม่ผูก', !!ss(fs1.id).querySelector('[data-act="cal-sync"]'));
+  const evBefore = TEACH.cal.events.length;
+  dact('cal-sync', '[data-sid="' + fs1.id + '"]'); await settle(600);
+  ok('กดซ้ำตอนยังล้ม: แถบแดงบอกเหตุผล (ไม่เงียบ) · ไม่มี event เพิ่ม', /ขัดข้องชั่วคราว/.test(detErr()) && TEACH.cal.events.length === evBefore, detErr());
+  TEACH.cal.failUpsert = null;
+  dact('cal-sync', '[data-sid="' + fs1.id + '"]'); await settle(600);
+  ok('กดลองอีกครั้งหลัง Google กลับมา: สำเร็จ "ลงปฏิทินแล้ว ✓" · ผูกแล้ว · ปุ่มหาย · event เพิ่มเดียว', /ลงปฏิทินแล้ว ✓/.test(detOk()) && /ผูกปฏิทินแล้ว ✓/.test(ss(fs1.id).textContent) && !ss(fs1.id).querySelector('[data-act="cal-sync"]') && TEACH.cal.events.length === evBefore + 1, detOk());
+  // ── 7. ยกเลิกรอบ → ลบ event ตาม ──
+  const nRm = FNA('remove').length;
+  openForm('cancel', fs1.id); await settle(100);
+  dfill('by', 'teacher');
+  submit('cancel'); await settle(700);
+  const rm = FNA('remove')[nRm];
+  ok('ยกเลิกรอบที่ลงปฏิทินแล้ว: เรียก remove ด้วย session_id เดียว (ไม่ส่งอย่างอื่น) · ข้อความ "ลบนัดในปฏิทินแล้ว ✓" · event หาย · ลิงก์ถูกถอด',
+    !!rm && J(Object.keys(rm.body).sort()) === J(['action', 'session_id']) && rm.body.session_id === fs1.id && /ลบนัดในปฏิทินแล้ว ✓/.test(detOk())
+    && !TEACH.cal.events.some(e => e.session === fs1.id) && TEACH.sessions.find(x => x.id === fs1.id).gcal_uid === null, detOk());
+  ok('ไม่มีแถบเตือน/ปุ่มค้างบนรอบที่ยกเลิก', !E('teDetWarn') && !ss(fs1.id).querySelector('[data-act="cal-remove"]') && !/ค้างในปฏิทิน/.test(ss(fs1.id).textContent));
+
+  // ── 8. ยกเลิกรอบที่ผูกกับนัดจาก Discord (ไม่ใช่ของระบบ) → ไม่ลบ บอกให้ลบเอง ──
+  openForm('cancel', 's1'); await settle(100);
+  dfill('by', 'teacher');
+  submit('cancel'); await settle(700);
+  ok('ผูกกับนัดภายนอก (uid-1): ยกเลิกรอบแล้ว แต่ไม่ลบนัด · แถบแดงตัวหนา "ระบบไม่ลบให้ — ลบเองในปฏิทิน"', isRed(D().querySelector('#teDetWarn .wk-red')) && /ลบเองในปฏิทิน/.test(detWarn())
+    && TEACH.sessions.find(x => x.id === 's1').gcal_uid === 'uid-1', detWarn());
+  ok('รอบนั้นขึ้น "นัดนี้ยังค้างในปฏิทิน" แดงตัวหนา + ปุ่ม "ลบนัดในปฏิทิน"', isRed(ss('s1').querySelector('[data-cal="stale"]')) && !!ss('s1').querySelector('[data-act="cal-remove"]'));
+  dact('cal-remove', '[data-sid="s1"]'); await settle(600);
+  ok('กดลบซ้ำ: บอกว่าไม่มีนัดที่ระบบสร้างให้ลบ + แถบแดงบอกให้ลบเอง · ลิงก์เดิมยังอยู่', /ไม่มีนัดที่ระบบสร้างให้ลบ/.test(detOk()) && /ลบเองในปฏิทิน/.test(detWarn()) && TEACH.sessions.find(x => x.id === 's1').gcal_uid === 'uid-1');
+
+  // ── 9. ลบ event ล้ม → แดง + ปุ่มลองอีกครั้ง ──
+  await schedRoom(26, 'ห้องเล็ก2');
+  const rs = sessByStart(26, '10:00');
+  TEACH.cal.failRemove = 'google_busy';
+  openForm('cancel', rs.id); await settle(100);
+  dfill('by', 'shop');
+  submit('cancel'); await settle(700);
+  ok('ลบ event ล้ม: ยกเลิกรอบแล้ว · แถบแดงตัวหนา "ยกเลิกรอบแล้ว แต่ลบนัดในปฏิทินไม่สำเร็จ" + ปุ่ม "ลบนัดในปฏิทิน" · ลิงก์ยังอยู่ (ลองใหม่ได้)',
+    TEACH.sessions.find(x => x.id === rs.id).status === 'cancelled' && isRed(D().querySelector('#teDetWarn .wk-red')) && /ยกเลิกรอบแล้ว แต่ลบนัดในปฏิทินไม่สำเร็จ/.test(detWarn())
+    && !!ss(rs.id).querySelector('[data-act="cal-remove"]') && !!TEACH.sessions.find(x => x.id === rs.id).gcal_uid, detWarn());
+  TEACH.cal.failRemove = null;
+  dact('cal-remove', '[data-sid="' + rs.id + '"]'); await settle(600);
+  ok('ลองอีกครั้ง: ลบสำเร็จ · ถอดลิงก์ · ปุ่มหาย', /ลบนัดในปฏิทินแล้ว ✓/.test(detOk()) && TEACH.sessions.find(x => x.id === rs.id).gcal_uid === null && !ss(rs.id).querySelector('[data-act="cal-remove"]'), detOk());
+
+  // ── 10. ชนตอน upsert (แข่งกัน): นัดบันทึกแล้ว + แดงชัด + ยกเลิกรอบได้ ──
+  TEACH.cal.raceConflict = true;
+  await schedRoom(27, 'ห้องใหญ่');
+  const rc = sessByStart(27, '10:00');
+  ok('ห้องชนตอนลงปฏิทิน (มีคนแทรกระหว่างสองจังหวะ): นัดอยู่ในฐาน · แถบแดงตัวหนา "ลงปฏิทินไม่สำเร็จ" บอก "ไม่ว่าง" · ปุ่มลองใหม่',
+    !!rc && isRed(D().querySelector('#teDetWarn .wk-red')) && /นัดบันทึกแล้ว แต่ลงปฏิทินไม่สำเร็จ/.test(detWarn()) && /ไม่ว่าง/.test(detWarn()) && !!ss(rc.id).querySelector('[data-act="cal-sync"]'), detWarn());
+  const nRm2 = FNA('remove').length;
+  openForm('cancel', rc.id); await settle(100);
+  dfill('by', 'shop');
+  submit('cancel'); await settle(700);
+  ok('ยกเลิกรอบที่ลงปฏิทินไม่ได้ได้ตามปกติ · ไม่เรียก remove (ไม่มีลิงก์)', TEACH.sessions.find(x => x.id === rc.id).status === 'cancelled' && FNA('remove').length === nRm2 && /ยกเลิกรอบแล้ว/.test(detOk()), detOk());
+  TEACH.cal.raceConflict = false;
+
+  // ── 11. สิทธิ์/ไม่ดึงข้อมูลนักเรียนไปปฏิทิน ──
+  ok('คำขอทุกครั้งไปยัง gcal-sync ไม่มีชื่อนักเรียน/เบอร์/ราคา/ยอดชำระ', !/สมชาย|08\d{8}|price|amount|20000/.test(J(FNC().map(c => c.body))));
+  ok('คำสั่งที่ส่งมีแค่ check · upsert · remove', FNC().every(c => ['check', 'upsert', 'remove'].includes(c.body.action)));
+  L('RESULT:' + (fail ? 'FAIL' : 'PASS') + ' pass=' + pass + ' fail=' + fail);
+}
+</script>`;
+
 const mock = MOCK3 + '\n' + TEACH_MOCK;
 let allOk = true;
 for (const [label, tests, opts] of [
@@ -595,11 +731,32 @@ for (const [label, tests, opts] of [
   ['5 ครู + ผู้ดูแล', T5, { width: 1366, height: 900, coarse: false }],
   ['6 แท็บรอบเรียน · realtime · ความปลอดภัย', T6, { width: 1366, height: 900, coarse: false }],
   ['7 iPhone 390×844', T7, { width: 390, height: 844, coarse: true }],
+  ['8 นัดสอนที่เดียว: ลงฐาน + Google Calendar (063)', T8, { width: 1366, height: 900, coarse: false }],
 ]) {
   if (ONLY && !ONLY.test(label)) continue;
   console.log('\n--- ' + label + ' ---');
   const res = await runCdpPage({ root: pageRoot, file: 'desk.html', mock, tests, hash: '', shotDir: SHOTS, ...opts });
   if (!res.ok) allOk = false;
+}
+// ── ห้องที่ลงปฏิทินได้ในหน้าจอ = ฟังก์ชัน gcal-sync = บอท /schedule (ตัวอักษรต่อตัวอักษร) ──
+if (!ONLY) {
+  const lit = (src, re) => { const m = src.match(re); return m ? JSON.stringify(eval(m[1])) : null; };
+  const desk = readFileSync(join(pageRoot, 'desk.html'), 'utf8'), tch = readFileSync(join(pageRoot, 'teacher.html'), 'utf8');
+  const fnPath = join(root, '../stock-app/supabase/functions/gcal-sync/index.ts');
+  const botIdx = join(root, '../../bots/bot/index.js'), botCal = join(root, '../../bots/bot/roomsync/calendar.js');
+  const dRooms = lit(desk, /^const TE_ROOMS = (\[[^\]]*\]);/m), tRooms = lit(tch, /^const CAL_ROOMS = (\[[^\]]*\]);/m);
+  let ok1 = !!dRooms && dRooms === tRooms, why = 'desk=' + dRooms + ' teacher=' + tRooms;
+  if (existsSync(fnPath)) {
+    const fn = readFileSync(fnPath, 'utf8');
+    const fr = lit(fn, /^export const ROOMS = (\[[^\]]*\]);/m), fp = (fn.match(/^export const ROOM_PRACTICE = '([^']*)'/m) || [])[1];
+    ok1 = ok1 && JSON.stringify([...JSON.parse(fr), fp]) === dRooms; why += ' fn=' + fr + '+' + fp;
+  }
+  if (existsSync(botIdx) && existsSync(botCal)) {
+    const br = lit(readFileSync(botIdx, 'utf8'), /^const ROOMS = (\[[^\]]*\]);/m), bp = (readFileSync(botCal, 'utf8').match(/^const ROOM_PRACTICE = '([^']*)'/m) || [])[1];
+    ok1 = ok1 && JSON.stringify([...JSON.parse(br), bp]) === dRooms; why += ' bot=' + br + '+' + bp;
+  }
+  console.log('\n' + (ok1 ? '  [PASS] ' : '  [FAIL] ') + 'รายชื่อห้องที่ลงปฏิทินได้ตรงกันทั้ง desk.html · teacher.html · gcal-sync · บอท /schedule' + (ok1 ? '' : ' — ' + why));
+  if (!ok1) allOk = false;
 }
 console.log('\n=== desk-teach-detail: ' + (allOk ? 'ผ่าน' : 'ไม่ผ่านหรือไม่ได้รันจนจบ') + ' ===');
 process.exit(allOk ? 0 : 1);

@@ -14061,6 +14061,18 @@ const TE_WARN = {
 };
 const TE_LATE_DAYS = 3;               // แจ้งยกเลิกน้อยกว่า 3 วัน (นับวันปฏิทินไทย) = นับเป็นครั้งที่ใช้ไป — ต้องตรง teach_is_late_cancel ใน 047
 const TE_GCAL_NEAR_MIN = 30;          // นัดปฏิทินที่เวลาห่างไม่เกิน ±30 นาที ขึ้นก่อน
+// ห้องที่ลงปฏิทินได้ (นัดสอนที่เดียว · Edge Function gcal-sync · 063) — ⚠️ ต้องตรงกับ ROOMS/ROOM_PRACTICE ในบอท (bots/bot/index.js · roomsync/calendar.js) ตัวอักษรต่อตัวอักษร (เทสต์เทียบให้)
+//   ห้องซ้อมลงได้เมื่อเปิดซิงก์ห้องซ้อม (booking_settings.room_blocks_enabled) — ปิดอยู่ = ฟังก์ชันตอบ room_invalid
+const TE_ROOMS = ['ห้องใหญ่', 'ห้องเล็ก1', 'ห้องเล็ก2', 'ห้องซ้อม'];
+class TeCalBlock extends Error { constructor(m) { super(String(m || '').replace(/\n+/g, ' · ')); } }       // ข้อความไทยจาก gcal-sync ที่ต้องแสดงตามจริง (ไม่ต่อหน้าด้วย "ไม่สำเร็จ:")
+// เรียก gcal-sync · ready=false เมื่อยังไม่ติดตั้ง/ตั้งค่า/ติดต่อไม่ได้ → หน้าจอถอยกลับลงฐานอย่างเดียวตามเดิม (ไม่ขวางการนัดสอน)
+async function teCal(body) {
+  const res = await callFn('gcal-sync', body);
+  const code = res && res.error && res.error.code;
+  const ready = !(code === 'not_configured' || code === 'network' || code === 'not_ready');
+  return { res, ok: !!res && !res.error && res.ok !== false, ready, code: code || '' };
+}
+const teCalMsg = r => (r.code === 'network' ? 'ติดต่อระบบปฏิทินไม่ได้ในตอนนี้' : (r.res && r.res.error && r.res.error.message) || 'ลงปฏิทินไม่สำเร็จ');
 const TE_PAY_WARN_SEEN = 'บันทึกแล้วแก้/ลบเองไม่ได้ทันที — ตรวจยอดและวันที่ก่อนกดบันทึก (ลงผิดแก้ได้ที่ปุ่ม "แก้" ข้างรายการ โดยเจ้าของหรือผู้ดูแล)';
 const teUuid = () => (window.crypto && crypto.randomUUID) ? crypto.randomUUID()
   : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 3 | 8)).toString(16); });
@@ -14308,7 +14320,8 @@ function teSessRowHtml(r, d, s, cap) {
   const here = d.open && d.fv.sid === s.id;
   let h = '<div class="te-ss" data-sid="' + escapeHtml(s.id) + '"><div class="te-pills">' + st + '</div><div>' + when + '</div>' +
     '<div class="te-sub">' + (tn ? 'ครู ' + escapeHtml(tn) : '') + (s.room ? ' · ห้อง ' + escapeHtml(s.room) : '') +
-    (s.status === 'scheduled' ? ' · ' + (s.gcal_uid ? 'ผูกปฏิทินแล้ว ✓' : 'ยังไม่ผูกปฏิทิน') : '') + '</div>' +
+    (s.status === 'scheduled' ? ' · ' + (s.gcal_uid ? 'ผูกปฏิทินแล้ว ✓' : 'ยังไม่ผูกปฏิทิน')
+      : (s.status === 'cancelled' || s.status === 'no_show') && s.gcal_uid ? ' · <span class="wk-red" data-cal="stale">นัดนี้ยังค้างในปฏิทิน</span>' : '') + '</div>' +
     (s.cancel_reason ? '<div class="te-sub">เหตุผล: ' + escapeHtml(s.cancel_reason) + '</div>' : '');
   const canNote = teCanNote(r, s);
   if (canNote && d.notes.has(s.id) && !(d.open === 'note' && here)) h += '<div class="te-note" data-note="' + escapeHtml(s.id) + '"><span class="te-sub">บันทึกการสอน</span><div>' + escapeHtml(d.notes.get(s.id)).replace(/\n/g, '<br>') + '</div></div>';
@@ -14322,7 +14335,10 @@ function teSessRowHtml(r, d, s, cap) {
     if (s.status === 'scheduled') {
       if (teCanDone(r, s)) a += teBtn('open', 'ทำเครื่องหมายสอนแล้ว', { k: 'done', sid: s.id, sm: true });
       a += teBtn('open', 'ยกเลิก / ไม่มา', { k: 'cancel', sid: s.id, sm: true });
+      if (!s.gcal_uid && s.room) a += teBtn('cal-sync', 'ลงปฏิทิน', { sid: s.id, sm: true });
       a += s.gcal_uid ? teBtn('unlink', 'ถอดนัดปฏิทิน', { sid: s.id, sm: true }) : teBtn('open', 'ผูกนัดปฏิทิน', { k: 'link', sid: s.id, sm: true });
+    } else if ((s.status === 'cancelled' || s.status === 'no_show') && s.gcal_uid) {
+      a += teBtn('cal-remove', 'ลบนัดในปฏิทิน', { sid: s.id, sm: true });
     }
     if (canNote) a += teBtn('open', d.notes.has(s.id) ? 'แก้บันทึกการสอน' : 'บันทึกการสอน', { k: 'note', sid: s.id, sm: true });
     if (a) h += '<div class="te-acts">' + a + '</div>';
@@ -14405,9 +14421,9 @@ function teFormSched(r, d) {
   if (!opts.some(o => o[0] === r.teacher_id)) opts.unshift([r.teacher_id, r.teacher_name || '']);
   return '<div class="te-form" id="teFormSched"><h4>นัดรอบเรียน</h4>' + teSel('teacher', 'ครูผู้สอน', opts) +
     teIn('date', 'วันที่', { type: 'date' }) + teIn('start', 'เวลาเริ่ม', { type: 'time' }) + teIn('end', 'เวลาจบ', { type: 'time' }) +
-    teIn('room', 'ห้อง (ไม่เกิน 40 ตัวอักษร · เว้นว่างได้)', { maxlength: 40 }) +
+    teSel('room', 'ห้อง (เลือกห้อง = ลงปฏิทินให้ด้วย)', [['', 'ไม่ระบุห้อง — ลงฐานอย่างเดียว ไม่ลงปฏิทิน']].concat(TE_ROOMS.map(x => [x, x]))) +
     teIn('hours', 'ชั่วโมง (เว้นว่าง = ตามคอร์ส ' + (Number(r.hours_total) / Number(r.sessions_total)).toFixed(2).replace(/\.?0+$/, '') + ' ชม./ครั้ง)', { inputmode: 'decimal' }) +
-    '<div class="hint">ครูมีนัดซ้อนกัน = ระบบปฏิเสธ · เกินจำนวนครั้ง/เกินวันหมดอายุ = เตือนแต่บันทึกให้</div>' + teFormBar('sched', 'บันทึกนัด') + '</div>';
+    '<div class="hint">ครูมีนัดซ้อนกัน = ระบบปฏิเสธ · เกินจำนวนครั้ง/เกินวันหมดอายุ = เตือนแต่บันทึกให้ · เลือกห้องแล้วห้องชนนัดอื่น = ไม่สร้างนัด (ระบบตรวจกับปฏิทินให้)</div>' + teFormBar('sched', 'บันทึกนัด') + '</div>';
 }
 
 function teDetManageHtml(r, d, cap) {
@@ -14521,7 +14537,7 @@ async function teDetRun(label, fn) {
   } catch (e) {
     if (uid !== currentUserId || te !== cur || te.det !== d) return;
     console.error('[Teach detail]', label, e && e.code || '');
-    d.busy = ''; d.err = 'ไม่สำเร็จ: ' + teErrText(e);
+    d.busy = ''; d.err = e instanceof TeCalBlock ? e.message : 'ไม่สำเร็จ: ' + teErrText(e);
     teDetRender();
   }
 }
@@ -14573,9 +14589,25 @@ function teDetSubmit(k) {
     const hrs = teMoney(fv.hours);
     if (hrs !== null && (Number.isNaN(hrs) || hrs <= 0 || hrs > 12)) return teDetFail('ชั่วโมงต้องมากกว่า 0 และไม่เกิน 12');
     return teDetRun('sched', async () => {
-      const res = await teRpc('teach_session_schedule', { p_enrollment: d.id, p_teacher: fv.teacher, p_starts: teTs(fv.date, fv.start), p_ends: teTs(fv.date, fv.end), p_room: String(fv.room).trim() || null, p_hours: hrs });
+      const room = String(fv.room).trim(), startsTs = teTs(fv.date, fv.start), endsTs = teTs(fv.date, fv.end);
+      // 1) เช็กห้องชนก่อนสร้างนัด (ชน/ห้องไม่ถูกต้อง = ไม่สร้างทั้งนัดและ event) · ปฏิทินยังไม่พร้อม = ลงฐานอย่างเดียวตามเดิม
+      let ready = false;
+      if (room) {
+        const ck = await teCal({ action: 'check', room, starts: startsTs, ends: endsTs });
+        if (ck.code === 'conflict' || ck.code === 'room_invalid') throw new TeCalBlock(ck.res.error.message);
+        ready = ck.ready;
+      }
+      const res = await teRpc('teach_session_schedule', { p_enrollment: d.id, p_teacher: fv.teacher, p_starts: startsTs, p_ends: endsTs, p_room: room || null, p_hours: hrs });
       const warn = ((res && res.warnings) || []).map(w => TE_WARN[w] || ('คำเตือนจากระบบ (รหัส ' + String(w).slice(0, 40) + ')'));
-      return { ok: 'นัดรอบเรียนแล้ว ✓', warn };
+      let okMsg = 'นัดรอบเรียนแล้ว ✓';
+      // 2) ลง Calendar ให้ (event id คงที่ — กดซ้ำไม่ซ้ำ) · ล้ม = แดงตัวหนา + ปุ่ม "ลงปฏิทิน" ที่รอบนั้น (ห้ามเงียบ)
+      if (room && !ready) warn.push('บันทึกนัดแล้ว แต่ยังไม่ได้ลงปฏิทิน — ระบบปฏิทินยังไม่พร้อม (ยังไม่ได้ตั้งค่า/ติดต่อไม่ได้) · ลงปฏิทินเองหรือกด "ลงปฏิทิน" ที่รอบนี้ภายหลัง');
+      else if (room) {
+        const up = await teCal({ action: 'upsert', session_id: res && res.id });
+        if (up.ok) okMsg += ' · ลงปฏิทินแล้ว ✓';
+        else warn.push('นัดบันทึกแล้ว แต่ลงปฏิทินไม่สำเร็จ — ' + teCalMsg(up) + ' — กดปุ่ม "ลงปฏิทิน" ที่รอบนี้เพื่อลองอีกครั้ง');
+      }
+      return { ok: okMsg, warn };
     });
   }
   if (k === 'done') {
@@ -14597,7 +14629,17 @@ function teDetSubmit(k) {
       const res = await teRpc('teach_session_cancel', { p_session: fv.sid, p_as: fv.as, p_by: fv.as === 'cancelled' ? fv.by : null,
         p_notified_at: fv.as === 'cancelled' && fv.by === 'student' && fv.notified !== today ? teTs(fv.notified, '12:00') : null, p_reason: String(fv.reason).trim() || null });
       const counted = res && res.counted;
-      return { ok: (fv.as === 'no_show' ? 'บันทึกว่านักเรียนไม่มา' : 'ยกเลิกรอบแล้ว') + (counted ? ' — นับเป็นครั้งที่ใช้ไป' : ' — ไม่นับเป็นครั้งที่ใช้ไป') };
+      let okMsg = (fv.as === 'no_show' ? 'บันทึกว่านักเรียนไม่มา' : 'ยกเลิกรอบแล้ว') + (counted ? ' — นับเป็นครั้งที่ใช้ไป' : ' — ไม่นับเป็นครั้งที่ใช้ไป');
+      const warn = [];
+      // ลบ event ในปฏิทินตาม (ไม่งั้นปฏิทินค้างผี + ตารางห้องซ้อมค้าง) · event ที่ระบบไม่ได้สร้าง = ไม่ลบ บอกให้ลบเอง
+      if (s && s.gcal_uid) {
+        const rm = await teCal({ action: 'remove', session_id: fv.sid });
+        if (rm.ok && rm.res.removed) okMsg += ' · ลบนัดในปฏิทินแล้ว ✓';
+        else if (rm.ok && rm.res.reason === 'external') warn.push(rm.res.message || 'นัดนี้ลงมาจาก Discord/ปฏิทินโดยตรง ระบบไม่ลบให้ — ลบเองในปฏิทิน');
+        else if (!rm.ok && rm.ready) warn.push('ยกเลิกรอบแล้ว แต่ลบนัดในปฏิทินไม่สำเร็จ — ' + teCalMsg(rm) + ' — กดปุ่ม "ลบนัดในปฏิทิน" ที่รอบนี้เพื่อลองอีกครั้ง');
+        else if (!rm.ok) warn.push('ยกเลิกรอบแล้ว แต่ยังลบนัดในปฏิทินให้ไม่ได้ (ระบบปฏิทินยังไม่พร้อม) — ลบเองในปฏิทิน');
+      }
+      return { ok: okMsg, warn };
     });
   }
   if (k === 'note') {
@@ -14742,6 +14784,15 @@ function teDetClick(e) {
   else if (act === 'decide-no') teDetDecide(false, b.dataset.sid);
   else if (act === 'delpay') teDetDelPay(b.dataset.sid);
   else if (act === 'reopen') teDetReopen();
+  else if (act === 'cal-sync' || act === 'cal-remove') {
+    const sid = b.dataset.sid, rmv = act === 'cal-remove';
+    teDetRun(act, async () => {
+      const r = await teCal({ action: rmv ? 'remove' : 'upsert', session_id: sid });
+      if (!r.ok) throw new TeCalBlock(r.ready ? teCalMsg(r) : 'ระบบปฏิทินยังไม่พร้อม (ยังไม่ได้ตั้งค่า/ติดต่อไม่ได้) — ลองใหม่ภายหลัง');
+      if (rmv) return r.res.removed ? { ok: 'ลบนัดในปฏิทินแล้ว ✓' } : { ok: 'ไม่มีนัดที่ระบบสร้างให้ลบ', warn: r.res.message ? [r.res.message] : [] };
+      return { ok: r.res.created === false ? (r.res.message || 'รอบนี้ผูกกับนัดในปฏิทินอยู่แล้ว') : 'ลงปฏิทินแล้ว ✓' };
+    });
+  }
   else if (act === 'unlink') {
     const sid = b.dataset.sid;
     teDetRun('unlink', async () => { await teRpc('teach_gcal_unlink', { p_session: sid }); return { ok: 'ถอดนัดปฏิทินแล้ว' }; });

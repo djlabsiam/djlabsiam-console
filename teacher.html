@@ -115,6 +115,8 @@
 //   เพิ่ม 14 ต.ค. 69 (เจ้าของสั่ง "ให้ครูเพิ่ม ลงเรียน/ย้อนหลัง ได้" · migration 062): สวิตช์ "นักเรียนเรียนไปแล้ว" ในฟอร์มเพิ่มนักเรียน —
 //     วันเริ่มเรียน · ติ๊กชำระครบ (ไม่ทราบวันที่) · วันที่เรียนไปแล้ว (ไม่เกินวันนี้ · ไม่เกินจำนวนครั้งของคอร์ส) · ลงให้ตัวเองเป็นครูเท่านั้น ·
 //     ไม่มีช่องราคา (ครูไม่รู้ราคาจริงของนักเรียนเก่า → ราคาที่ตกลงว่างไว้ ให้เจ้าของ/ผู้ดูแลกรอกภายหลัง) · พนักงานที่เป็นครู (Tibass/Nutty/Zlex) ฐานยังปฏิเสธ — ใช้คอนโซลผ่านผู้ดูแล
+//   เพิ่ม 14 ต.ค. 69 (เจ้าของสั่ง "นัดสอนที่เดียว" · Edge Function gcal-sync + migration 063): เลือกห้องตอนนัดรอบ → ตรวจห้องชนกับปฏิทิน → นัดในฐาน → ลง Google Calendar ให้เอง ·
+//     ยกเลิก/ไม่มา → ลบ event ตาม · ล้มกลางทาง = แถบแดง + ปุ่ม "ลงปฏิทิน"/"ลบนัดในปฏิทิน" · ฟังก์ชันยังไม่ติดตั้ง/ยังไม่ตั้ง secret = ลงฐานอย่างเดียวตามเดิม (ปุ่ม "ผูกนัดปฏิทิน" เดิมยังอยู่ สำหรับนัดที่ลงจาก Discord)
 //   อ่านผ่าน: rpc my_teacher_id · rpc teach_my_students · class_sessions · session_notes · enrollment_extension_requests · teachers (ชื่อตัวเอง)
 //     + (เฉพาะตอนเปิดฟอร์มเพิ่มนักเรียน) courses · course_teachers + rpc teach_student_find + Edge Function gcal (เฉพาะตอนผูกนัด)
 //   เขียนผ่าน: teach_session_done · teach_session_cancel · teach_session_schedule · teach_note_save · teach_extend_request · teach_enroll_create · teach_session_backfill (062) · teach_gcal_link · teach_gcal_unlink
@@ -524,6 +526,16 @@ async function callFn(name, body) {
   if (error.context && error.context.status === 404) return { error: { code: 'not_configured', message: 'ยังไม่ได้ติดตั้งฟังก์ชัน ' + name } };
   return { error: { code: 'network', message: error.message || String(error) } };
 }
+// ห้องที่ลงปฏิทินได้ — ⚠️ ต้องตรงกับ ROOMS/ROOM_PRACTICE ในบอท (bots/bot/index.js · roomsync/calendar.js) ตัวอักษรต่อตัวอักษร (เทสต์เทียบให้) · ห้องซ้อมลงได้เมื่อเปิดซิงก์ห้องซ้อม
+const CAL_ROOMS = ['ห้องใหญ่', 'ห้องเล็ก1', 'ห้องเล็ก2', 'ห้องซ้อม'];
+class CalBlock extends Error { constructor(m) { super(String(m || '').replace(/\n+/g, ' · ')); } }          // ข้อความไทยจาก gcal-sync ที่ต้องแสดงตามจริง (ไม่ต่อหน้าด้วย "ไม่สำเร็จ:")
+// เรียก gcal-sync · ready=false เมื่อยังไม่ติดตั้ง/ตั้งค่า/ติดต่อไม่ได้ → ถอยกลับลงฐานอย่างเดียวตามเดิม (ไม่ขวางการนัดสอน)
+async function cal(body) {
+  const res = await callFn('gcal-sync', body);
+  const code = res && res.error && res.error.code;
+  return { res, ok: !!res && !res.error && res.ok !== false, ready: !(code === 'not_configured' || code === 'network' || code === 'not_ready'), code: code || '' };
+}
+const calMsg = r => (r.code === 'network' ? 'ติดต่อระบบปฏิทินไม่ได้ในตอนนี้' : (r.res && r.res.error && r.res.error.message) || 'ลงปฏิทินไม่สำเร็จ');
 function parseTitle(raw) {                                // ตรงกับ parseGcalTitle ใน desk.html: [ห้อง] นำหน้า · ชื่อครูหลังตัวคั่น — – - ตัวสุดท้าย
   let s = String(raw || '').trim(), room = '';
   const m = s.match(/^\[([^\]]{1,40})\]\s*/);
@@ -621,11 +633,12 @@ function sessRowHtml(r, s) {
     state = '<span class="st">ยกเลิก (' + esc(BY_TXT[s.cancel_by] || '') + ')</span>';
     when = (s.starts_at ? esc(whenOf(s.starts_at)) : '') + (s.late_cancel ? ' <span class="wk-red">แจ้งช้า — นับเป็นครั้งที่ใช้ไป</span>' : s.cancel_by === 'student' ? ' <span class="sub">แจ้งล่วงหน้า — ไม่นับเป็นครั้งที่ใช้ไป</span>' : '');
   }
-  const cal = s.status !== 'scheduled' ? '' : s.gcal_uid
+  const calRow = (s.status === 'cancelled' || s.status === 'no_show') && s.gcal_uid ? '<div class="wk-red" data-cal="stale">นัดนี้ยังค้างในปฏิทิน</div>'
+    : s.status !== 'scheduled' ? '' : s.gcal_uid
     ? '<div class="sub" data-cal="linked">ผูกกับนัดในปฏิทินแล้ว ✓' + (s.gcal_start ? ' (' + esc(whenOf(s.gcal_start)) + ')' : '') + '</div>'
     : '<div class="sub" data-cal="none">ยังไม่ผูกกับนัดในปฏิทิน</div>';
   let h = '<div class="card" data-sid="' + esc(s.id) + '"><div class="pills">' + state + '</div><div>' + when + '</div>' +
-    '<div class="sub">' + (s.room ? 'ห้อง ' + esc(s.room) : '') + (s.teacher_id !== st.tid ? ' · สอนโดยครูท่านอื่น' : '') + '</div>' + cal +
+    '<div class="sub">' + (s.room ? 'ห้อง ' + esc(s.room) : '') + (s.teacher_id !== st.tid ? ' · สอนโดยครูท่านอื่น' : '') + '</div>' + calRow +
     (s.cancel_reason ? '<div class="sub">เหตุผล: ' + esc(s.cancel_reason) + '</div>' : '');
   if (st.notes.has(s.id) && !(here && d.open === 'note')) h += '<div class="note" data-note="' + esc(s.id) + '"><span class="sub">บันทึกการสอน</span><br>' + esc(st.notes.get(s.id)) + '</div>';
   if (here && d.open === 'done') {
@@ -648,7 +661,9 @@ function sessRowHtml(r, s) {
   } else {
     let a = '';
     if (s.status === 'scheduled') a += btn('open', 'ทำเครื่องหมายสอนแล้ว', { k: 'done', sid: s.id }) + btn('open', 'ยกเลิก / ไม่มา', { k: 'cancel', sid: s.id }) +
+      (!s.gcal_uid && s.room ? btn('cal-sync', 'ลงปฏิทิน', { sid: s.id }) : '') +
       (s.gcal_uid ? btn('unlink', 'ถอดนัดปฏิทิน', { sid: s.id }) : btn('open', 'ผูกนัดปฏิทิน', { k: 'link', sid: s.id }));
+    if ((s.status === 'cancelled' || s.status === 'no_show') && s.gcal_uid) a += btn('cal-remove', 'ลบนัดในปฏิทิน', { sid: s.id });
     a += btn('open', st.notes.has(s.id) ? 'แก้บันทึกการสอน' : 'บันทึกการสอน', { k: 'note', sid: s.id });
     h += '<div class="acts">' + a + '</div>';
   }
@@ -678,8 +693,8 @@ function detailHtml() {
   if (!closed) {
     h += d.open === 'sched'
       ? '<div class="form" id="formSched"><h3>นัดรอบเรียน</h3>' + inp('date', 'วันที่', { type: 'date' }) + inp('start', 'เวลาเริ่ม', { type: 'time' }) + inp('end', 'เวลาจบ', { type: 'time' }) +
-        inp('room', 'ห้อง (ไม่เกิน 40 ตัวอักษร · เว้นว่างได้)', { maxlength: 40 }) +
-        '<div class="hint">ครูมีนัดซ้อนกัน = ระบบปฏิเสธ · เกินจำนวนครั้ง/เกินวันหมดอายุ = เตือนแต่บันทึกให้</div>' + formBar('sched', 'บันทึกนัด') + '</div>'
+        sel('room', 'ห้อง (เลือกห้อง = ลงปฏิทินให้ด้วย)', [['', 'ไม่ระบุห้อง — ลงฐานอย่างเดียว ไม่ลงปฏิทิน']].concat(CAL_ROOMS.map(x => [x, x]))) +
+        '<div class="hint">ครูมีนัดซ้อนกัน = ระบบปฏิเสธ · เกินจำนวนครั้ง/เกินวันหมดอายุ = เตือนแต่บันทึกให้ · เลือกห้องแล้วห้องชนนัดอื่น = ไม่สร้างนัด (ระบบตรวจกับปฏิทินให้)</div>' + formBar('sched', 'บันทึกนัด') + '</div>'
       : '<div class="acts">' + btn('open', '+ นัดรอบเรียน', { k: 'sched' }) + '</div>';
   } else h += '<div class="hint">คอร์สนี้ปิดแล้ว — นัดรอบใหม่ไม่ได้</div>';
   h += '</section>';
@@ -768,7 +783,7 @@ async function run(label, fn) {
   } catch (e) {
     if (uid !== st.uid || st.det !== d) return;
     console.error('[Teacher action]', label, e && e.code || '');
-    d.busy = ''; d.err = 'ไม่สำเร็จ: ' + errText(e);
+    d.busy = ''; d.err = e instanceof CalBlock ? e.message : 'ไม่สำเร็จ: ' + errText(e);
     render();
   }
 }
@@ -788,10 +803,21 @@ function submit(k) {
     if (fv.as === 'cancelled' && fv.by === 'student' && !fv.notified) return failMsg('ใส่วันที่นักเรียนแจ้ง');
     if (fv.as === 'cancelled' && fv.by === 'student' && fv.notified > today) return failMsg('วันที่แจ้งต้องไม่เกินวันนี้');
     if (String(fv.reason).length > 300) return failMsg('เหตุผลยาวเกิน 300 ตัวอักษร');
+    const sess0 = sessOf(d.id).find(x => x.id === fv.sid);
     return run('cancel', async () => {
       const res = await rpc('teach_session_cancel', { p_session: fv.sid, p_as: fv.as, p_by: fv.as === 'cancelled' ? fv.by : null,
         p_notified_at: fv.as === 'cancelled' && fv.by === 'student' && fv.notified !== today ? ts(fv.notified, '12:00') : null, p_reason: String(fv.reason).trim() || null });
-      return { ok: (fv.as === 'no_show' ? 'บันทึกว่านักเรียนไม่มา' : 'ยกเลิกรอบแล้ว') + (res && res.counted ? ' — นับเป็นครั้งที่ใช้ไป' : ' — ไม่นับเป็นครั้งที่ใช้ไป') };
+      let okMsg = (fv.as === 'no_show' ? 'บันทึกว่านักเรียนไม่มา' : 'ยกเลิกรอบแล้ว') + (res && res.counted ? ' — นับเป็นครั้งที่ใช้ไป' : ' — ไม่นับเป็นครั้งที่ใช้ไป');
+      const warn = [];
+      // ลบ event ในปฏิทินตาม (ไม่งั้นปฏิทินค้างผี) · event ที่ระบบไม่ได้สร้าง = ไม่ลบ บอกให้ลบเอง
+      if (sess0 && sess0.gcal_uid) {
+        const rm = await cal({ action: 'remove', session_id: fv.sid });
+        if (rm.ok && rm.res.removed) okMsg += ' · ลบนัดในปฏิทินแล้ว ✓';
+        else if (rm.ok && rm.res.reason === 'external') warn.push(rm.res.message || 'นัดนี้ลงมาจาก Discord/ปฏิทินโดยตรง ระบบไม่ลบให้ — ลบเองในปฏิทิน');
+        else if (!rm.ok && rm.ready) warn.push('ยกเลิกรอบแล้ว แต่ลบนัดในปฏิทินไม่สำเร็จ — ' + calMsg(rm) + ' — กดปุ่ม "ลบนัดในปฏิทิน" ที่รอบนี้เพื่อลองอีกครั้ง');
+        else if (!rm.ok) warn.push('ยกเลิกรอบแล้ว แต่ยังลบนัดในปฏิทินให้ไม่ได้ (ระบบปฏิทินยังไม่พร้อม) — ลบเองในปฏิทิน');
+      }
+      return { ok: okMsg, warn };
     });
   }
   if (k === 'note') {
@@ -805,8 +831,25 @@ function submit(k) {
     if (!fv.date || !fv.start || !fv.end) return failMsg('ใส่วันที่ เวลาเริ่ม และเวลาจบ');
     if (fv.end <= fv.start) return failMsg('เวลาจบต้องหลังเวลาเริ่ม');
     return run('sched', async () => {
-      const res = await rpc('teach_session_schedule', { p_enrollment: d.id, p_teacher: st.tid, p_starts: ts(fv.date, fv.start), p_ends: ts(fv.date, fv.end), p_room: String(fv.room).trim() || null, p_hours: null });
-      return { ok: 'นัดรอบเรียนแล้ว ✓', warn: ((res && res.warnings) || []).map(w => WARN_TXT[w] || ('คำเตือนจากระบบ (รหัส ' + String(w).slice(0, 40) + ')')) };
+      const room = String(fv.room).trim(), startsTs = ts(fv.date, fv.start), endsTs = ts(fv.date, fv.end);
+      // 1) เช็กห้องชนก่อนสร้างนัด (ชน/ห้องไม่ถูกต้อง = ไม่สร้างทั้งนัดและ event) · ปฏิทินยังไม่พร้อม = ลงฐานอย่างเดียวตามเดิม
+      let ready = false;
+      if (room) {
+        const ck = await cal({ action: 'check', room, starts: startsTs, ends: endsTs });
+        if (ck.code === 'conflict' || ck.code === 'room_invalid') throw new CalBlock(ck.res.error.message);
+        ready = ck.ready;
+      }
+      const res = await rpc('teach_session_schedule', { p_enrollment: d.id, p_teacher: st.tid, p_starts: startsTs, p_ends: endsTs, p_room: room || null, p_hours: null });
+      const warn = ((res && res.warnings) || []).map(w => WARN_TXT[w] || ('คำเตือนจากระบบ (รหัส ' + String(w).slice(0, 40) + ')'));
+      let okMsg = 'นัดรอบเรียนแล้ว ✓';
+      // 2) ลง Calendar ให้ (event id คงที่ — กดซ้ำไม่ซ้ำ) · ล้ม = แดงตัวหนา + ปุ่ม "ลงปฏิทิน" ที่รอบนั้น (ห้ามเงียบ)
+      if (room && !ready) warn.push('บันทึกนัดแล้ว แต่ยังไม่ได้ลงปฏิทิน — ระบบปฏิทินยังไม่พร้อม (ยังไม่ได้ตั้งค่า/ติดต่อไม่ได้) · ลงปฏิทินเองหรือกด "ลงปฏิทิน" ที่รอบนี้ภายหลัง');
+      else if (room) {
+        const up = await cal({ action: 'upsert', session_id: res && res.id });
+        if (up.ok) okMsg += ' · ลงปฏิทินแล้ว ✓';
+        else warn.push('นัดบันทึกแล้ว แต่ลงปฏิทินไม่สำเร็จ — ' + calMsg(up) + ' — กดปุ่ม "ลงปฏิทิน" ที่รอบนี้เพื่อลองอีกครั้ง');
+      }
+      return { ok: okMsg, warn };
     });
   }
   if (k === 'ext') {
@@ -830,6 +873,15 @@ $app.addEventListener('click', e => {
     if (a === 'open') openForm(b.dataset.k, b.dataset.sid || '');
     else if (a === 'close-form') { d.open = null; d.fv = {}; d.err = ''; d.link = null; render(); }
     else if (a === 'submit') submit(b.dataset.k);
+    else if (a === 'cal-sync' || a === 'cal-remove') {
+      const sid = b.dataset.sid, rmv = a === 'cal-remove';
+      run(a, async () => {
+        const r = await cal({ action: rmv ? 'remove' : 'upsert', session_id: sid });
+        if (!r.ok) throw new CalBlock(r.ready ? calMsg(r) : 'ระบบปฏิทินยังไม่พร้อม (ยังไม่ได้ตั้งค่า/ติดต่อไม่ได้) — ลองใหม่ภายหลัง');
+        if (rmv) return r.res.removed ? { ok: 'ลบนัดในปฏิทินแล้ว ✓' } : { ok: 'ไม่มีนัดที่ระบบสร้างให้ลบ', warn: r.res.message ? [r.res.message] : [] };
+        return { ok: r.res.created === false ? (r.res.message || 'รอบนี้ผูกกับนัดในปฏิทินอยู่แล้ว') : 'ลงปฏิทินแล้ว ✓' };
+      });
+    }
     else if (a === 'unlink') { const sid = b.dataset.sid; run('unlink', async () => { await rpc('teach_gcal_unlink', { p_session: sid }); return { ok: 'ถอดนัดปฏิทินแล้ว' }; }); }
     else if (a === 'link-pick') {
       const s = sessOf(d.id).find(x => x.id === d.fv.sid), x = s && d.link ? linkChoices(s, d.link)[Number(b.dataset.i)] : null;
