@@ -2535,6 +2535,7 @@
                 <select id="opsArea" class="input" aria-label="หมวดงาน"></select>
                 <input type="search" id="opsSearch" class="input grow" placeholder="ค้นหางาน…" autocomplete="off" aria-label="ค้นหางาน">
                 <button class="btn" id="opsRefresh" type="button">↻ รีเฟรช</button>
+                <span class="hint" id="opsStamp" role="status" aria-live="polite" style="margin:0;"></span>
                 <button class="btn btn-primary" id="opsAdd" type="button">+ เพิ่มงาน</button>
               </div>
               <div id="opsBoard"><div class="empty">กำลังโหลดงาน…</div></div>
@@ -3792,6 +3793,7 @@ async function resyncAll() {
   if (current === 'calendar') loadCalendar();
   if (current === 'transfer') loadTransfer(); else trLoadUnseen();
   if (current === 'teach') loadTeach();
+  if (current === 'ops') loadOps();
   loadWork();
 }
 document.addEventListener('visibilitychange', () => {
@@ -7841,11 +7843,18 @@ function renderOps() { renderOpsStats(); renderOpsBoard(); renderOpsRail(); }
 async function loadOps() {
   if (!isOwner()) return;
   const uid = currentUserId;
-  const [t, m, o] = await Promise.all([
-    db.from('ops_tasks').select(OPS_COLS).order('created_at', { ascending: true }),
-    db.from('ops_board_meta').select('last_scan, next_scan, sources, reports').maybeSingle(),
-    db.from('ops_task_orders').select(OPS_ORD_COLS).order('created_at', { ascending: false }).limit(300),
-  ]);
+  let t, m, o;
+  try {
+    [t, m, o] = await Promise.all([
+      db.from('ops_tasks').select(OPS_COLS).order('created_at', { ascending: true }),
+      db.from('ops_board_meta').select('last_scan, next_scan, sources, reports').maybeSingle(),
+      db.from('ops_task_orders').select(OPS_ORD_COLS).order('created_at', { ascending: false }).limit(300),
+    ]);
+  } catch (e) {                                              // คำขอล้มทั้งก้อน (เน็ตหลุด) — ต้องบอก ไม่ปล่อยให้ปุ่มรีเฟรช "ไม่เกิดอะไรขึ้น"
+    console.error('[Ops load]', e);
+    if (uid === currentUserId && isOwner()) showFatalError('โหลด Ops Board ไม่สำเร็จ: ' + ((e && e.message) || 'เชื่อมต่อไม่ได้'));
+    return;
+  }
   if (uid !== currentUserId || !isOwner()) return;           // สลับบัญชีระหว่างโหลด — ทิ้งผล ไม่เอามาแสดง
   const alertEl = document.getElementById('opsAlert');
   ops.loaded = true;
@@ -7876,13 +7885,39 @@ async function loadOps() {
     if (ops.ordersOn) alertEl.innerHTML += '<div class="alert alert-warn">โหลดคำสั่งถึง Claude ไม่สำเร็จ: ' + escapeHtml(o.error.message) + ' (รายการงานยังใช้ได้)</div>';
   } else { ops.ordersOn = true; ops.orders = o.data || []; }
   renderOps();
+  opsStampSet();
 }
+
+// บอกผลทุกครั้งที่ดึงสำเร็จ: ข้อมูลเท่าเดิมแล้วหน้าตาไม่เปลี่ยน ผู้ใช้จะเห็นเป็น "กดแล้วไม่เกิดอะไร" (14 ต.ค. 69)
+function opsStampSet() {
+  const el = document.getElementById('opsStamp');
+  if (!el) return;
+  const t = new Date().toLocaleTimeString('th-TH', { hour12: false, timeZone: 'Asia/Bangkok' });
+  el.textContent = 'อัปเดตล่าสุด ' + t + ' · ' + ops.tasks.length + ' งาน';
+}
+async function opsRefreshClick() {
+  const b = document.getElementById('opsRefresh');
+  if (b.disabled) return;
+  b.disabled = true; b.textContent = 'กำลังโหลด…';
+  try { await loadOps(); } finally { b.disabled = false; b.textContent = '↻ รีเฟรช'; }
+}
+// ไม่มี realtime ของ ops_* — โพลล์เบา ๆ เฉพาะตอนเปิดหมวดนี้ + แท็บมองเห็น (งาน/ผลคำสั่งที่ฝั่งผู้จัดการเขียนจะโผล่เอง)
+let OPS_POLL_MS = 60000, opsPollTimer = null;     // let: เทสต์ปรับให้สั้นลงได้
+function opsPollSchedule() {
+  clearTimeout(opsPollTimer);
+  opsPollTimer = setTimeout(() => {
+    opsPollSchedule();
+    if (current === 'ops' && !document.hidden && currentUserId && navigator.onLine !== false) loadOps();
+  }, OPS_POLL_MS);
+}
+opsPollSchedule();
 
 function opsReset() {            // ออกจากระบบ/สลับบัญชี — ข้อมูลภายในร้านต้องไม่ค้างในหน้า (DOM ก็ล้าง ไม่ใช่แค่ซ่อน)
   ops = { tasks: [], meta: null, orders: [], ordersOn: true, loaded: false, filter: 'open', area: 'all', q: '', editingId: null };
   document.getElementById('opsBoard').innerHTML = '<div class="empty">กำลังโหลดงาน…</div>';
   document.getElementById('opsRail').innerHTML = '';
   document.getElementById('opsAlert').innerHTML = '';
+  document.getElementById('opsStamp').textContent = '';
   ['opsStatRed', 'opsStatAmber', 'opsStatDue', 'opsStatDone'].forEach(id => { document.getElementById(id).textContent = '0'; });
   document.getElementById('opsSearch').value = '';
   document.getElementById('opsArea').value = 'all';
@@ -8885,7 +8920,7 @@ function catReset() {
   });
   document.getElementById('opsArea').addEventListener('change', e => { ops.area = e.target.value; renderOpsBoard(); });
   document.getElementById('opsSearch').addEventListener('input', e => { ops.q = e.target.value; renderOpsBoard(); });
-  document.getElementById('opsRefresh').addEventListener('click', () => loadOps());
+  document.getElementById('opsRefresh').addEventListener('click', opsRefreshClick);
   document.getElementById('opsAdd').addEventListener('click', () => openOpsForm(null));
   document.getElementById('opsfCancel').addEventListener('click', () => document.getElementById('opsDialog').close());
   document.getElementById('opsForm').addEventListener('submit', e => { e.preventDefault(); saveOps(); });

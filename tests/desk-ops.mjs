@@ -168,6 +168,40 @@ async function runTests() {
   ok('ยังไม่ได้รัน 033 (ไม่มีตาราง): บอกให้รัน migration ไม่ใช่ error ดิบ', /ต้องรัน migration 033/.test($('opsAlert').textContent));
   OPS.missing = false; $('opsRefresh').click(); await sleep(300);
   ok('รีเฟรชแล้วกลับมาปกติ: ข้อความเตือนหาย งานกลับมา', $('opsAlert').textContent === '' && titles().length > 0);
+
+  // ── รีเฟรช/อัปเดตเอง: ต้องเห็นผลเสมอ (14 ต.ค. 69 "กดรีเฟรชแล้วไม่มีอะไรเกิดขึ้น") ──
+  const selOps = () => opsCalls('select').filter(c => c.table === 'ops_tasks').length;
+  $('opsStamp').textContent = '';
+  $('opsRefresh').click();
+  ok('กดรีเฟรช: ปุ่มเป็น "กำลังโหลด…" และกดซ้ำไม่ได้ระหว่างโหลด', $('opsRefresh').disabled === true && /กำลังโหลด/.test($('opsRefresh').textContent));
+  await sleep(300);
+  ok('รีเฟรชเสร็จ: ปุ่มกลับมากดได้ · ขึ้น "อัปเดตล่าสุด HH:MM:SS · N งาน" ทั้งที่ข้อมูลเท่าเดิม',
+    $('opsRefresh').disabled === false && $('opsRefresh').textContent.trim() === '↻ รีเฟรช' &&
+    /^อัปเดตล่าสุด \\d\\d:\\d\\d:\\d\\d · \\d+ งาน$/.test($('opsStamp').textContent), $('opsStamp').textContent);
+  const origFrom = db.from;
+  db.from = () => { throw new Error('เน็ตหลุดจำลอง'); };
+  $('opsStamp').textContent = '';
+  $('opsRefresh').click(); await sleep(300);
+  db.from = origFrom;
+  ok('คำขอล้มทั้งก้อน (reject/throw): แจ้งแถบแดง ไม่เงียบ · ปุ่มกลับมากดได้ · ไม่ขึ้นเวลา "อัปเดตล่าสุด" หลอก',
+    /โหลด Ops Board ไม่สำเร็จ: เน็ตหลุดจำลอง/.test(document.body.innerText) && $('opsRefresh').disabled === false && $('opsStamp').textContent === '', document.body.innerText.slice(0, 160));
+  $('opsRefresh').click(); await sleep(300);
+  OPS.tasks.push({ ...OPS.tasks[0], id: 'tpoll', title: 'งานใหม่ที่ผู้จัดการเพิ่มเอง' });
+  const selBefore = selOps();
+  OPS_POLL_MS = 150; opsPollSchedule();
+  await sleep(700);
+  ok('โพลล์เบาตอนเปิดหมวด OPS: งานที่ฝั่งผู้จัดการเขียนโผล่เองโดยไม่ต้องกดรีเฟรช', selOps() > selBefore && titles().includes('งานใหม่ที่ผู้จัดการเพิ่มเอง'), titles().join(' | '));
+  showSection('home'); await sleep(100);
+  const selAway = selOps();
+  await sleep(600);
+  ok('ไม่ได้อยู่หมวด OPS: โพลล์ไม่ยิงคำขอไปที่ ops_tasks', selOps() === selAway, selAway + ' → ' + selOps());
+  OPS_POLL_MS = 60000; opsPollSchedule();
+  showSection('ops'); await sleep(300);
+  const selR = selOps();
+  OPS.tasks = OPS.tasks.filter(t => t.id !== 'tpoll');
+  await resyncAll(); await sleep(300);
+  ok('กลับมาที่แท็บ/เน็ตกลับมา (resyncAll) ตอนอยู่หมวด OPS: โหลด OPS ใหม่ งานที่ถูกลบหายจากหน้า', selOps() > selR && !titles().includes('งานใหม่ที่ผู้จัดการเพิ่มเอง'));
+  ok('ป้ายอัปเดตล่าสุดอยู่ในกรอบตัวหนังสือ ≥ 14px', parseFloat(getComputedStyle($('opsStamp')).fontSize) >= 13.95);
   ok('ตัวหนังสือทุกส่วนของหมวด ≥ 14px', [...document.querySelectorAll('#sec-ops *')].filter(e => e.children.length === 0 && e.textContent.trim() && vis(e)).every(e => parseFloat(getComputedStyle(e).fontSize) >= 13.95),
     [...new Set([...document.querySelectorAll('#sec-ops *')].filter(e => e.children.length === 0 && e.textContent.trim() && vis(e) && parseFloat(getComputedStyle(e).fontSize) < 13.95).map(e => e.className + ' ' + getComputedStyle(e).fontSize))].join(' | '));
   ok('ทุกมุมเป็นเหลี่ยม (border-radius 0) ในหมวด', [...document.querySelectorAll('#sec-ops .ops-task, #sec-ops .ops-group h3, #sec-ops .btn, #sec-ops .st, #sec-ops select')].every(e => getComputedStyle(e).borderRadius === '0px'));
