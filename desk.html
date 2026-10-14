@@ -1125,6 +1125,9 @@
   .te-row { border-bottom: 1px solid var(--line); min-height: 44px; overflow-wrap: anywhere; }
   .te-row:last-child { border-bottom: 0; }
   .te-srow { grid-template-columns: minmax(170px, 1.4fr) minmax(150px, 1.4fr) minmax(150px, 1.4fr) minmax(80px, .8fr) minmax(90px, .8fr); }
+  .te-crow { grid-template-columns: minmax(200px, 2fr) minmax(130px, 1fr) minmax(150px, 1.2fr) minmax(100px, .8fr) minmax(190px, 1.3fr); align-items: center; }
+  .te-prin { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .te-prin .input { width: 150px; min-height: 44px; }
   .te-name { font-family: var(--font-head); font-weight: 600; font-size: 16px; line-height: 1.4; }
   .te-sub { font-size: 14px; color: var(--text2); }
   .te-pills { display: flex; flex-wrap: wrap; gap: 6px 8px; margin-top: 6px; }
@@ -2383,6 +2386,7 @@
               <button class="mail-tab" type="button" role="tab" data-tab="sessions" aria-selected="false">รอบเรียน</button>
               <button class="mail-tab" type="button" role="tab" data-tab="ended" aria-selected="false">หมดอายุ / จบ</button>
               <button class="mail-tab" type="button" role="tab" data-tab="enroll" aria-selected="false">ลงเรียน / ย้อนหลัง</button>
+              <button class="mail-tab" type="button" role="tab" data-tab="prices" id="teTabPrices" aria-selected="false" hidden>ราคาคอร์ส</button>
             </div>
             <button class="btn" id="teReload" type="button">↻ รีเฟรช</button>
           </div>
@@ -2397,6 +2401,7 @@
           <div id="teBody"><div class="empty">กำลังโหลดข้อมูลคอร์สเรียน…</div></div>
           </div>
           <div id="teEnrollPane" hidden><div id="teEnrollBody"></div></div>
+          <div id="tePricePane" hidden><div id="tePriceBody"></div></div>
         </section>
 
         <section class="section" id="sec-transfer" hidden aria-label="โอนไฟล์ ถังโอนถ่ายไฟล์ภายในร้าน เก็บ 30 วัน">
@@ -13199,7 +13204,7 @@ const TE_CLOSED = { refund: 'คืนเงิน', quit: 'เลิกเร�
 function teBlank() {
   return { tab: 'summary', who: null, q: '', rows: [], nicks: new Map(), week: [], extPending: 0, tid: null,
            loaded: false, missing: false, error: '', tok: 0, rt: null, cat: null, members: null, f: teFormBlank(),
-           det: null, sched: [], schedOnly: false };
+           det: null, sched: [], schedOnly: false, pr: null };
 }
 let te = teBlank();
 
@@ -13286,6 +13291,8 @@ function teReset() {
   if (al) al.innerHTML = '';
   const q = document.getElementById('teSearch');
   if (q) q.value = '';
+  const pb = document.getElementById('tePriceBody');
+  if (pb) pb.innerHTML = '';                  // หน้าราคาคอร์ส (เฉพาะเจ้าของ/ผู้ดูแล) — ออกจากระบบ/สลับบัญชีแล้วต้องไม่ค้าง
   const eb = document.getElementById('teEnrollBody');
   if (eb) eb.innerHTML = '';                  // ฟอร์มลงเรียน (ชื่อ/เบอร์นักเรียนที่เลือกค้างไว้) ต้องหายจาก DOM ด้วย
   ['teQueueN', 'teActiveN'].forEach(id => { const n = document.getElementById(id); if (n) n.textContent = ''; });
@@ -13390,11 +13397,16 @@ function renderTeach() {
   if (!al || !body) return;
   al.innerHTML = te.missing ? '<div class="alert alert-warn">ยังไม่ได้ติดตั้งระบบคอร์สเรียนในฐานข้อมูล — ต้องรัน migration 047 ก่อน (วางใน Supabase SQL Editor ของโปรเจกต์ร้าน)</div>'
     : te.error ? '<div class="alert alert-red">' + escapeHtml(te.error) + '</div>' : '';
+  document.getElementById('teTabPrices').hidden = !isManager();          // แท็บ "ราคาคอร์ส" = เจ้าของ/ผู้ดูแลเท่านั้น (ฐานบังคับซ้ำด้วย RLS ของ 060)
+  if (te.tab === 'prices' && !isManager()) te.tab = 'summary';
   teTabMark();
   const enr = te.tab === 'enroll';             // แท็บ "ลงเรียน / ย้อนหลัง" ไม่ใช้ตัวกรอง/รายการ — แผงของมันเอง
-  document.getElementById('teListPane').hidden = enr;
+  const prc = te.tab === 'prices';             // แท็บ "ราคาคอร์ส" — แผงของมันเองเช่นกัน
+  document.getElementById('teListPane').hidden = enr || prc;
   document.getElementById('teEnrollPane').hidden = !enr;
+  document.getElementById('tePricePane').hidden = !prc;
   if (enr) { teEnrollOpen(); return; }
+  if (prc) { tePrOpen(); return; }
   const who = document.getElementById('teWho');
   who.hidden = !te.tid;
   who.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.who === teWho())));
@@ -13894,7 +13906,146 @@ document.getElementById('teWho').addEventListener('click', e => {
   if (b) { te.who = b.dataset.who; renderTeach(); }
 });
 document.getElementById('teSearch').addEventListener('input', e => { te.q = e.target.value; renderTeach(); });
-document.getElementById('teReload').addEventListener('click', () => { loadTeach(); });
+document.getElementById('teReload').addEventListener('click', () => {
+  loadTeach();
+  if (te.tab === 'prices') { te.pr = null; renderTeach(); }      // หน้าราคาคอร์ส: โหลดรายการราคาใหม่ด้วย
+});
+
+// ── แท็บ "ราคาคอร์ส" (เจ้าของ/ผู้ดูแลเท่านั้น · migration 060 ให้เขียน courses · 061 = ราคาตามไฟล์ source_price) ──────────────
+// แก้เฉพาะ courses.list_price ด้วย update ตรง (RLS ของ 060 ตัดสินสิทธิ์ · trg_audit_courses บันทึกลง activity_log) · ใช้กับการลงเรียนใหม่เท่านั้น
+//   (enrollments.list_price ถูกก๊อปตอนลงเรียนแล้ว — ใบที่ลงไว้ไม่เปลี่ยน) · บอท Discord/LINE กับหน้าคอร์สบนเว็บยังอ่านราคาจากไฟล์ (courses.json/HTML)
+// ⚠️ ฐานปฏิเสธ RLS เงียบ ๆ = 0 แถว → ต้องขอแถวกลับ (.select) แล้วนับ ไม่ขึ้น "สำเร็จ" หลอก (กฎข้อ 8)
+// ⚠️ list_price <> source_price (ราคาตามไฟล์ ณ การนำเข้า) = แถบแดงต่อแถว · ยังไม่รัน 061 (ไม่มีคอลัมน์) = ซ่อนเงียบ ๆ ส่วนอื่นใช้ได้
+const TE_PR_RE = /^\d{1,9}(\.\d{1,2})?$/;
+const tePrMoney = n => '฿' + teFmt(n);
+const tePrNum = v => { const t = String(v == null ? '' : v).replace(/[,\s฿]/g, ''); return TE_PR_RE.test(t) ? Number(t) : null; };
+function tePrOpen() {
+  if (!isManager()) return;
+  if (!te.pr) tePrLoad(); else tePrRender();
+}
+async function tePrLoad(ok) {
+  const uid = currentUserId, cur = te;
+  const me = te.pr = { loading: true, loaded: false, error: '', srcMissing: false, rows: [], edit: null, busy: false, ok: ok || '' };
+  tePrRender();
+  const COLS = 'id, title, list_price, sessions_total, hours_per_session, practice_hours, valid_months, is_active';
+  let r = await db.from('courses').select(COLS + ', source_price').order('title');
+  if (r.error && /source_price/.test(r.error.message || '')) {          // ยังไม่รัน 061 — ไม่มีคอลัมน์ราคาตามไฟล์ → ไม่มีคำเตือน "ไม่ตรงไฟล์" ส่วนอื่นใช้ได้
+    me.srcMissing = true;
+    r = await db.from('courses').select(COLS).order('title');
+  }
+  if (uid !== currentUserId || te !== cur || te.pr !== me) return;      // สลับบัญชี/ออกจากระบบ/โหลดซ้อน — ทิ้งผล
+  me.loading = false;
+  if (r.error) {
+    console.error('[Teach prices]', r.error.code || '', r.error.message);
+    me.error = 'โหลดราคาคอร์สไม่สำเร็จ: ' + teErrText(r.error);
+  } else {
+    me.loaded = true;
+    me.rows = r.data || [];
+  }
+  tePrRender();
+}
+function tePrRowHtml(c, pr) {
+  const editing = pr.edit && pr.edit.id === c.id;
+  const sp = pr.srcMissing || c.source_price == null ? null : Number(c.source_price);
+  const off = sp !== null && Number(c.list_price) !== sp;
+  let h = '<div class="te-row te-crow" role="row" data-cid="' + escapeHtml(c.id) + '">' +
+    '<div role="cell" class="te-c1"><div class="te-name">' + escapeHtml(c.title) + '</div>' +
+    '<div class="te-sub">' + escapeHtml(c.id) + (c.is_active === false ? ' · ปิดรับการลงเรียนแล้ว' : '') + '</div>' +
+    (off ? '<div class="wk-red" role="alert">⚠️ ราคาลงเรียน ' + escapeHtml(tePrMoney(c.list_price)) + ' ไม่ตรงราคาที่บอท/เว็บบอกลูกค้า (' + escapeHtml(tePrMoney(sp)) + ')</div>' : '') +
+    '</div>' +
+    '<div role="cell" data-l="ราคาลงเรียน"><b>' + escapeHtml(tePrMoney(c.list_price)) + '</b></div>' +
+    '<div role="cell" data-l="จำนวนครั้ง">' + escapeHtml(String(c.sessions_total)) + ' ครั้ง · ' + escapeHtml(teFmt(c.hours_per_session)) + ' ชม./ครั้ง</div>' +
+    '<div role="cell" data-l="อายุคอร์ส">' + escapeHtml(String(c.valid_months)) + ' เดือน</div>';
+  if (editing) {
+    h += '<div role="cell"><div class="te-prin"><label class="lbl" for="tePrIn" style="margin:0;">ราคาใหม่ (บาท)</label>' +
+      '<input type="text" inputmode="decimal" id="tePrIn" class="input" autocomplete="off" value="' + escapeHtml(pr.edit.v) + '" aria-label="ราคาลงเรียนใหม่ของ ' + escapeHtml(c.title) + '">' +
+      '<button class="btn btn-primary btn-sm" type="button" data-act="pr-save"' + (pr.busy ? ' disabled' : '') + '>บันทึก</button>' +
+      '<button class="btn btn-sm" type="button" data-act="pr-cancel"' + (pr.busy ? ' disabled' : '') + '>ยกเลิก</button></div>' +
+      (pr.edit.err ? '<div class="wk-red" role="alert" id="tePrErr">' + escapeHtml(pr.edit.err) + '</div>' : '') + '</div>';
+  } else {
+    h += '<div role="cell"><button class="btn btn-sm" type="button" data-act="pr-edit" data-id="' + escapeHtml(c.id) + '"' + (pr.busy ? ' disabled' : '') + '>แก้ราคา</button></div>';
+  }
+  return h + '</div>';
+}
+function tePrRender() {
+  const box = document.getElementById('tePriceBody');
+  if (!box || te.tab !== 'prices') return;
+  const pr = te.pr;
+  const note = '<div class="alert alert-red" role="note" id="tePrNote">' +
+    '<div class="wk-red">ใช้กับการลงเรียนใหม่เท่านั้น ใบที่ลงแล้วไม่เปลี่ยน</div>' +
+    '<div class="wk-red">บอท Discord/LINE และหน้าคอร์สบนเว็บยังใช้ราคาจากไฟล์ — ราคาที่ลูกค้าเห็นต้องแก้ที่ไฟล์/เว็บแยกต่างหาก</div></div>';
+  if (!pr || pr.loading) { box.innerHTML = note + '<div class="empty">กำลังโหลดราคาคอร์ส…</div>'; return; }
+  const act = document.activeElement;
+  const keep = act && box.contains(act) && act.id ? { id: act.id, s: act.selectionStart, e: act.selectionEnd } : null;
+  box.innerHTML = note +
+    (pr.ok ? '<div class="alert alert-plain" id="tePrOk" role="status" style="border-color:var(--ok);color:var(--ok);background:var(--ok-soft);">' + escapeHtml(pr.ok) + '</div>' : '') +
+    (pr.error ? '<div class="alert alert-red" role="alert">' + escapeHtml(pr.error) + '</div>' : '') +
+    (pr.loaded ? '<div class="te-head te-crow" role="row"><div>คอร์ส</div><div>ราคาลงเรียน</div><div>จำนวนครั้ง</div><div>อายุคอร์ส</div><div></div></div>' +
+      '<div class="te-list" role="table" aria-label="ราคาคอร์ส">' + (pr.rows.length ? pr.rows.map(c => tePrRowHtml(c, pr)).join('') : '<div class="empty">ยังไม่มีคอร์สในระบบ</div>') + '</div>' : '');
+  if (keep) {
+    const el = document.getElementById(keep.id);
+    if (el) { el.focus(); try { if (keep.s != null) el.setSelectionRange(keep.s, keep.e); } catch (e) { /* ไม่รองรับ selection */ } }
+  }
+}
+function tePrAsk() {
+  const pr = te.pr, ed = pr && pr.edit;
+  if (!ed || pr.busy) return;
+  const c = pr.rows.find(x => x.id === ed.id);
+  if (!c) return;
+  const n = tePrNum(ed.v);
+  if (n === null) { ed.err = 'ราคาต้องเป็นตัวเลขไม่ติดลบ ทศนิยมไม่เกิน 2 ตำแหน่ง (เช่น 20000 หรือ 18500.50)'; tePrRender(); return; }
+  if (n === Number(c.list_price)) { ed.err = 'ราคาเท่าเดิม — ไม่มีอะไรเปลี่ยน'; tePrRender(); return; }
+  ed.err = ''; tePrRender();
+  askConfirm('ยืนยันแก้ราคาลงเรียน',
+    '<p><b>' + escapeHtml(c.title) + '</b></p>' +
+    '<p>ราคาลงเรียน: จาก <b>' + escapeHtml(tePrMoney(c.list_price)) + '</b> เป็น <b>' + escapeHtml(tePrMoney(n)) + '</b></p>' +
+    '<p class="wk-red">ใช้กับการลงเรียนใหม่เท่านั้น ใบที่ลงแล้วไม่เปลี่ยน · บอท Discord/LINE และหน้าคอร์สบนเว็บยังใช้ราคาจากไฟล์</p>',
+    'ยืนยันแก้ราคา', () => tePrSave(c.id, n));
+}
+async function tePrSave(id, price) {
+  const pr = te.pr, uid = currentUserId, cur = te;
+  if (!pr || !pr.edit || pr.busy) return;
+  const c = pr.rows.find(x => x.id === id);
+  pr.busy = true; tePrRender();
+  const r = await db.from('courses').update({ list_price: price }).eq('id', id).select('id, list_price');   // ขอแถวกลับ — ฐานปฏิเสธ RLS เงียบ ๆ = 0 แถว
+  closeConfirm();
+  if (uid !== currentUserId || te !== cur || te.pr !== pr) return;
+  pr.busy = false;
+  if (r.error || !(r.data || []).length) {
+    if (r.error) console.error('[Teach price save]', r.error.code || '', r.error.message);
+    pr.edit.err = r.error ? 'แก้ราคาไม่สำเร็จ: ' + teErrText(r.error) : 'แก้ราคาไม่สำเร็จ — ฐานข้อมูลไม่รับการแก้ (สิทธิ์ไม่ถึง หรือยังไม่ได้รัน migration 060) ราคายังเป็นค่าเดิม';
+    tePrRender();
+    return;
+  }
+  te.cat = null;                       // รายการคอร์สของฟอร์มลงเรียน/แผงรายละเอียดต้องโหลดใหม่ (ไม่ให้ใช้ราคาเก่า)
+  tePrLoad('แก้ราคา ' + (c ? c.title : id) + ' เป็น ' + tePrMoney(r.data[0].list_price) + ' แล้ว — ใช้กับการลงเรียนใหม่เท่านั้น');
+}
+(function tePrWire() {
+  const box = document.getElementById('tePriceBody');
+  box.addEventListener('click', e => {
+    const b = e.target.closest('button[data-act]');
+    if (!b || !te.pr || !isManager()) return;
+    if (b.dataset.act === 'pr-edit') {
+      const c = te.pr.rows.find(x => x.id === b.dataset.id);
+      if (!c || te.pr.busy) return;
+      te.pr.ok = '';
+      te.pr.edit = { id: c.id, v: String(Number(c.list_price)), err: '' };
+      tePrRender();
+      const i = document.getElementById('tePrIn'); if (i) { i.focus(); i.select(); }
+    } else if (b.dataset.act === 'pr-cancel') {
+      te.pr.edit = null; tePrRender();
+    } else if (b.dataset.act === 'pr-save') {
+      tePrAsk();
+    }
+  });
+  box.addEventListener('input', e => {
+    if (e.target.id === 'tePrIn' && te.pr && te.pr.edit) { te.pr.edit.v = e.target.value; }     // ไม่วาดใหม่ระหว่างพิมพ์ (เคอร์เซอร์ไม่หาย)
+  });
+  box.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && e.target.id === 'tePrIn') { e.preventDefault(); if (te.pr && te.pr.edit) te.pr.edit.v = e.target.value; tePrAsk(); }
+    if (e.key === 'Escape' && e.target.id === 'tePrIn' && te.pr) { te.pr.edit = null; tePrRender(); }
+  });
+})();
 
 // ── ก้อน C: แผงรายละเอียดการลงเรียน (คลิกแถว) + แท็บ "รอบเรียน" ────────────────────────────────────────────
 // แผงขวากลาง (openDetail) · ข้อมูลเฉพาะการลงเรียนนี้: class_sessions · (ผู้ที่สิทธิ์ถึงเท่านั้น) enrollment_money/enrollment_payments · session_notes · enrollment_extension_requests

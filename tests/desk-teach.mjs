@@ -82,7 +82,8 @@ async function runTests() {
   ok('ไม่เรียกฟังก์ชัน/ตารางสลิป (ปิดไว้หลัง feature flag)', !CALLS.some(c => /course-slips|teach_slip/.test(JSON.stringify(c))) && TE_SLIPS_ENABLED === false);
   ok('พนักงานที่ไม่ใช่ครู: ไม่มีตัวกรอง "ทุกคน/ของฉัน"', $('teWho').hidden === true);
   ok('แท็บเริ่มที่ "สรุป" · แท็บมี 6 อัน: สรุป รอคิว กำลังเรียน รอบเรียน หมดอายุ/จบ ลงเรียน/ย้อนหลัง', document.querySelector('#teTabs .mail-tab[aria-selected="true"]').dataset.tab === 'summary'
-    && [...document.querySelectorAll('#teTabs .mail-tab')].map(b => b.dataset.tab).join() === 'summary,queue,active,sessions,ended,enroll');
+    && [...document.querySelectorAll('#teTabs .mail-tab')].filter(b => !b.hidden).map(b => b.dataset.tab).join() === 'summary,queue,active,sessions,ended,enroll');
+  ok('พนักงานทั่วไป: แท็บ "ราคาคอร์ส" ซ่อนอยู่ (เจ้าของ/ผู้ดูแลเท่านั้น)', $('teTabPrices').hidden === true && $('teTabPrices').getBoundingClientRect().width === 0);
   ok('ไม่มีแท็บ "ค่าสอน" (เลื่อนไป 048)', !/ค่าสอน/.test($('teTabs').textContent));
 
   // ── 2. สรุป ───────────────────────────────────────────────────────────────
@@ -150,7 +151,7 @@ async function runTests() {
   ok('ชื่อ/คอร์ส/ครูที่เป็น HTML แสดงเป็นข้อความ ไม่ถูกแปลเป็นแท็ก (XSS)', !!xr && !xr.querySelector('img, b') && [...xr.querySelectorAll('i')].every(i => i.parentElement.classList.contains('te-prog')) && /<img src=x/.test(xr.textContent) && /<b onmouseover/.test(xr.textContent) && !window.__xss, xr && xr.innerHTML);
   const small = [...body().querySelectorAll('.te-row *')].filter(e => e.children.length === 0 && e.textContent.trim() && parseFloat(getComputedStyle(e).fontSize) < 14);
   ok('ตัวหนังสือทุกชิ้นในรายการ ≥ 14px', small.length === 0, small.slice(0, 3).map(e => e.textContent + ':' + getComputedStyle(e).fontSize).join('|'));
-  ok('แท็บสูง ≥ 44px', [...document.querySelectorAll('#teTabs .mail-tab')].every(e => e.getBoundingClientRect().height >= 44));
+  ok('แท็บสูง ≥ 44px (เฉพาะที่มองเห็น — "ราคาคอร์ส" ซ่อนจากพนักงานทั่วไป)', [...document.querySelectorAll('#teTabs .mail-tab')].filter(e => !e.hidden).every(e => e.getBoundingClientRect().height >= 44));
 
   // ── 4. เจ้าของที่เป็นครู (TiBass) ──────────────────────────────────────────
   await logout();
@@ -295,6 +296,18 @@ async function runTests() {
     [...pn.querySelectorAll('#teSave, select.input, input.input, .te-seg button')].map(e => Math.round(e.getBoundingClientRect().height)).join());
   ok('iPhone: ช่องกรอกตัวหนังสือ ≥ 16px (iOS ไม่ซูมเอง)', [...pn.querySelectorAll('select.input, input.input, textarea.input')].every(e => parseFloat(getComputedStyle(e).fontSize) >= 16));
   await shot('11-phone-enroll');
+  // บล็อก ข: แท็บ "ราคาคอร์ส" บน iPhone — การ์ดต่อคอร์ส · ไม่ล้นจอ · ปุ่ม/ช่องกรอกสูง ≥ 44px · ช่องกรอก ≥ 16px
+  tab('prices'); await sleep(600);
+  const pr0 = $('tePriceBody').querySelector('.te-crow[data-cid="basic-dj-class"]');
+  ok('iPhone: ราคาคอร์สเรียงเป็นการ์ดคอลัมน์เดียว · หัวตารางซ่อน · ไม่ล้นจอ', !!pr0 && getComputedStyle(pr0).gridTemplateColumns.split(' ').length === 1
+    && getComputedStyle($('tePriceBody').querySelector('.te-head')).display === 'none' && document.documentElement.scrollWidth <= window.innerWidth + 1, document.documentElement.scrollWidth + '>' + window.innerWidth);
+  ok('iPhone: ป้ายคอลัมน์ "ราคาลงเรียน" โผล่หน้าค่า', getComputedStyle(pr0.querySelector('[data-l="ราคาลงเรียน"]'), '::before').content.indexOf('ราคาลงเรียน') >= 0);
+  ok('iPhone: ปุ่มแก้ราคา ≥ 44px', [...$('tePriceBody').querySelectorAll('button[data-act="pr-edit"]')].every(e => e.getBoundingClientRect().height >= 43.5));
+  pr0.querySelector('button[data-act="pr-edit"]').click(); await sleep(150);
+  ok('iPhone: ช่องกรอกราคา/ปุ่มบันทึก/ปุ่มยกเลิก สูง ≥ 44px · ตัวหนังสือช่องกรอก ≥ 16px · ไม่ล้นจอ', [...$('tePriceBody').querySelectorAll('#tePrIn, button[data-act="pr-save"], button[data-act="pr-cancel"]')].every(e => e.getBoundingClientRect().height >= 43.5)
+    && parseFloat(getComputedStyle($('tePrIn')).fontSize) >= 16 && document.documentElement.scrollWidth <= window.innerWidth + 1);
+  ok('iPhone: ข้อความเตือนสีแดงตัวหนาอยู่ในจอ (ไม่ถูกตัด)', [...$('tePrNote').querySelectorAll('.wk-red')].every(e => isRed(e) && e.getBoundingClientRect().right <= window.innerWidth + 1));
+  await shot('12-phone-prices');
   L('RESULT:' + (fail ? 'FAIL' : 'PASS') + ' pass=' + pass + ' fail=' + fail);
 }
 </script>`;
@@ -586,11 +599,171 @@ async function runTests() {
 const J = o => JSON.stringify(o);
 </script>`;
 
+const TESTS_PRICES = `<script>
+window.addEventListener('load', () => setTimeout(runTests, 300));
+${COMMON}
+const pane = () => $('tePriceBody');
+const prRows = () => [...pane().querySelectorAll('.te-crow[data-cid]')];
+const prRow = id => pane().querySelector('.te-crow[data-cid="' + id + '"]');
+const btn = (id, act) => prRow(id).querySelector('button[data-act="' + act + '"]');
+const upd = () => CALLS.filter(c => c.op === 'update' && c.table === 'courses');
+const typeIn = v => { const i = $('tePrIn'); i.value = v; i.dispatchEvent(new Event('input', { bubbles: true })); };
+const cur = () => te.tab;
+async function runTests() {
+  L('=== คอร์สเรียน · แท็บ "ราคาคอร์ส" (บล็อก ข · เจ้าของ/ผู้ดูแลเท่านั้น) ===');
+  TEACH.seed();
+
+  // ── 1. พนักงานทั่วไป: ไม่เห็น ไม่โหลด ──
+  await login('Zen'); await open();
+  ok('พนักงาน: แท็บ "ราคาคอร์ส" ซ่อน', $('teTabPrices').hidden === true);
+  tab('prices'); await sleep(300);
+  ok('พนักงานบังคับเปิดแท็บ (ผ่านโค้ด): ถอยกลับแท็บสรุป · แผงราคาไม่เปิด · ไม่วาดอะไร', cur() === 'summary' && $('tePricePane').hidden === true && pane().innerHTML === '', cur() + ' ' + pane().innerHTML.length);
+  ok('พนักงาน: ไม่อ่านราคาคอร์สแบบมี source_price (ไม่โหลดหน้านี้เลย)', !CALLS.some(c => c.table === 'courses' && /source_price/.test(c.cols || '')) && te.pr === null);
+  ok('พนักงาน: ปุ่มแก้ราคาไม่มีใน DOM', !document.querySelector('[data-act="pr-edit"]'));
+  await logout();
+
+  // ── 2. ผู้ดูแล (Nui): เห็นแท็บ · ตารางคอร์ส · ข้อความแดง ──
+  TEACH.courses.push({ id: 'manual-course', title: 'คอร์สเพิ่มเอง (ไม่ได้มาจากไฟล์)', list_price: '9000.00', source_price: null, sessions_total: 3, hours_per_session: '1.00', practice_hours: null, valid_months: 1, tracks: [], is_active: true });
+  TEACH.courses.push({ id: 'xss-course', title: '<img src=x onerror="window.__xss=1">คอร์สแปลก', list_price: '5000.00', source_price: '5000.00', sessions_total: 2, hours_per_session: '1.00', practice_hours: null, valid_months: 1, tracks: [], is_active: true });
+  await login('Nui'); await open();
+  ok('ผู้ดูแล: แท็บ "ราคาคอร์ส" เห็น (วางท้ายแท็บ ลงเรียน/ย้อนหลัง)', $('teTabPrices').hidden === false
+    && [...document.querySelectorAll('#teTabs .mail-tab')].filter(b => !b.hidden).map(b => b.dataset.tab).join() === 'summary,queue,active,sessions,ended,enroll,prices');
+  ok('ยังไม่เปิดแท็บ = ยังไม่โหลดราคา', te.pr === null && !CALLS.some(c => c.table === 'courses'));
+  tab('prices'); await sleep(500);
+  ok('เปิดแท็บ: แผงราคาขึ้น · แผงรายการ/ลงเรียนซ่อน · แท็บถูกเลือก', $('tePricePane').hidden === false && $('teListPane').hidden === true && $('teEnrollPane').hidden === true
+    && $('teTabPrices').getAttribute('aria-selected') === 'true');
+  ok('แสดงทุกคอร์สรวมที่ปิดรับแล้ว (5 แถว) · ชื่อ + รหัส + ราคา + จำนวนครั้ง + อายุ', prRows().length === 5
+    && /Basic DJ Class/.test(prRow('basic-dj-class').textContent) && /฿20,000/.test(prRow('basic-dj-class').textContent)
+    && /6 ครั้ง · 2 ชม\\.\\/ครั้ง/.test(prRow('basic-dj-class').textContent) && /3 เดือน/.test(prRow('basic-dj-class').textContent), prRows().length + ' ' + prRow('basic-dj-class').textContent);
+  ok('คอร์สปิดรับ: บอก "ปิดรับการลงเรียนแล้ว"', /ปิดรับการลงเรียนแล้ว/.test(prRow('old-course').textContent));
+  const note = $('tePrNote');
+  ok('ข้อความเตือนบนหน้าเป็นแดงตัวหนา: "ใช้กับการลงเรียนใหม่เท่านั้น ใบที่ลงแล้วไม่เปลี่ยน"', !!note && /ใช้กับการลงเรียนใหม่เท่านั้น ใบที่ลงแล้วไม่เปลี่ยน/.test(note.textContent)
+    && [...note.querySelectorAll('.wk-red')].length === 2 && [...note.querySelectorAll('.wk-red')].every(isRed));
+  ok('ข้อความเตือนบอกว่าบอท Discord/LINE + หน้าคอร์สบนเว็บยังใช้ราคาจากไฟล์ · ต้องแก้ที่ไฟล์/เว็บแยกต่างหาก', /บอท Discord\\/LINE และหน้าคอร์สบนเว็บยังใช้ราคาจากไฟล์/.test(note.textContent) && /ต้องแก้ที่ไฟล์\\/เว็บแยกต่างหาก/.test(note.textContent));
+  ok('ราคาตรงไฟล์ทุกแถว (และคอร์สที่ source_price ว่าง): ไม่มีแถบเตือน "ไม่ตรงไฟล์"', !pane().querySelector('[role="alert"]') && !/ไม่ตรงราคาที่บอท/.test(pane().textContent) && /฿9,000/.test(prRow('manual-course').textContent));
+  ok('XSS: ชื่อคอร์สที่มีแท็กแสดงเป็นข้อความ ไม่รันสคริปต์', !window.__xss && !pane().querySelector('img') && /onerror/.test(prRow('xss-course').textContent));
+  ok('โหลดครั้งเดียวด้วย select ตาราง courses (มี source_price) — ไม่ใช้ฟังก์ชัน/ตารางเงิน', CALLS.filter(c => c.op === 'select' && c.table === 'courses' && /source_price/.test(c.cols)).length === 1
+    && !CALLS.some(c => /^enrollment_(money|payments)$/.test(c.table || '') && c.op !== 'select'), J(CALLS.filter(c => c.table === 'courses').map(c => c.cols)));
+  const small = [...pane().querySelectorAll('*')].filter(e => [...e.childNodes].some(n => n.nodeType === 3 && n.textContent.trim()) && parseFloat(getComputedStyle(e).fontSize) < 14);
+  ok('ตัวหนังสือในหน้าราคา ≥ 14px ทุกจุด', small.length === 0, small.map(e => e.tagName + '.' + e.className + ':' + getComputedStyle(e).fontSize).join());
+  await shot('10-prices');
+
+  // ── 3. แก้ราคา: ตรวจค่า ก่อนเปิดหน้าต่างยืนยัน ──
+  btn('basic-dj-class', 'pr-edit').click(); await sleep(100);
+  ok('กดแก้ราคา: ช่องกรอกขึ้นพร้อมราคาปัจจุบัน (20000) · ได้โฟกัส · ปุ่มบันทึก/ยกเลิก', !!$('tePrIn') && $('tePrIn').value === '20000' && document.activeElement === $('tePrIn')
+    && !!btn('basic-dj-class', 'pr-save') && !!btn('basic-dj-class', 'pr-cancel') && !btn('basic-dj-class', 'pr-edit'));
+  ok('แถวอื่นยังเป็นปุ่ม "แก้ราคา" (แก้ทีละแถว)', !!btn('adv-scratch-class', 'pr-edit'));
+  const bad = [['18500.505', 'ทศนิยม 3 ตำแหน่ง'], ['-100', 'ติดลบ'], ['abc', 'ไม่ใช่ตัวเลข'], ['', 'ว่าง'], ['1e5', 'รูปแบบวิทยาศาสตร์'], ['12 000 000 000', 'ใหญ่เกินช่วง']];
+  for (const [v, why] of bad) {
+    typeIn(v); btn('basic-dj-class', 'pr-save').click(); await sleep(60);
+    ok('ค่าไม่ถูกต้อง (' + why + '): ข้อความแดงตัวหนา · ไม่เปิดหน้าต่างยืนยัน · ไม่เรียกฐาน', !!$('tePrErr') && isRed($('tePrErr')) && $('confirmDialog').open === false && upd().length === 0, v + ' → ' + ($('tePrErr') || {}).textContent);
+  }
+  typeIn('20000'); btn('basic-dj-class', 'pr-save').click(); await sleep(60);
+  ok('ราคาเท่าเดิม: บอก "เท่าเดิม" · ไม่เปิดหน้าต่าง · ไม่เรียกฐาน', /เท่าเดิม/.test(($('tePrErr') || {}).textContent) && $('confirmDialog').open === false && upd().length === 0);
+  typeIn('0'); btn('basic-dj-class', 'pr-save').click(); await sleep(60);
+  ok('ราคา 0 ผ่านการตรวจ (≥ 0) → เปิดหน้าต่างยืนยัน', $('confirmDialog').open === true && /จาก/.test($('confirmBody').textContent), $('confirmBody').textContent);
+  closeConfirm(); await sleep(50);
+
+  // ── 4. ยืนยันแล้วบันทึก ──
+  typeIn('18,500.50'); await sleep(30);
+  btn('basic-dj-class', 'pr-save').click(); await sleep(100);
+  const cb = $('confirmBody').textContent;
+  ok('หน้าต่างยืนยัน: ชื่อคอร์ส + "จาก ฿20,000 เป็น ฿18,500.5" (ตัวคั่นหลักพันรับได้)', $('confirmDialog').open === true && /Basic DJ Class/.test(cb) && /จาก ฿20,000 เป็น ฿18,500\\.5/.test(cb), cb);
+  ok('หน้าต่างยืนยันมีข้อความแดงตัวหนา "ใช้กับการลงเรียนใหม่เท่านั้น ใบที่ลงแล้วไม่เปลี่ยน"', [...$('confirmBody').querySelectorAll('.wk-red')].some(e => isRed(e) && /ใบที่ลงแล้วไม่เปลี่ยน/.test(e.textContent)));
+  ok('ยังไม่บันทึกจนกว่าจะกดยืนยัน', upd().length === 0 && TEACH.priceWrites.length === 0);
+  closeConfirm(); await sleep(50);
+  ok('ปิดหน้าต่างยืนยัน (ไม่ยืนยัน): ไม่เรียกฐาน · ช่องกรอกยังอยู่', upd().length === 0 && !!$('tePrIn') && $('tePrIn').value === '18,500.50');
+  tab('enroll'); await sleep(600); tab('prices'); await sleep(200);
+  ok('ก่อนบันทึก: เปิดแท็บลงเรียนแล้วรายการคอร์สของฟอร์มถูกโหลดค้างไว้ (te.cat ไม่ว่าง) · ช่องกรอกยังอยู่', !!te.cat && te.cat.loaded === true && !!$('tePrIn'));
+  btn('basic-dj-class', 'pr-save').click(); await sleep(100);
+  $('confirmOkBtn').click(); await sleep(700);
+  const u = upd();
+  ok('ยืนยัน: update ตาราง courses ครั้งเดียว · เฉพาะคีย์ list_price · ค่า 18500.5 · eq id คอร์สนั้น', u.length === 1 && J(u[0].payload.keys) === '["list_price"]' && u[0].vals.list_price === 18500.5
+    && J(u[0].eqs) === '[["id","basic-dj-class"]]', J(u));
+  ok('ไม่แตะฟังก์ชันชำระ/การลงเรียน/ตารางอื่น (ราคาที่ลงเรียนไปแล้วไม่เปลี่ยน)', !CALLS.some(c => c.op === 'rpc' && /^teach_(enroll|payment)/.test(c.fn)) && !CALLS.some(c => c.op !== 'select' && c.table && c.table !== 'courses' && c.op !== 'rpc'));
+  ok('บันทึกสำเร็จ: ฐานเก็บ 18500.50 · โดยผู้ดูแล (u4)', TEACH.priceWrites.length === 1 && TEACH.priceWrites[0].list_price === '18500.50' && TEACH.priceWrites[0].by === 'u4', J(TEACH.priceWrites));
+  ok('หน้าต่างยืนยันปิดเอง · ช่องกรอกหาย · ขึ้นข้อความสำเร็จ', $('confirmDialog').open === false && !$('tePrIn') && /แก้ราคา Basic DJ Class เป็น ฿18,500\\.5 แล้ว/.test(($('tePrOk') || {}).textContent || ''), ($('tePrOk') || {}).textContent);
+  ok('โหลดรายการใหม่: ราคาในตารางเป็น ฿18,500.5', /฿18,500\\.5/.test(prRow('basic-dj-class').textContent));
+  const w1 = prRow('basic-dj-class').querySelector('[role="alert"]');
+  ok('ราคาไม่ตรงราคาตามไฟล์ (source_price 20000): แถบแดงตัวหนา "ราคาลงเรียน ฿18,500.5 ไม่ตรงราคาที่บอท/เว็บบอกลูกค้า (฿20,000)"', !!w1 && isRed(w1)
+    && /ราคาลงเรียน ฿18,500\\.5 ไม่ตรงราคาที่บอท\\/เว็บบอกลูกค้า \\(฿20,000\\)/.test(w1.textContent), w1 && w1.textContent);
+  ok('แถวอื่นที่ราคาตรงไฟล์ไม่มีแถบเตือน', !prRow('adv-scratch-class').querySelector('[role="alert"]') && pane().querySelectorAll('[role="alert"]').length === 1);
+  ok('บันทึกสำเร็จแล้วรายการคอร์สของฟอร์มลงเรียนถูกล้าง (ไม่ใช้ราคาเก่า)', te.cat === null);
+  await shot('11-prices-saved');
+
+  // ── 5. กลับเป็นราคาตามไฟล์ → แถบเตือนหาย ──
+  btn('basic-dj-class', 'pr-edit').click(); await sleep(50);
+  typeIn('20000'); $('tePrIn').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await sleep(100);
+  ok('Enter ในช่องกรอก = ขอยืนยัน (เปิดหน้าต่าง)', $('confirmDialog').open === true && /จาก ฿18,500\\.5 เป็น ฿20,000/.test($('confirmBody').textContent), $('confirmBody').textContent);
+  $('confirmOkBtn').click(); await sleep(700);
+  ok('แก้กลับเท่าราคาตามไฟล์: แถบเตือนหาย', upd().length === 2 && !prRow('basic-dj-class').querySelector('[role="alert"]') && /฿20,000/.test(prRow('basic-dj-class').textContent));
+
+  // ── 6. Realtime ระหว่างกำลังแก้: ช่องกรอก/ค่าที่พิมพ์ไม่หาย ──
+  btn('adv-scratch-class', 'pr-edit').click(); await sleep(50);
+  typeIn('15000');
+  TEACH.fireRt('enrollments'); await sleep(900);
+  ok('Realtime โหลดรายการใหม่ระหว่างกำลังแก้: ช่องกรอกและค่าที่พิมพ์ยังอยู่', !!$('tePrIn') && $('tePrIn').value === '15000' && cur() === 'prices', $('tePrIn') && $('tePrIn').value);
+  tab('summary'); await sleep(100); tab('prices'); await sleep(150);
+  ok('สลับแท็บไป-กลับ: ไม่โหลดซ้ำ · ช่องกรอกยังอยู่', !!$('tePrIn') && CALLS.filter(c => c.op === 'select' && c.table === 'courses' && /source_price/.test(c.cols)).length === 3);
+  btn('adv-scratch-class', 'pr-cancel').click(); await sleep(60);
+  ok('กดยกเลิก: กลับเป็นปุ่ม "แก้ราคา" · ไม่เรียกฐาน', !$('tePrIn') && !!btn('adv-scratch-class', 'pr-edit') && upd().length === 2);
+
+  // ── 7. ฐานปฏิเสธเงียบ ๆ (ยังไม่รัน 060 / สิทธิ์ไม่ถึง) → ไม่หลอกว่าสำเร็จ ──
+  TEACH.noCourseWrite = true;
+  btn('adv-scratch-class', 'pr-edit').click(); await sleep(50);
+  typeIn('17000'); btn('adv-scratch-class', 'pr-save').click(); await sleep(100);
+  $('confirmOkBtn').click(); await sleep(600);
+  ok('ฐานตอบ 0 แถว: ข้อความแดงตัวหนา "ฐานข้อมูลไม่รับการแก้" · ไม่ขึ้นว่าสำเร็จ · ราคายังเป็นค่าเดิม', !!$('tePrErr') && isRed($('tePrErr')) && /ฐานข้อมูลไม่รับการแก้/.test($('tePrErr').textContent) && !$('tePrOk')
+    && /฿20,000/.test(prRow('adv-scratch-class').textContent) && TEACH.courses.find(c => c.id === 'adv-scratch-class').list_price === '20000.00', ($('tePrErr') || {}).textContent);
+  ok('ล้มแล้วช่องกรอกยังอยู่ให้แก้/ยกเลิก · ปุ่มไม่ค้างล็อก', !!$('tePrIn') && btn('adv-scratch-class', 'pr-save').disabled === false);
+  TEACH.fail.from_courses = 'secret-internal-detail-42';
+  btn('adv-scratch-class', 'pr-save').click(); await sleep(100); $('confirmOkBtn').click(); await sleep(600);
+  ok('ฐานตอบ error ภาษาอังกฤษ: ขึ้น "ฐานข้อมูลตอบกลับผิดปกติ" แดงตัวหนา · ไม่โชว์ข้อความดิบของฐาน', !!$('tePrErr') && isRed($('tePrErr')) && /ฐานข้อมูลตอบกลับผิดปกติ/.test($('tePrErr').textContent) && !/secret-internal-detail-42/.test(pane().textContent), ($('tePrErr') || {}).textContent);
+  TEACH.fail = {};
+  btn('adv-scratch-class', 'pr-cancel').click(); await sleep(50);
+  TEACH.noCourseWrite = false;
+
+  // ── 8. ยังไม่รัน 061: ไม่มีคอลัมน์ source_price → ซ่อนคำเตือนเงียบ ๆ · ส่วนอื่นใช้ได้ ──
+  await logout(); await login('Tibass'); await open();
+  TEACH.noSource = true;
+  TEACH.courses.find(c => c.id === 'basic-dj-class').list_price = '12345.00';       // ต่างจากที่ฐานเคยจำ — ถ้าคอลัมน์ไม่มี ต้องไม่ขึ้นเตือน
+  tab('prices'); await sleep(600);
+  ok('เจ้าของเห็นแท็บ · ยังไม่รัน 061: ตารางขึ้นตามปกติ · ไม่มีแถบเตือน · ไม่มีข้อความผิดพลาด', prRows().length === 5 && /฿12,345/.test(prRow('basic-dj-class').textContent)
+    && !pane().querySelector('[role="alert"]') && !/ไม่สำเร็จ/.test(pane().textContent) && te.pr.srcMissing === true, pane().textContent.slice(0, 160));
+  ok('ถอยไปอ่านแบบไม่มี source_price (2 ครั้ง: ลองแล้วล้ม → อ่านซ้ำ)', CALLS.filter(c => c.op === 'select' && c.table === 'courses' && c.cols.indexOf('source_price') < 0 && c.cols.indexOf('list_price') >= 0).length >= 1);
+  btn('basic-dj-class', 'pr-edit').click(); await sleep(50);
+  typeIn('13000'); btn('basic-dj-class', 'pr-save').click(); await sleep(100); $('confirmOkBtn').click(); await sleep(600);
+  ok('ยังไม่รัน 061: แก้ราคาได้ตามปกติ', TEACH.courses.find(c => c.id === 'basic-dj-class').list_price === '13000.00' && /฿13,000/.test(prRow('basic-dj-class').textContent) && !pane().querySelector('[role="alert"]'));
+  TEACH.noSource = false;
+
+  // ── 9. โหลดล้ม ──
+  await logout(); await login('Nui'); await open();
+  TEACH.fail.from_courses = 'connection reset';
+  tab('prices'); await sleep(500);
+  ok('โหลดราคาล้ม: ข้อความแดงในหน้า · ไม่มีตาราง · ไม่มีปุ่มแก้', /โหลดราคาคอร์สไม่สำเร็จ/.test(pane().textContent) && prRows().length === 0 && !btn_any(), pane().textContent.slice(0, 120));
+  TEACH.fail = {};
+
+  // ── 10. ออกจากระบบ/สลับบัญชี: หน้าราคาไม่ค้างให้คนถัดไป ──
+  const n0 = CALLS.filter(c => c.op === 'select' && c.table === 'courses').length;
+  $('teReload').click(); await sleep(500);
+  ok('กด ↻ รีเฟรช ในหน้าราคา: โหลดราคาคอร์สใหม่', CALLS.filter(c => c.op === 'select' && c.table === 'courses').length > n0);
+  btn('adv-scratch-class', 'pr-edit').click(); await sleep(50); typeIn('9999');
+  await logout();
+  ok('ออกจากระบบ: แผงราคาว่าง · ไม่มีช่องกรอก · te.pr ล้าง', pane().innerHTML === '' && !$('tePrIn') && te.pr === null, pane().innerHTML.length);
+  await login('Zen'); await open();
+  ok('คนถัดไป (พนักงาน): ไม่เห็นแท็บ · ไม่มีอะไรของราคาค้าง', $('teTabPrices').hidden === true && pane().innerHTML === '' && cur() === 'summary');
+  L('RESULT:' + (fail ? 'FAIL' : 'PASS') + ' pass=' + pass + ' fail=' + fail);
+}
+const btn_any = () => document.querySelector('#tePriceBody button[data-act]');
+const J = o => JSON.stringify(o);
+</script>`;
+
 const mock = MOCK3 + '\n' + TEACH_MOCK;
 let allOk = true;
 for (const [label, tests, opts] of [
   ['จอคอม 1366×768', TESTS_MAIN, { width: 1366, height: 768, coarse: false }],
   ['ลงเรียน / ย้อนหลัง (ก้อน B)', TESTS_ENROLL, { width: 1366, height: 900, coarse: false }],
+  ['ราคาคอร์ส (บล็อก ข)', TESTS_PRICES, { width: 1366, height: 900, coarse: false }],
   ['บัญชีครูล้วน/ไม่มีสิทธิ์', TESTS_NOACCESS, { width: 1366, height: 768, coarse: false }],
   ['iPhone 390×844', TESTS_PHONE, { width: 390, height: 844, coarse: true }],
 ]) {

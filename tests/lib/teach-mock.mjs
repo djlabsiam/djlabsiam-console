@@ -41,7 +41,7 @@ const TEACH = { rows: [], profiles: [], sessions: [], ext: [], subs: [], status:
     sessions_done: 0, sessions_used: 0, hours_done: '0', sessions_remaining: 6, last_session_on: null, next_session_at: null,
     paid_in_full: true, payment_count: 1, state: 'queued' }, o);
   TEACH.seed = () => {
-    TEACH.fail = {}; TEACH.missing = false; TEACH.gate = null; TEACH.loads = 0;
+    TEACH.fail = {}; TEACH.missing = false; TEACH.noSource = false; TEACH.noCourseWrite = false; TEACH.priceWrites = []; TEACH.gate = null; TEACH.loads = 0;
     TEACH.rows = [
       // กำลังเรียน: เหลือ 50 วัน · 3/6
       R('e-active', { customer_id: 'c1', state: 'active', started_on: day(-40), expires_on: day(50), effective_expiry: day(50), sessions_done: 3, sessions_used: 3, sessions_remaining: 3,
@@ -156,10 +156,10 @@ const TEACH = { rows: [], profiles: [], sessions: [], ext: [], subs: [], status:
   // ── ก้อน B: แคตตาล็อก · ทะเบียนสมาชิก · ค้นนักเรียน · ลงเรียน (สำเนากติกาของ 047 เท่าที่หน้าจอพึ่ง) ──
   TEACH.seedB = () => {
     TEACH.courses = [
-      { id: 'basic-dj-class', title: 'Basic DJ Class', list_price: '20000.00', sessions_total: 6, hours_per_session: '2.00', practice_hours: '20.0', valid_months: 3, tracks: [], is_active: true },
-      { id: 'adv-scratch-class', title: 'Advance Scratch Class', list_price: '20000.00', sessions_total: 6, hours_per_session: '2.00', practice_hours: null, valid_months: 3,
+      { id: 'basic-dj-class', title: 'Basic DJ Class', list_price: '20000.00', source_price: '20000.00', sessions_total: 6, hours_per_session: '2.00', practice_hours: '20.0', valid_months: 3, tracks: [], is_active: true },
+      { id: 'adv-scratch-class', title: 'Advance Scratch Class', list_price: '20000.00', source_price: '20000.00', sessions_total: 6, hours_per_session: '2.00', practice_hours: null, valid_months: 3,
         tracks: [{ name: 'Scratch for Mixing', detail: '' }, { name: 'Scratch for Battle', detail: '' }], is_active: true },
-      { id: 'old-course', title: 'คอร์สเลิกสอนแล้ว', list_price: '9999.00', sessions_total: 3, hours_per_session: '1.00', practice_hours: null, valid_months: 1, tracks: [], is_active: false },
+      { id: 'old-course', title: 'คอร์สเลิกสอนแล้ว', list_price: '9999.00', source_price: '9999.00', sessions_total: 3, hours_per_session: '1.00', practice_hours: null, valid_months: 1, tracks: [], is_active: false },
     ];
     TEACH.teachers = [
       { id: 't1', display_name: 'Tibass', is_active: true }, { id: 't2', display_name: 'Nutty', is_active: true }, { id: 't3', display_name: 'Maniac', is_active: true },
@@ -529,10 +529,11 @@ const TEACH = { rows: [], profiles: [], sessions: [], ext: [], subs: [], status:
     },
   });
   // ตารางที่ก้อน B อ่าน/เขียน (ฐานปลอมแบบเรียบ: ไม่จำลอง RLS ละเอียด — ตัวจริงตรวจที่ test047.mjs)
-  const plain = (client, table, rowsFn, onInsert) => {
-    const st = { op: 'select', notCol: null, order: null };
+  const plain = (client, table, rowsFn, onInsert, onUpdate) => {
+    const st = { op: 'select', notCol: null, order: null, cols: '' };
     const q = {
-      select() { return q; }, order() { return q; }, limit() { return q; }, eq(c, v) { st.eqs = (st.eqs || []).concat([[c, v]]); return q; }, contains() { return q; }, or() { return q; }, ilike() { return q; },
+      select(c) { st.cols = c || ''; return q; }, order() { return q; }, limit() { return q; },
+      update(p) { st.op = 'update'; st.payload = p; return q; }, eq(c, v) { st.eqs = (st.eqs || []).concat([[c, v]]); return q; }, contains() { return q; }, or() { return q; }, ilike() { return q; },
       not(c) { st.notCol = c; return q; },
       insert(p) { st.op = 'insert'; st.payload = p; return q; },
       async single() { const r = await run(); return { data: (r.data || [])[0] || null, error: r.error }; },
@@ -540,16 +541,30 @@ const TEACH = { rows: [], profiles: [], sessions: [], ext: [], subs: [], status:
       then(res, rej) { return run().then(res, rej); },
     };
     async function run() {
-      CALLS.push({ op: st.op, table, who: who(client), payload: st.payload ? { keys: Object.keys(st.payload) } : null });       // ไม่เก็บค่า (ชื่อ/เบอร์) ลงบันทึกเรียก
+      CALLS.push({ op: st.op, table, who: who(client), cols: st.cols, eqs: st.eqs || [], payload: st.payload ? { keys: Object.keys(st.payload) } : null,
+        vals: table === 'courses' && st.payload ? clone(st.payload) : undefined });       // ไม่เก็บค่า (ชื่อ/เบอร์) ลงบันทึกเรียก — ยกเว้นราคาคอร์ส (ไม่ใช่ข้อมูลส่วนตัว)
       if (TEACH.fail['from_' + table]) return E(TEACH.fail['from_' + table]);
       if (TEACH.missing) return E('relation "public.' + table + '" does not exist');
       if (st.op === 'insert') return onInsert ? onInsert(st.payload, client) : E('permission denied for table ' + table);
+      if (st.op === 'update') return onUpdate ? onUpdate(st, client) : E('permission denied for table ' + table);
+      if (table === 'courses' && TEACH.noSource && /source_price/.test(st.cols)) return E('column courses.source_price does not exist');   // ยังไม่รัน 061
       return OK(clone(rowsFn(st)).filter(r => (st.eqs || []).every(([c, v]) => r[c] === v)));
     }
     return q;
   };
   const B_TABLES = {
-    courses: c => plain(c, 'courses', () => TEACH.courses),
+    // update: เจ้าของ/ผู้ดูแลเท่านั้น (060 · courses_owner_admin_write) — คนอื่นโดน RLS กรองเงียบ ๆ = 0 แถว (ไม่มี error) · TEACH.noCourseWrite = ยังไม่รัน 060 (ไม่มี policy เขียน = 0 แถวเหมือนกัน)
+    courses: c => plain(c, 'courses', st => TEACH.courses.map(r => {
+      if (!TEACH.noSource) return r;
+      const { source_price: _s, ...rest } = r; return rest;                                 // ฐานที่ยังไม่รัน 061: ไม่มีคอลัมน์นี้ในแถวด้วย
+    }), null, (st, client) => {
+      const role = roleOf(who(client));
+      if ((role !== 'owner' && role !== 'admin') || TEACH.noCourseWrite) return OK([]);
+      const hit = TEACH.courses.filter(r => (st.eqs || []).every(([k, v]) => r[k] === v));
+      hit.forEach(r => { if ('list_price' in st.payload) r.list_price = Number(st.payload.list_price).toFixed(2); });
+      TEACH.priceWrites = (TEACH.priceWrites || []).concat(hit.map(r => ({ id: r.id, list_price: r.list_price, by: who(client) })));
+      return OK(clone(hit));
+    }),
     course_teachers: c => plain(c, 'course_teachers', () => TEACH.links),
     teachers: c => plain(c, 'teachers', () => TEACH.teachers),
     members: c => plain(c, 'members', () => TEACH.members),
