@@ -421,7 +421,7 @@ function addHtml() {
         '<dt>จำนวนครั้ง</dt><dd>' + Number(c.sessions_total) + ' ครั้ง</dd><dt>อายุคอร์ส</dt><dd>' + Number(c.valid_months) + ' เดือน</dd></dl>';
       const lock = busy || !!a.createdId, today = todayBkk();
       h += '<div class="field"><label class="chk"><input type="checkbox" id="a_back" data-ab="back"' + (a.back ? ' checked' : '') + (lock ? ' disabled' : '') + '> นักเรียนเรียนไปแล้ว (กรอกย้อนหลัง)</label>' +
-        '<div class="hint">ใช้กับนักเรียนเก่าที่เรียนกับคุณมาก่อนระบบนี้ — ลงให้ตัวเองเป็นครูเท่านั้น · ไม่ต้องกรอกราคา (เจ้าของ/ผู้ดูแลกรอกภายหลัง) · บัญชีครูที่เป็นพนักงานด้วยลงย้อนหลังที่หน้านี้ไม่ได้ ให้แจ้งผู้ดูแลลงที่คอนโซล</div></div>';
+        '<div class="hint">ใช้กับนักเรียนเก่าที่เรียนกับคุณมาก่อนระบบนี้ — ลงให้ตัวเองเป็นครูเท่านั้น · ไม่ต้องกรอกราคา (เจ้าของ/ผู้ดูแลกรอกภายหลัง)</div></div>';
       if (a.back) {
         h += '<div id="backForm"><div class="field"><label class="lbl" for="a_started">วันเริ่มเรียน (ถ้าทราบ)</label><input id="a_started" class="input" type="date" data-a="started" max="' + today + '" value="' + esc(a.started) + '"' + (lock ? ' disabled' : '') + '></div>' +
           '<div class="field"><label class="chk"><input type="checkbox" id="a_paid" data-ab="paid"' + (a.paid ? ' checked' : '') + (lock ? ' disabled' : '') + '> ชำระครบแล้ว (ไม่ทราบวันที่)</label></div>' +

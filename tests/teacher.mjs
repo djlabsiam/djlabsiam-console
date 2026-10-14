@@ -511,7 +511,7 @@ async function runTests() {
   await openForm('0877772222');
   ok('มีสวิตช์ "นักเรียนเรียนไปแล้ว (กรอกย้อนหลัง)" ปิดอยู่ · สูง ≥ 44px · ยังไม่มีช่องวันเริ่ม\/ชำระ\/วันที่เรียน · ข้อความเดิม "รอเจ้าของ\/ผู้ดูแลบันทึกชำระก่อน"',
     !!$('a_back') && $('a_back').checked === false && $('a_back').closest('label').getBoundingClientRect().height >= 43.5 && !$('backForm') && \/รอเจ้าของ\\/ผู้ดูแลบันทึกชำระก่อน จึงนัดรอบเรียนได้\/.test($('payNote').textContent));
-  ok('คำอธิบายใต้สวิตช์: ลงให้ตัวเองเท่านั้น · ไม่ต้องกรอกราคา · ครูที่เป็นพนักงานลงย้อนหลังที่หน้านี้ไม่ได้', \/ลงให้ตัวเองเป็นครูเท่านั้น\/.test($('addForm').textContent) && \/ไม่ต้องกรอกราคา\/.test($('addForm').textContent) && \/ครูที่เป็นพนักงานด้วยลงย้อนหลังที่หน้านี้ไม่ได้\/.test($('addForm').textContent));
+  ok('คำอธิบายใต้สวิตช์: ลงให้ตัวเองเท่านั้น · ไม่ต้องกรอกราคา · ไม่มีข้อความห้ามพนักงานที่เป็นครู (064 เปิดให้แล้ว)', \/ลงให้ตัวเองเป็นครูเท่านั้น\/.test($('addForm').textContent) && \/ไม่ต้องกรอกราคา\/.test($('addForm').textContent) && !\/ลงย้อนหลังที่หน้านี้ไม่ได้\/.test($('addForm').textContent) && !\/แจ้งผู้ดูแลลงที่คอนโซล\/.test($('addForm').textContent));
   tick('a_back'); await settle(100);
   ok('เปิดสวิตช์: ขึ้นวันเริ่มเรียน (max = วันนี้) · ติ๊กชำระครบ · วันที่เรียนไปแล้ว 0 ครั้ง · ปุ่ม "+ เพิ่มวันที่เรียน" · ปุ่มส่งเป็น "ลงเรียนย้อนหลัง"',
     !!$('backForm') && $('a_started').max === TODAY && $('a_paid').checked === false && \/0\\/6 ครั้ง\/.test($('datesN').textContent) && !!$('app').querySelector('[data-act="add-adddate"]')
@@ -599,15 +599,16 @@ async function runTests() {
   ok('กดซ้ำ: ไม่สร้างใบซ้ำ (teach_enroll_create ยังเท่าเดิม) · ลงรอบอีก 1 ครั้งเรียกด้วยใบเดิม · สำเร็จ',
     enrolls().length === nE2 + 1 && backs().length === nB2 + 2 && backs()[backs().length - 1].args.p_enrollment === backs()[backs().length - 2].args.p_enrollment && !$('addStu') && \/ลงเรียนย้อนหลังให้\/.test(($('flash') || {}).textContent || ''));
 
-  \/\/ ── 6. ฐานปฏิเสธ (ครูที่เป็นพนักงาน = ใช้กติกาพนักงาน) ──
+  \/\/ ── 6. พนักงานที่เป็นครู (064): ลงย้อนหลังให้ตัวเองได้ · ราคาว่าง ──
   await signOut();
   await signIn('nutty');
   await openForm('0877772222');
   tick('a_back'); await settle(80);
   const nE3 = enrolls().length;
   aact('add-submit'); await settle(600);
-  ok('ครูที่เป็นพนักงาน: ฐานปฏิเสธ · ข้อความไทยของฐานแสดงตามจริง · ไม่มีใบเกิด · ไม่ลงรอบ · ฟอร์มยังอยู่',
-    enrolls().length === nE3 + 1 && \/ลงเรียนไม่สำเร็จ: กรอกย้อนหลังได้เฉพาะเจ้าของ ผู้ดูแล\/.test(errT()) && !TEACH.created.some(x => x.args.p_teacher === 't2' && x.args.p_source === 'backfill') && !!$('addForm') && backs().length === nB2 + 2, errT());
+  const cr = TEACH.created.filter(x => x.args.p_teacher === 't2' && x.args.p_source === 'backfill');
+  ok('พนักงานที่เป็นครู (064): ลงย้อนหลังให้ตัวเองได้ · ส่ง teach_enroll_create ครั้งเดียว · ราคาที่ส่งเป็น null · ไม่มีข้อความผิดพลาด · ไม่ลงรอบ (ไม่ได้ใส่วัน)',
+    enrolls().length === nE3 + 1 && cr.length === 1 && cr[0].args.p_price_agreed === null && cr[0].role === 'staff' && errT() === '' && backs().length === nB2 + 2, errT());
   await signOut();
 
   \/\/ ── 7. ไม่ดึง\/ไม่วาดของที่ไม่ใช่ของครู ──

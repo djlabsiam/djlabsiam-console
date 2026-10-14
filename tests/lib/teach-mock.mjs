@@ -223,12 +223,13 @@ const TEACH = { rows: [], profiles: [], sessions: [], ext: [], subs: [], status:
     },
     teach_enroll_create(me, a) {
       // 060: เจ้าของ/ผู้ดูแล = เดิม · พนักงาน = ราคาที่ตกลงต้องเท่าราคาตั้ง + ไม่มีย้อนหลัง · ครูล้วน = ครูเป็นตัวเอง · ราคาบังคับ = ราคาตั้ง
-      const role = roleOf(me), tid = myTid(me), priv = role === 'owner' || role === 'admin', tonly = !role && !!tid;
+      const role = roleOf(me), tid = myTid(me), priv = role === 'owner' || role === 'admin', tonly = !role && !!tid, tself = !priv && !!tid;      // 064: tself = ครูที่ไม่ใช่เจ้าของ/ผู้ดูแล (ครูล้วน หรือพนักงานที่เป็นครู)
       if (!role && !tid) return E('ต้องเข้าสู่ระบบด้วยบัญชีทีมงานหรืออาจารย์ที่ยังใช้งานอยู่');
       const lang = a.p_teach_lang || 'th', source = a.p_source || 'console';
       if (['console', 'backfill'].indexOf(source) < 0) return E('แหล่งที่มาของการลงเรียนไม่ถูกต้อง');
-      if (source === 'backfill' && !priv && !tonly) return E('กรอกย้อนหลังได้เฉพาะเจ้าของ ผู้ดูแล หรืออาจารย์ (ลงให้นักเรียนของตัวเอง)');      // 062: ครูล้วนผ่านได้ (ลงให้ตัวเองเท่านั้น — เช็กบรรทัดถัดไป)
+      if (source === 'backfill' && !priv && !tself) return E('กรอกย้อนหลังได้เฉพาะเจ้าของ ผู้ดูแล หรืออาจารย์ (ลงให้นักเรียนของตัวเอง)');      // 062: ครูล้วนผ่านได้ (ลงให้ตัวเองเท่านั้น — เช็กบรรทัดถัดไป)
       if (tonly && a.p_teacher !== tid) return E('อาจารย์ลงเรียนได้เฉพาะให้ตัวเองเป็นครู');
+      if (tself && !tonly && source === 'backfill' && a.p_teacher !== tid) return E('กรอกย้อนหลังได้เฉพาะให้ตัวเองเป็นครู');      // 064
       const cust = FAKE.customers.find(c => c.id === a.p_customer);
       if (!cust) return E('ไม่พบนักเรียน (ลูกค้า) คนนี้');
       const course = TEACH.courses.find(c => c.id === a.p_course && c.is_active);
@@ -242,7 +243,8 @@ const TEACH = { rows: [], profiles: [], sessions: [], ext: [], subs: [], status:
         list = a.p_list_price;
       } else if (a.p_list_price != null) return E('ตั้งราคาตั้งเองได้เฉพาะคอร์สภาษาอังกฤษ');
       let agreed = a.p_price_agreed;
-      if (tonly) agreed = source === 'backfill' ? null : list;                    // 062: ครูล้วนย้อนหลัง = ไม่มีราคาที่ตกลง · console = ราคาตั้ง
+      if (tself && !tonly && source === 'backfill') { if (a.p_price_agreed != null) return E('พนักงานกรอกย้อนหลังไม่ต้องระบุราคา — เจ้าของหรือผู้ดูแลกรอกราคาภายหลัง'); agreed = null; }      // 064
+      else if (tonly) agreed = source === 'backfill' ? null : list;                    // 062: ครูล้วนย้อนหลัง = ไม่มีราคาที่ตกลง · console = ราคาตั้ง
       else if (!priv && agreed != null && agreed !== list) return E('ราคาแก้ได้เฉพาะเจ้าของหรือผู้ดูแล');
       if (agreed == null && source !== 'backfill') return E('ต้องระบุราคาที่ตกลง');
       if (agreed != null && agreed < 0) return E('ราคาที่ตกลงต้องไม่ติดลบ');
@@ -260,7 +262,7 @@ const TEACH = { rows: [], profiles: [], sessions: [], ext: [], subs: [], status:
     },
     teach_session_backfill(me, a) {
       // 062: เจ้าของ/ผู้ดูแล = เดิม · ครูล้วน = เฉพาะใบ backfill ที่ teacher_id = ตัวเอง (ใบของคนอื่น = "ไม่พบ" เหมือนไม่มีจริง) · พนักงาน = ปฏิเสธ
-      const role = roleOf(me), tid = myTid(me), tonly = !role && !!tid;
+      const role = roleOf(me), tid = myTid(me), tonly = !isMgr(role) && !!tid;      // 064: ครูล้วน + พนักงานที่เป็นครู
       if (!isMgr(role) && !tonly) return E('ลงรอบย้อนหลังได้เฉพาะเจ้าของ ผู้ดูแล หรืออาจารย์ของนักเรียนคนนั้น');
       const e = TEACH.rows.find(r => r.id === a.p_enrollment);
       if (!e || (tonly && e.teacher_id !== tid)) return E('ไม่พบการลงเรียนนี้');
