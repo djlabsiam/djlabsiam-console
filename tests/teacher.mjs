@@ -644,7 +644,7 @@ async function runTests() {
 
   // ── 1. ฟอร์ม ──
   oform('sched'); await settle(150);
-  const opts = [...$('f_room').options].map(o => o.value);
+  const opts = [...($('f_room').options || [])].map(o => o.value);       // ช่องกลายเป็น input = ไม่มี options → ให้ข้อยืนยันข้างล่างตก ไม่ใช่ TypeError ทั้งหน้า
   ok('ช่องห้องเป็นตัวเลือก: ว่าง (ลงฐานอย่างเดียว) + ห้องใหญ่ · ห้องเล็ก1 · ห้องเล็ก2 · ห้องซ้อม', $('f_room').tagName === 'SELECT' && J(opts) === J(['', 'ห้องใหญ่', 'ห้องเล็ก1', 'ห้องเล็ก2', 'ห้องซ้อม']), J(opts));
   ok('ข้อความใต้ฟอร์มบอกว่าห้องชนแล้วไม่สร้างนัด', /ห้องชนนัดอื่น = ไม่สร้างนัด/.test(txt()));
   dact('close-form'); await settle(100);
@@ -710,7 +710,7 @@ async function runTests() {
   fillf('by', 'teacher');
   submitK('cancel'); await settle(700);
   ok('นัดที่ลงจาก Discord: ยกเลิกรอบแล้วแต่ไม่ลบ · แถบแดงตัวหนา "ลบเองในปฏิทิน" · รอบขึ้น "นัดนี้ยังค้างในปฏิทิน" + ปุ่ม "ลบนัดในปฏิทิน"',
-    isRed($('detWarn').querySelector('.wk-red')) && /ลบเองในปฏิทิน/.test(warnTxt()) && TEACH.sessions.find(x => x.id === 's-ext').gcal_uid === 'discord-made@google.com'
+    isRed(($('detWarn') || document.createElement('i')).querySelector('.wk-red')) && /ลบเองในปฏิทิน/.test(warnTxt()) && TEACH.sessions.find(x => x.id === 's-ext').gcal_uid === 'discord-made@google.com'
     && isRed(sc('s-ext').querySelector('[data-cal="stale"]')) && has('cal-remove', '[data-sid="s-ext"]'), warnTxt());
 
   // ── 9. ลบ event ล้ม → แดง + ลองอีกครั้ง ──

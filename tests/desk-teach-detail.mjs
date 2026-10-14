@@ -607,7 +607,7 @@ async function runTests() {
 
   // ── 1. ฟอร์ม ──
   openForm('sched'); await settle(200);
-  const opts = [...$('teD_room').options].map(o => o.value);
+  const opts = [...($('teD_room').options || [])].map(o => o.value);       // ช่องกลายเป็น input = ไม่มี options → ให้ข้อยืนยันข้างล่างตก ไม่ใช่ TypeError ทั้งหน้า
   ok('ช่องห้องเป็นตัวเลือก: ว่าง (ลงฐานอย่างเดียว) + ห้องใหญ่ · ห้องเล็ก1 · ห้องเล็ก2 · ห้องซ้อม', $('teD_room').tagName === 'SELECT' && J(opts) === J(['', 'ห้องใหญ่', 'ห้องเล็ก1', 'ห้องเล็ก2', 'ห้องซ้อม']), J(opts));
   ok('ข้อความใต้ฟอร์มบอกว่าห้องชนแล้วไม่สร้างนัด (ระบบตรวจกับปฏิทิน)', /ห้องชนนัดอื่น = ไม่สร้างนัด/.test(dt()));
   dact('close-form'); await settle(100);
