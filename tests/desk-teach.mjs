@@ -26,6 +26,7 @@ import { TEACH_MOCK } from './lib/teach-mock.mjs';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const { MOCK: MOCK3 } = await import(pathToFileURL(join(root, 'tests/desk-home3.mjs')).href);
 const SHOTS = process.env.TEACH_SHOTS || null;
+const ONLY = process.env.TEACH_ONLY ? new RegExp(process.env.TEACH_ONLY) : null;   // รันทีละหน้า (mutation) เช่น TEACH_ONLY='ลงเรียน'
 const pageRoot = process.env.TEACH_ROOT || root;   // ทดสอบหน้าฉบับอื่น (mutation) ได้
 if (SHOTS) mkdirSync(SHOTS, { recursive: true });
 
@@ -271,7 +272,7 @@ const fillv = (id, v) => { const e = document.getElementById(id); e.value = v; e
 async function runTests() {
   L('=== คอร์สเรียน: iPhone ===');
   TEACH.seed();
-  await login('Zen');
+  await login('Nui');
   await open();
   tab('active'); await sleep(100);
   const head = body().querySelector('.te-head');
@@ -322,14 +323,14 @@ async function pickCourse(id) { fill('teCourse', id); await settle(80); }
 async function runTests() {
   L('=== คอร์สเรียน ก้อน B: ลงเรียน / ย้อนหลัง ===');
   TEACH.seed();
-  await login('Zen');
+  await login('Nui');          // 060: กรอกย้อนหลัง/ราคาที่ตกลง/ชำระ = เจ้าของ/ผู้ดูแล — ชุดนี้ทดสอบในนามผู้ดูแล · ของพนักงานทั่วไปอยู่ที่หัวข้อ "5s"
   await open();
   tab('enroll'); await settle(500);
 
   // ── 1. แผง/แท็บ ──
   ok('แท็บ "ลงเรียน / ย้อนหลัง" มี · เปิดแล้วแผงรายการซ่อน แผงลงเรียนขึ้น', !!document.querySelector('#teTabs [data-tab="enroll"]') && E('teListPane').hidden === true && E('teEnrollPane').hidden === false
     && document.querySelector('#teTabs .mail-tab[aria-selected="true"]').dataset.tab === 'enroll');
-  ok('พนักงานทั่วไป (ไม่ใช่ผู้ดูแล) เปิดแท็บนี้ได้', !!E('teFindQ'));
+  ok('ผู้ดูแลเปิดแท็บนี้ได้ (ช่องค้นนักเรียนขึ้น)', !!E('teFindQ'));
   ok('โหลดรายการคอร์ส/ครู/ทะเบียนสมาชิกตอนเปิดแท็บ (courses · course_teachers · teachers · members)', ['courses', 'course_teachers', 'teachers', 'members'].every(t => CALLS.some(c => c.table === t)));
   ok('ไม่เรียกถังสลิป/ฟังก์ชันสลิปเลย (ปิดไว้)', !CALLS.some(c => /course-slips|teach_slip/.test(JSON.stringify(c))));
   ok('ยังไม่เลือกนักเรียน: ไม่มีฟอร์มรายละเอียด · มีทางลัดผู้สมัครกรอกย้อนหลัง', !E('teCourse') && !!E('teCands'));
@@ -422,19 +423,11 @@ async function runTests() {
   ok('สร้างลูกค้าใหม่ (เบอร์ไม่ซ้ำ): ได้แถวลูกค้า · ถูกเลือกเป็นนักเรียนทันที', TEACH.newCust.length === 2 && studentCard() && studentCard().textContent === 'ลูกค้าทดสอบใหม่' && /มีในทะเบียนลูกค้าแล้ว/.test(pane().textContent), pane().textContent.slice(0, 80));
   ok('บันทึกการเรียกฐาน: ไม่เก็บค่าชื่อ/เบอร์ลง CALLS (เก็บเฉพาะชื่อคอลัมน์)', CALLS.filter(c => c.table === 'customers' && c.op === 'insert').every(c => !/0800000099|ลูกค้าทดสอบใหม่/.test(JSON.stringify(c))));
 
-  // ── 5. ลงเรียนใหม่ (พนักงาน) ──
+  // ── 5. ลงเรียนใหม่ (ผู้ดูแล — ตั้งราคาที่ตกลงเอง + บันทึกชำระได้) ──
   await pickCourse('basic-dj-class');
   ok('ลงเรียนใหม่ตั้งต้น: โหมด "ลงเรียนใหม่" · ไม่มีช่องวันเริ่ม/รอบย้อนหลัง · มีช่องชำระแบบติ๊ก', pane().querySelector('[data-act="mode"][data-v="console"]').getAttribute('aria-pressed') === 'true' && !E('teStarted') && !!pane().querySelector('[data-act="paychk"]'));
-  ok('พนักงานทั่วไป: ปุ่ม "อังกฤษ (International)" ปิดอยู่ + ข้อความอธิบายว่าต้องให้ผู้ดูแลลง', pane().querySelector('[data-act="lang"][data-v="en"]').disabled === true && /ให้ผู้ดูแลลงให้/.test(pane().textContent));
+  ok('ผู้ดูแล: ปุ่ม "อังกฤษ (International)" ใช้ได้ · ไม่มีข้อความ "ให้ผู้ดูแลลงให้"', pane().querySelector('[data-act="lang"][data-v="en"]').disabled === false && !/ให้ผู้ดูแลลงให้/.test(pane().textContent));
   fill('teTeacher', 't2'); await settle(50);
-  {   // ผู้ใช้ปลดปุ่มที่ปิดอยู่เอง (DevTools): ฟอร์มต้องปฏิเสธเอง (ฐานก็ปฏิเสธซ้ำ)
-    const en = pane().querySelector('[data-act="lang"][data-v="en"]'); en.disabled = false; en.click(); await settle(100);
-    fill('teListPrice', '28000'); fill('tePrice', '28000'); await settle(50);
-    const ne = rpcCalls('teach_enroll_create').length;
-    act('save'); await settle(100);
-    ok('พนักงานทั่วไปปลดปุ่มภาษาอังกฤษเองแล้วบันทึก: ฟอร์มปฏิเสธ · ไม่ส่งฐาน', /เฉพาะเจ้าของหรือผู้ดูแล/.test(errText()) && rpcCalls('teach_enroll_create').length === ne, errText());
-    act('lang', '[data-v="th"]'); await settle(100);
-  }
   fill('tePrice', '18000'); await settle(100);
   ok('ราคาที่ตกลงต่างจากราคาตั้ง: คำเตือนแดงตัวหนา ให้ใส่หมายเหตุ', isRed(E('tePriceWarn')) && /ต้องใส่หมายเหตุ/.test(E('tePriceWarn').textContent));
   const n0 = rpcCalls('teach_enroll_create').length;
@@ -442,7 +435,7 @@ async function runTests() {
   ok('ราคาต่างโดยไม่ใส่หมายเหตุ: ไม่ส่งฐาน · ข้อความแดง', /ใส่หมายเหตุบอกเหตุผล/.test(errText()) && rpcCalls('teach_enroll_create').length === n0);
   fill('teNote', 'ส่วนลดตามที่ตกลงกับเจ้าของ');
   chk(); await settle(100);
-  ok('ติ๊ก "ชำระแล้ว": มีช่องวันที่/ยอด/วิธี · ข้อความแดงตัวหนา "บันทึกแล้วจะไม่แสดงยอดนี้อีก" (พนักงาน)', !!E('tePayDate') && !!E('tePayAmount') && !!E('tePayMethod') && isRed(E('tePayWarn')) && /ไม่แสดงยอดนี้อีก/.test(E('tePayWarn').textContent));
+  ok('ติ๊ก "ชำระแล้ว": มีช่องวันที่/ยอด/วิธี · ผู้ดูแลเห็นยอดได้เอง จึงไม่มีข้อความ "ไม่แสดงยอดนี้อีก"', !!E('tePayDate') && !!E('tePayAmount') && !!E('tePayMethod') && !E('tePayWarn'));
   fill('tePayDate', day(0)); fill('tePayAmount', '25000'); await settle(50);
   act('save'); await settle(100);
   ok('ยอดชำระเกินราคาที่ตกลง: ไม่ส่งฐาน', /ยอดชำระเกินราคาที่ตกลง/.test(errText()) && rpcCalls('teach_enroll_create').length === n0);
@@ -501,6 +494,45 @@ async function runTests() {
   await open();
   ok('เข้าใหม่: ฟอร์มสะอาด (ไม่มีนักเรียนค้าง · อยู่แท็บสรุป)', !studentCard() && document.querySelector('#teTabs .mail-tab[aria-selected="true"]').dataset.tab === 'summary');
 
+  // ── 5s. พนักงานทั่วไป (060): ลงเรียนได้เฉพาะราคาตั้ง · ไม่มีย้อนหลัง/ชำระ · ฐานปฏิเสธซ้ำ ──
+  tab('enroll'); await settle(500);
+  ok('พนักงานทั่วไป: ไม่มีทางลัดผู้สมัครกรอกย้อนหลัง', !E('teCands') && !pane().querySelector('[data-act="cand"]'));
+  await findBy('สมชาย');
+  act('pick', '[data-i="0"]'); await settle(100);
+  await pickCourse('basic-dj-class'); fill('teTeacher', 't2'); await settle(100);
+  ok('พนักงานทั่วไป: เห็นราคาตั้งอ่านอย่างเดียว (ไม่มีช่องราคาที่ตกลง) · ไม่มีช่องติ๊กชำระ · ไม่มีช่องวันเริ่ม/รอบย้อนหลัง',
+    !!E('tePriceFixed') && /20,?000/.test(E('tePriceFixed').textContent) && !E('tePrice') && !pane().querySelector('[data-act="paychk"]') && !E('tePayDate') && !E('teStarted') && !!E('tePayNote') && !E('teSlipNote') && !pane().querySelector('[data-act="mode"]'), pane().textContent.slice(0, 200));
+  ok('พนักงานทั่วไป: ข้อความบอกว่าบันทึกชำระทำโดยเจ้าของ/ผู้ดูแล · ปุ่ม "อังกฤษ" ปิดอยู่', /บันทึกชำระทำโดยเจ้าของหรือผู้ดูแลเท่านั้น/.test(E('tePayNote').textContent) && pane().querySelector('[data-act="lang"][data-v="en"]').disabled === true);
+  {   // ผู้ใช้ปลดปุ่มที่ปิดอยู่เอง (DevTools): ฟอร์มต้องปฏิเสธเอง (ฐานก็ปฏิเสธซ้ำ)
+    const en = pane().querySelector('[data-act="lang"][data-v="en"]'); en.disabled = false; en.click(); await settle(100);
+    fill('teListPrice', '28000'); await settle(50);
+    const ne0 = rpcCalls('teach_enroll_create').length;
+    act('save'); await settle(100);
+    ok('พนักงานทั่วไปปลดปุ่มภาษาอังกฤษเองแล้วบันทึก: ฟอร์มปฏิเสธ · ไม่ส่งฐาน', /เฉพาะเจ้าของหรือผู้ดูแล/.test(errText()) && rpcCalls('teach_enroll_create').length === ne0, errText());
+    act('lang', '[data-v="th"]'); await settle(100);
+  }
+  const nS = rpcCalls('teach_enroll_create').length, nPay = rpcCalls('teach_payment_record').length, nBf = rpcCalls('teach_session_backfill').length;
+  act('save'); await settle(700);
+  const aS = lastArgs('teach_enroll_create');
+  ok('พนักงานทั่วไปลงเรียน: ส่งราคาที่ตกลง = ราคาตั้ง 20000 · console · ไม่ย้อนหลัง/ไม่ชำระครบไม่ทราบวันที่/ไม่มีวันเริ่ม', rpcCalls('teach_enroll_create').length === nS + 1 && aS.p_price_agreed === 20000 &&
+    aS.p_source === 'console' && aS.p_paid_unknown === false && aS.p_started_on === null && aS.p_list_price === null && aS.p_teach_lang === 'th', J(aS));
+  ok('พนักงานทั่วไป: ไม่เรียกบันทึกชำระ/ลงรอบย้อนหลังเลย · ข้อความสำเร็จเขียว', rpcCalls('teach_payment_record').length === nPay && rpcCalls('teach_session_backfill').length === nBf && /บันทึกแล้ว ✓/.test(okText()), okText());
+  // ใบที่เพิ่งลง: ยังไม่ชำระ → แผงรายละเอียดบอกรอชำระ + ไม่มีปุ่มบันทึกชำระ
+  tab('queue'); await settle(300);
+  {
+    const wrow = document.querySelector('#teBody .te-row[data-id="' + TEACH.created[TEACH.created.length - 1].id + '"]');
+    ok('ใบที่เพิ่งลงโดยพนักงาน: ขึ้นในแท็บรอคิวกลุ่ม "รอชำระ" (ยังไม่ชำระ)', !!wrow, document.getElementById('teBody').textContent.slice(0, 150));
+    if (wrow) { wrow.click(); await settle(500); }
+    const det = document.getElementById('teDet');
+    ok('แผงรายละเอียด (พนักงานทั่วไป): ไม่มีปุ่ม "+ บันทึกชำระ" · มีข้อความบอกว่าเฉพาะเจ้าของ/ผู้ดูแล · ขึ้นคำเตือนแดงว่ายังนัดรอบไม่ได้',
+      !!det && !det.querySelector('[data-act="open"][data-k="pay"]') && !!det.querySelector('#teDetPayOnlyMgr') && !!det.querySelector('#teSchedBlocked') && isRed(det.querySelector('#teSchedBlocked')), det && det.textContent.slice(0, 200));
+    const nSch = rpcCalls('teach_session_schedule').length;
+    det.querySelector('[data-act="open"][data-k="sched"]').click(); await settle(100);
+    fill('teD_date', day(3)); fill('teD_start', '10:00'); fill('teD_end', '12:00'); await settle(50);
+    det.querySelector('[data-act="submit"][data-k="sched"]').click(); await settle(500);
+    ok('พนักงานทั่วไปนัดรอบของใบที่ยังไม่ชำระ: ฐานปฏิเสธ · ข้อความไทย "ยังไม่ชำระครบ" แสดงในแผง (ไม่ใช่ error ดิบ)', rpcCalls('teach_session_schedule').length === nSch + 1 && /ยังไม่ชำระครบ/.test(document.getElementById('teDet').textContent) && !/permission|violates/.test(document.getElementById('teDet').textContent));
+  }
+
   // ── 9. เจ้าของ/ผู้ดูแล: คอร์สภาษาอังกฤษ ──
   await logout();
   await login('Nui');
@@ -535,7 +567,7 @@ async function runTests() {
   ok('โหลดรายการคอร์สล้ม: ข้อความแดง · แถบ fatal (กฎข้อ 8) · ไม่เปิดฟอร์มปลอม ๆ', /โหลดรายการคอร์ส\\/ครูไม่สำเร็จ/.test(pane().textContent) && /โหลดรายการคอร์ส/.test(fatalText()) && !E('teSave'), pane().textContent.slice(0, 120));
   // ── 11. กรอกย้อนหลังโดยไม่เลือกการชำระ · วันเริ่มเรียนในอนาคต ──
   TEACH.fail = {};
-  await logout(); await login('Zen'); await open();
+  await logout(); await login('Nui'); await open();
   tab('enroll'); await settle(600);
   act('cand', '[data-mid="m3"]'); await settle(100);
   await pickCourse('basic-dj-class');
@@ -562,6 +594,7 @@ for (const [label, tests, opts] of [
   ['บัญชีครูล้วน/ไม่มีสิทธิ์', TESTS_NOACCESS, { width: 1366, height: 768, coarse: false }],
   ['iPhone 390×844', TESTS_PHONE, { width: 390, height: 844, coarse: true }],
 ]) {
+  if (ONLY && !ONLY.test(label)) continue;
   console.log('\n--- ' + label + ' ---');
   const res = await runCdpPage({ root: pageRoot, file: 'desk.html', mock, tests, hash: '', shotDir: SHOTS, ...opts });
   if (!res.ok) allOk = false;

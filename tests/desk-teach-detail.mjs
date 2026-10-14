@@ -90,6 +90,10 @@ async function runTests() {
     && !selects.some(c => /slip_path/.test(c.cols || '')) && !CALLS.some(c => /course-slips|storage/.test(J(c))));
   ok('ข้อความ "แนบสลิป: ยังไม่เปิดใช้" ขึ้นเสมอ · ไม่มีช่องเลือกไฟล์', /แนบสลิป: ยังไม่เปิดใช้/.test(dt()) && !D().querySelector('input[type="file"]'));
   await shot('c1-detail-owner');
+  ok('ส่วนการชำระ (เจ้าของ): มีปุ่ม "ปรับราคาที่ตกลง (ส่วนลด)" + คำอธิบายให้ปรับก่อนบันทึกชำระ', !!D().querySelector('#teDetPay [data-act="open"][data-k="fix"]') && !!E('tePriceAdjustHint') && /ก่อนบันทึกชำระ/.test(E('tePriceAdjustHint').textContent));
+  D().querySelector('#teDetPay [data-act="open"][data-k="fix"]').click(); await settle(150);
+  ok('กดแล้วเปิดฟอร์มแก้ข้อมูลการลงเรียนที่มีช่อง "ราคาที่ตกลง" (ส่ง price_agreed ผ่าน teach_enroll_fix)', !!E('teFormFix') && !!E('teD_price'));
+  dact('close-form'); await settle(100);
 
   // ── บันทึกชำระ ──
   openForm('pay'); await settle(100);
@@ -373,6 +377,7 @@ ${COMMON}
 async function runTests() {
   L('=== คอร์สเรียน ก้อน C (4/7): พนักงานที่ไม่ใช่ครู — ไม่วาด/ไม่ดึง เงิน · บันทึกการสอน · ขยายอายุ ===');
   TEACH.seed();
+  { const bf = TEACH.rows.find(r => r.id === 'e-backfill'); bf.paid_unknown = false; bf.paid_in_full = false; delete TEACH.money['e-backfill']; }   // ใบย้อนหลังที่ไม่ใช่ชำระครบ (ตั้งก่อนหน้าโหลด)
   await login('Zen');
   await open();
   await openEnroll('active', 'e-active');
@@ -385,17 +390,24 @@ async function runTests() {
   ok('รอบนัดไว้: ไม่มีปุ่ม "ทำเครื่องหมายสอนแล้ว" (ไม่ใช่ครูของรอบ) · มีปุ่มยกเลิก/ไม่มา · ถอดนัดปฏิทิน', !has('open', '[data-k="done"]') && has('open', '[data-k="cancel"][data-sid="s1"]') && has('unlink', '[data-sid="s1"]'));
   await shot('c4-detail-staff');
 
-  // บันทึกชำระ: ทำได้ แต่เห็นข้อความ "ไม่แสดงยอดนี้อีก"
-  openForm('pay'); await settle(100);
-  ok('ฟอร์มชำระของพนักงาน: ข้อความแดงตัวหนา "บันทึกแล้วจะไม่แสดงยอดนี้อีก"', isRed(E('teDetPayWarn')) && /บันทึกแล้วจะไม่แสดงยอดนี้อีก/.test(E('teDetPayWarn').textContent), E('teDetPayWarn') && E('teDetPayWarn').textContent);
-  dfill('amount', '1000'); dfill('note', 'งวดเสริม');
-  submit('pay'); await settle(600);
-  ok('บันทึกได้: ส่งฟังก์ชัน · ข้อความไม่มียอด · ยังไม่เห็นยอดในแผง (มีแต่ "บันทึก 2 งวด")', rpcCalls('teach_payment_record').length === 1 && !/1000|1,000/.test(detOk()) && /บันทึก 2 งวด/.test(dt()) && !E('teMoney') && !/1,000|21,000/.test(dt()), detOk());
-  // นัดรอบ: ทำได้
+  // บันทึกชำระ (060): เจ้าของ/ผู้ดูแลเท่านั้น — พนักงานทั่วไปไม่มีปุ่ม ไม่มีฟอร์ม
+  ok('พนักงานทั่วไป: ไม่มีปุ่ม "+ บันทึกชำระ"/คืนเงิน · มีข้อความ "บันทึกชำระได้เฉพาะเจ้าของหรือผู้ดูแล"', !has('open', '[data-k="pay"]') && !has('open', '[data-k="refund"]') && !!E('teDetPayOnlyMgr') && /เฉพาะเจ้าของหรือผู้ดูแล/.test(E('teDetPayOnlyMgr').textContent));
+  ok('ยังเห็น ✓ชำระครบ + "บันทึก 1 งวด" (สถานะ ไม่ใช่ยอด) · ไม่ส่งบันทึกชำระ', /✓ ชำระครบ/.test(dt()) && /บันทึก 1 งวด/.test(dt()) && rpcCalls('teach_payment_record').length === 0);
+  // นัดรอบ: ทำได้เมื่อชำระครบ (ทีมงานทุกตำแหน่ง)
   openForm('sched'); await settle(300);
   dfill('date', day(8)); dfill('start', '10:00'); dfill('end', '12:00');
   submit('sched'); await settle(600);
-  ok('พนักงานนัดรอบได้ (ทีมงานทุกตำแหน่ง)', rpcCalls('teach_session_schedule').length === 1 && ssIds().length === 5);
+  ok('พนักงานนัดรอบได้เมื่อชำระครบ (ทีมงานทุกตำแหน่ง)', rpcCalls('teach_session_schedule').length === 1 && ssIds().length === 5 && !E('teSchedBlocked'));
+  // ใบย้อนหลังที่ไม่ใช่ชำระครบ (ราคาอาจว่าง): ฐานไม่บล็อก → หน้าไม่ขึ้นคำเตือนแดงเอง (ปล่อยให้ฐานตัดสิน)
+  await openEnroll('active', 'e-backfill');
+  ok('ใบย้อนหลังที่ยังไม่ชำระ: ไม่ขึ้นคำเตือน "ยังนัดไม่ได้" ฝั่งหน้า (ฐานตัดสินเองเพราะราคาอาจว่าง)', !E('teSchedBlocked'));
+  // ใบที่ยังไม่ชำระ (e-wait): คำเตือนแดง + ฐานปฏิเสธเป็นข้อความไทย
+  await openEnroll('queue', 'e-wait');
+  ok('ใบที่ยังไม่ชำระ: ขึ้นคำเตือนแดงตัวหนา "ยังไม่ชำระครบ — นัดรอบเรียนได้หลังเจ้าของหรือผู้ดูแลบันทึกชำระครบ"', isRed(E('teSchedBlocked')) && /ยังไม่ชำระครบ/.test(E('teSchedBlocked').textContent));
+  openForm('sched'); await settle(300);
+  dfill('date', day(9)); dfill('start', '10:00'); dfill('end', '12:00');
+  submit('sched'); await settle(600);
+  ok('นัดรอบของใบที่ยังไม่ชำระ: ส่งฐาน → ฐานปฏิเสธ · แถบแดงข้อความไทยจากฐาน (ไม่ใช่ error ดิบ)', rpcCalls('teach_session_schedule').length === 2 && /ยังไม่ชำระครบ/.test(detErr()) && !/permission|violates|42501/.test(detErr()), detErr());
   // ผู้ดูแล: ปิดคอร์สไม่ได้
   ok('ไม่เรียกถังสลิป/Storage ตลอดการใช้งาน', !CALLS.some(c => /course-slips|storage/.test(J(c))));
   L('RESULT:' + (fail ? 'FAIL' : 'PASS') + ' pass=' + pass + ' fail=' + fail);

@@ -191,12 +191,22 @@ const TEACH = { rows: [], profiles: [], sessions: [], ext: [], subs: [], status:
   const roleOf = id => { const a = FAKE.admins.find(x => x.id === id && x.is_active); return a ? a.role : null; };
   const RPC = {
     teach_student_find(me, a) {
-      if (!roleOf(me)) return E(LOGIN);
+      // 060: ครูล้วน (ไม่มีแถว admins) ค้นได้ด้วยเบอร์เต็มเท่านั้น → ชื่อ + เบอร์ปิดเหลือ 4 ตัวท้าย · ไม่คืน member_id/จำนวนลงเรียน
+      const team = !!roleOf(me);
+      if (!team && !myTid(me)) return E('ต้องเข้าสู่ระบบด้วยบัญชีทีมงานหรืออาจารย์ที่ยังใช้งานอยู่');
       const q = String(a.p_query || '').trim();
       if (q.length < 2) return OK([]);
       const cnt = cid => TEACH.rows.filter(r => r.customer_id === cid).length + TEACH.created.filter(x => x.customer_id === cid).length;
       const memberOf = cid => (TEACH.custLinks.find(l => l.id === cid) || {}).member_id || null;
       let out = [];
+      if (!team) {
+        if (digits(q).length < 9 || !/^[0-9+()\\-. ]+$/.test(q)) return OK([]);
+        const n = norm(q), mask = p => '******' + digits(p).slice(-4);
+        const memPhones = id => TEACH.members.filter(m => m.id === id).map(m => norm(m.phone));
+        FAKE.customers.forEach(c => { const mid = memberOf(c.id); if (norm(c.phone) === n || (mid && memPhones(mid).includes(n))) out.push({ customer_id: c.id, member_id: null, full_name: c.full_name, phone: mask(c.phone), enrollment_count: null, matched_by: 'phone' }); });
+        TEACH.members.forEach(m => { if (norm(m.phone) === n && !TEACH.custLinks.some(l => l.member_id === m.id)) out.push({ customer_id: null, member_id: null, full_name: m.full_name, phone: mask(m.phone), enrollment_count: null, matched_by: 'member_only' }); });
+        return OK(out.slice(0, 20));
+      }
       if (digits(q).length >= 9) {
         const n = norm(q);
         const memPhones = id => TEACH.members.filter(m => m.id === id).map(m => norm(m.phone));
@@ -212,10 +222,13 @@ const TEACH = { rows: [], profiles: [], sessions: [], ext: [], subs: [], status:
       return OK(out.slice(0, 20));
     },
     teach_enroll_create(me, a) {
-      const role = roleOf(me);
-      if (!role) return E(LOGIN);
+      // 060: เจ้าของ/ผู้ดูแล = เดิม · พนักงาน = ราคาที่ตกลงต้องเท่าราคาตั้ง + ไม่มีย้อนหลัง · ครูล้วน = ครูเป็นตัวเอง · ราคาบังคับ = ราคาตั้ง
+      const role = roleOf(me), tid = myTid(me), priv = role === 'owner' || role === 'admin', tonly = !role && !!tid;
+      if (!role && !tid) return E('ต้องเข้าสู่ระบบด้วยบัญชีทีมงานหรืออาจารย์ที่ยังใช้งานอยู่');
       const lang = a.p_teach_lang || 'th', source = a.p_source || 'console';
       if (['console', 'backfill'].indexOf(source) < 0) return E('แหล่งที่มาของการลงเรียนไม่ถูกต้อง');
+      if (source === 'backfill' && !priv) return E('กรอกย้อนหลังได้เฉพาะเจ้าของหรือผู้ดูแล');
+      if (tonly && a.p_teacher !== tid) return E('อาจารย์ลงเรียนได้เฉพาะให้ตัวเองเป็นครู');
       const cust = FAKE.customers.find(c => c.id === a.p_customer);
       if (!cust) return E('ไม่พบนักเรียน (ลูกค้า) คนนี้');
       const course = TEACH.courses.find(c => c.id === a.p_course && c.is_active);
@@ -224,12 +237,15 @@ const TEACH = { rows: [], profiles: [], sessions: [], ext: [], subs: [], status:
       if (!teacher || !TEACH.links.some(l => l.course_id === course.id && l.teacher_id === teacher.id)) return E('ครูคนนี้ไม่ได้เปิดสอนคอร์สนี้ หรือถูกปิดใช้งาน');
       let list = Number(course.list_price);
       if (lang === 'en') {
-        if (role !== 'owner' && role !== 'admin') return E('คอร์สภาษาอังกฤษตั้งราคาตั้งได้เฉพาะเจ้าของหรือผู้ดูแล');
+        if (!priv) return E('คอร์สภาษาอังกฤษตั้งราคาตั้งได้เฉพาะเจ้าของหรือผู้ดูแล');
         if (a.p_list_price == null || a.p_list_price < 0) return E('ต้องระบุราคาตั้งของคอร์สภาษาอังกฤษ (ไม่อยู่ในไฟล์คอร์ส)');
         list = a.p_list_price;
       } else if (a.p_list_price != null) return E('ตั้งราคาตั้งเองได้เฉพาะคอร์สภาษาอังกฤษ');
-      if (a.p_price_agreed == null && source !== 'backfill') return E('ต้องระบุราคาที่ตกลง');
-      if (a.p_price_agreed != null && a.p_price_agreed < 0) return E('ราคาที่ตกลงต้องไม่ติดลบ');
+      let agreed = a.p_price_agreed;
+      if (tonly) agreed = list;
+      else if (!priv && agreed != null && agreed !== list) return E('ราคาแก้ได้เฉพาะเจ้าของหรือผู้ดูแล');
+      if (agreed == null && source !== 'backfill') return E('ต้องระบุราคาที่ตกลง');
+      if (agreed != null && agreed < 0) return E('ราคาที่ตกลงต้องไม่ติดลบ');
       if (source !== 'backfill' && (a.p_started_on || a.p_paid_unknown)) return E('วันเริ่มเรียนและ "ชำระครบ (ไม่ทราบวันที่)" ใช้ได้เฉพาะการกรอกย้อนหลัง');
       if (a.p_started_on && a.p_started_on > TODAY) return E('วันเริ่มเรียนต้องไม่เกินวันนี้');
       const id = 'new-e' + (++TEACH.seq);
@@ -243,7 +259,7 @@ const TEACH = { rows: [], profiles: [], sessions: [], ext: [], subs: [], status:
       return OK(id);
     },
     teach_session_backfill(me, a) {
-      if (!roleOf(me)) return E(LOGIN);
+      if (!isMgr(roleOf(me))) return E('ลงรอบย้อนหลังได้เฉพาะเจ้าของหรือผู้ดูแล');
       const e = TEACH.rows.find(r => r.id === a.p_enrollment);
       if (!e) return E('ไม่พบการลงเรียนนี้');
       if (e.source !== 'backfill') return E('ลงรอบย้อนหลังได้เฉพาะการลงเรียนที่กรอกย้อนหลัง');
@@ -257,7 +273,7 @@ const TEACH = { rows: [], profiles: [], sessions: [], ext: [], subs: [], status:
       return OK(ds.length);
     },
     teach_payment_record(me, a) {
-      if (!roleOf(me)) return E(LOGIN);
+      if (!isMgr(roleOf(me))) return E('บันทึกชำระได้เฉพาะเจ้าของหรือผู้ดูแล');
       if (!a.p_request_id) return E('ต้องมีรหัสคำขอ (ใช้กันบันทึกซ้ำ)');
       const dup = TEACH.payments.find(p => p.request_id === a.p_request_id);
       const e = TEACH.rows.find(r => r.id === a.p_enrollment);
@@ -324,6 +340,8 @@ const TEACH = { rows: [], profiles: [], sessions: [], ext: [], subs: [], status:
       if (!role && !(e && t && e.teacher_id === t)) return E('นัดรอบเรียนได้เฉพาะทีมงานหรือครูของนักเรียนคนนี้');
       if (!e) return E('ไม่พบการลงเรียนนี้');
       if (e.closed_on) return E('การลงเรียนนี้ปิดแล้ว นัดรอบใหม่ไม่ได้');
+      // 060: ต้องชำระครบก่อน (ทุกตำแหน่ง) · ยกเว้นใบย้อนหลังที่ไม่มีราคาที่ตกลง (ตัดสินไม่ได้)
+      if (!e.paid_in_full && !(e.source === 'backfill' && TEACH.money[e.id] == null)) return E('ยังไม่ชำระครบ — นัดรอบเรียนได้หลังเจ้าของหรือผู้ดูแลบันทึกชำระครบแล้ว');
       if (!TEACH.teachers.some(x => x.id === a.p_teacher && x.is_active)) return E('ครูไม่ถูกต้องหรือถูกปิดใช้งาน');
       if (!a.p_starts || !a.p_ends || Date.parse(a.p_ends) <= Date.parse(a.p_starts)) return E('เวลาเริ่ม/จบไม่ถูกต้อง (เวลาจบต้องหลังเวลาเริ่ม)');
       const hours = a.p_hours != null ? a.p_hours : Math.round(Number(e.hours_total) / e.sessions_total * 100) / 100;

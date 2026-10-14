@@ -104,11 +104,15 @@
 // หน้าครู (P1b · migration 047) — สำหรับครูที่ "ไม่มีแถวใน admins" (เช่น Alldayz · Maniac) เข้าคอนโซลร้านไม่ได้ แต่ต้องดูนักเรียน/รอบเรียนของตัวเอง
 //   ใช้บัญชี login เดิม (session ชุดเดียวกับ desk.html) · ครูคนไหนก็ได้ที่ my_teacher_id() ไม่ว่าง ใช้หน้านี้ได้ (รวม Tibass/Nutty ที่เป็นพนักงานด้วย)
 //   สิทธิ์ตัวจริงอยู่ที่ฐาน (RLS + ฟังก์ชัน security definer ของ 047) — หน้านี้ "ไม่ดึง" และ "ไม่วาด" ส่วนที่ไม่ใช่ของครู:
-//     ไม่มี ยอดชำระ/ราคา/สลิป · ไม่มีลูกค้า/สมาชิก/บิล/สต็อก/นักเรียนของครูคนอื่น · ไม่มีอีเมล/ที่อยู่
+//     ไม่มี ยอดชำระ/ราคาที่ตกลง/สลิป · ไม่มีลูกค้า/สมาชิก/บิล/สต็อก/นักเรียนของครูคนอื่น · ไม่มีอีเมล/ที่อยู่
 //     เบอร์โทรของนักเรียนผู้ใหญ่แสดงเต็ม (เจ้าของตัดสิน 12 ต.ค. 69 ตามมติ 7 ต.ค.) · ผู้เยาว์ = ผู้ปกครองแทน (ฟังก์ชันฐานไม่คืนช่องทางของเด็ก)
 //     ไม่มี ปิดคอร์ส/ขยายอายุเอง/แก้ราคา/แก้ข้อมูลการลงเรียน — ขอขยายอายุได้ทางคำขอ (เจ้าของตัดสิน) เท่านั้น
+//   เพิ่ม 14 ต.ค. 69 (เจ้าของสั่ง · migration 060 + gcal): ครูค้นนักเรียนด้วยเบอร์เต็ม → ลงเรียนให้ตัวเอง (ราคา = ราคาตั้งของคอร์ส อ่านอย่างเดียว ฐานบังคับ) ·
+//     นัดรอบได้เมื่อเจ้าของ/ผู้ดูแลบันทึกชำระครบแล้ว (ฐานบล็อก — ข้อความไทยจากฐาน) · ผูก/ถอดนัดปฏิทิน Google ของรอบตัวเอง (gcal คืนเฉพาะนัดที่ชื่อครูตรงตัวเอง)
+//     ไม่มี: ช่องราคา/ชำระ/ย้อนหลัง/สร้างลูกค้าใหม่ — ถ้าไม่พบนักเรียนให้ทีมงานสร้างลูกค้าก่อน
 //   อ่านผ่าน: rpc my_teacher_id · rpc teach_my_students · class_sessions · session_notes · enrollment_extension_requests · teachers (ชื่อตัวเอง)
-//   เขียนผ่าน: teach_session_done · teach_session_cancel · teach_session_schedule · teach_note_save · teach_extend_request
+//     + (เฉพาะตอนเปิดฟอร์มเพิ่มนักเรียน) courses · course_teachers + rpc teach_student_find + Edge Function gcal (เฉพาะตอนผูกนัด)
+//   เขียนผ่าน: teach_session_done · teach_session_cancel · teach_session_schedule · teach_note_save · teach_extend_request · teach_enroll_create · teach_gcal_link · teach_gcal_unlink
 // ⚠️ ข้อความจากผู้ใช้/ฐาน (ชื่อ · ชื่อเล่น · LINE · IG · ผู้ปกครอง · เหตุผล · บันทึกการสอน) = escapeHtml เสมอ · ห้าม console.log ข้อมูลนักเรียน
 // ⚠️ ออกจากระบบ/สลับบัญชี → reset() ล้างข้อมูลทั้งหมด · ผลโหลดที่มาช้าถูกทิ้ง (uid + tok)
 // ⚠️ ตัวแปรฐานข้อมูลชื่อ db เท่านั้น (ห้ามชื่อ supabase)
@@ -144,7 +148,7 @@ if (!window.supabase || !window.supabase.createClient) {
 const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const NO_TABLE = /does not exist|schema cache|Could not find the function|PGRST20[24]|42P01|42883/i;
-const SOON_DAYS = 14, WEEK_DAYS = 7, LATE_DAYS = 3;
+const SOON_DAYS = 14, WEEK_DAYS = 7, LATE_DAYS = 3, GCAL_NEAR_MIN = 30;
 const STATE_TXT = { waiting_payment: 'รอชำระ', queued: 'รอคิว', active: 'กำลังเรียน', expired: 'หมดอายุ', completed: 'จบ (ใช้สิทธิ์ครบ)', closed: 'ปิดแล้ว' };
 const BY_TXT = { student: 'นักเรียน', teacher: 'ครู', shop: 'ร้าน' };
 const KIND_TXT = { line: 'LINE', ig: 'Instagram', phone: 'โทรศัพท์' };
@@ -178,7 +182,7 @@ const uuid = () => (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : 
 // ── สถานะ ──
 function blank() {
   return { uid: null, tid: null, me: '', phase: 'boot', students: [], sess: [], reqs: [], notes: new Map(), loaded: false, missing: false, error: '',
-           tab: 'students', q: '', tok: 0, rt: null, openId: null, det: null, loginErr: '', loginBusy: false };
+           tab: 'students', q: '', tok: 0, rt: null, openId: null, det: null, add: null, flash: '', loginErr: '', loginBusy: false };
 }
 let st = blank();
 let channel = null, hiddenAt = 0;
@@ -229,7 +233,7 @@ async function loadAll() {
   const uid = st.uid, tok = ++st.tok;
   const [ms, cs, rq, me] = await Promise.all([
     db.rpc('teach_my_students'),
-    db.from('class_sessions').select('id, enrollment_id, teacher_id, status, starts_at, ends_at, held_on, hours, room, cancel_by, late_cancel, cancel_reason').order('starts_at', { ascending: true }).limit(1000),
+    db.from('class_sessions').select('id, enrollment_id, teacher_id, status, starts_at, ends_at, held_on, hours, room, cancel_by, late_cancel, cancel_reason, gcal_uid, gcal_start').order('starts_at', { ascending: true }).limit(1000),
     db.from('enrollment_extension_requests').select('id, enrollment_id, requested_until, reason, status, decision_note, approved_until, created_at').order('created_at', { ascending: false }),
     db.from('teachers').select('display_name').eq('id', st.tid),
   ]);
@@ -366,8 +370,159 @@ function scheduleHtml() {
   return (late.length ? g('เลยเวลานัดแล้ว ยังไม่ได้ทำเครื่องหมาย', late, '') : '') + g('สัปดาห์นี้ (' + WEEK_DAYS + ' วันข้างหน้า)', week, 'ไม่มีรอบที่นัดไว้ใน ' + WEEK_DAYS + ' วันข้างหน้า') + g('ที่จะถึง', later, 'ไม่มีรอบที่นัดไว้ไกลกว่านั้น');
 }
 
+// ── เพิ่มนักเรียน (ครูลงเรียนให้ตัวเอง · 060) ──
+// พิมพ์เบอร์เต็ม → ฐานคืนชื่อ + เบอร์ 4 ตัวท้าย → เลือกคอร์สที่ตัวเองสอน → ราคาตั้งอ่านอย่างเดียว (ฐานบังคับราคา = ราคาตั้งเอง ค่าที่ส่งไปถูกข้าม)
+function addBlank() { return { phone: '', res: null, pick: null, course: '', courses: null, coursesErr: '', busy: '', err: '' }; }
+const baht = v => Number(v).toLocaleString('th-TH', { maximumFractionDigits: 2 });
+async function loadCourses() {
+  const a = st.add, uid = st.uid;
+  if (!a || a.courses) return;
+  const [ct, cs] = await Promise.all([
+    db.from('course_teachers').select('course_id').eq('teacher_id', st.tid),
+    db.from('courses').select('id, title, list_price, sessions_total, hours_per_session, valid_months').eq('is_active', true).order('title'),
+  ]);
+  if (uid !== st.uid || st.add !== a) return;
+  const bad = ct.error || cs.error;
+  if (bad) { console.error('[Teacher courses]', bad.code || ''); a.coursesErr = 'โหลดรายการคอร์สไม่สำเร็จ: ' + errText(bad); a.courses = []; }
+  else { const mine = new Set((ct.data || []).map(x => x.course_id)); a.courses = (cs.data || []).filter(c => mine.has(c.id)); }
+  render();
+}
+function addHtml() {
+  const a = st.add, busy = !!a.busy;
+  let h = '<div class="back"><button class="btn" type="button" data-act="add-back"' + (busy ? ' disabled' : '') + '>← นักเรียนของฉัน</button></div>';
+  h += '<section class="sec" id="addStu"><h2>เพิ่มนักเรียนของฉัน</h2>';
+  if (a.err) h += '<div class="alert alert-red wk-red" id="addErr" role="alert">' + esc(a.err) + '</div>';
+  h += '<div class="hint">พิมพ์เบอร์โทรเต็มของนักเรียนที่ร้านมีข้อมูลอยู่แล้ว (ค้นด้วยชื่อไม่ได้) — ระบบแสดงชื่อกับเบอร์ 4 ตัวท้ายเท่านั้น</div>' +
+    '<div class="bar"><input id="a_phone" class="input grow" type="tel" inputmode="tel" autocomplete="off" data-a="phone" placeholder="เบอร์โทรเต็ม เช่น 0812345678" aria-label="เบอร์โทรนักเรียน" value="' + esc(a.phone) + '">' +
+    '<button class="btn btn-primary" type="button" data-act="add-find"' + (busy ? ' disabled' : '') + '>' + (a.busy === 'find' ? 'กำลังค้นหา…' : 'ค้นหา') + '</button></div>';
+  if (a.res) {
+    if (!a.res.length) h += '<div class="empty" id="addNone">ไม่พบนักเรียนที่ใช้เบอร์นี้ — ให้ทีมงานสร้างข้อมูลลูกค้าก่อน (อาจารย์สร้างลูกค้าใหม่เองไม่ได้)</div>';
+    else h += a.res.map((r, i) => '<div class="card" data-res="' + i + '"><div class="name">' + esc(r.full_name) + '</div><div class="sub">เบอร์ ' + esc(r.phone || '') + '</div>' +
+      (r.customer_id ? '<div class="acts"><button class="btn btn-sm' + (a.pick === r ? ' btn-primary' : '') + '" type="button" data-act="add-pick" data-i="' + i + '"' + (busy ? ' disabled' : '') + '>' + (a.pick === r ? 'เลือกแล้ว ✓' : 'เลือกคนนี้') + '</button></div>'
+        : '<div class="wk-red">ยังไม่มีในทะเบียนลูกค้า — ให้ทีมงานสร้างลูกค้าก่อน จึงลงเรียนได้</div>') + '</div>').join('');
+  }
+  if (a.pick) {
+    h += '<div class="form" id="addForm"><h3>ลงเรียนให้ ' + esc(a.pick.full_name) + '</h3>';
+    if (a.coursesErr) h += '<div class="alert alert-red wk-red" role="alert">' + esc(a.coursesErr) + '</div>';
+    else if (a.courses === null) h += '<div class="empty">กำลังโหลดคอร์สที่คุณสอน…</div>';
+    else if (!a.courses.length) h += '<div class="alert alert-warn" id="noCourse">ยังไม่มีคอร์สที่เปิดให้คุณสอน — แจ้งเจ้าของร้าน</div>';
+    else {
+      h += '<div class="field"><label class="lbl" for="a_course">คอร์ส</label><select id="a_course" class="input" data-a="course"><option value="">— เลือกคอร์ส —</option>' +
+        a.courses.map(c => '<option value="' + esc(c.id) + '"' + (c.id === a.course ? ' selected' : '') + '>' + esc(c.title) + '</option>').join('') + '</select></div>';
+      const c = a.courses.find(x => x.id === a.course);
+      if (c) h += '<dl class="dl" id="coursePrice"><dt>ราคาคอร์ส</dt><dd><strong>' + baht(c.list_price) + ' บาท</strong> <span class="sub">(ราคาตั้ง แก้ไม่ได้)</span></dd>' +
+        '<dt>จำนวนครั้ง</dt><dd>' + Number(c.sessions_total) + ' ครั้ง</dd><dt>อายุคอร์ส</dt><dd>' + Number(c.valid_months) + ' เดือน</dd></dl>';
+      h += '<div class="hint wk-red" id="payNote">ลงเรียนแล้วต้องรอเจ้าของ/ผู้ดูแลบันทึกชำระก่อน จึงนัดรอบเรียนได้</div>' +
+        '<div class="acts"><button class="btn btn-primary" type="button" data-act="add-submit"' + (busy || !c ? ' disabled' : '') + '>' + (a.busy === 'create' ? 'กำลังลงเรียน…' : 'ลงเรียน') + '</button></div>';
+    }
+    h += '</div>';
+  }
+  return h + '</section>';
+}
+function addAct(act, b) {
+  if (act === 'add-open') { st.det = null; st.flash = ''; st.add = addBlank(); render(); window.scrollTo(0, 0); loadCourses(); return; }
+  const a = st.add;
+  if (!a || a.busy) return;
+  if (act === 'add-back') { st.add = null; render(); }
+  else if (act === 'add-find') addFind();
+  else if (act === 'add-pick') { const r = a.res && a.res[Number(b.dataset.i)]; if (r && r.customer_id) { a.pick = r; a.err = ''; render(); } }
+  else if (act === 'add-submit') addSubmit();
+}
+async function addFind() {
+  const a = st.add, uid = st.uid, raw = String(a.phone || '').trim();
+  if (!/^[0-9+()\-. ]+$/.test(raw) || raw.replace(/\D/g, '').length < 9) { a.res = null; a.pick = null; a.err = 'พิมพ์เบอร์โทรเต็ม (ตัวเลขอย่างน้อย 9 หลัก) — ค้นด้วยชื่อไม่ได้'; render(); return; }
+  a.err = ''; a.busy = 'find'; a.pick = null; a.course = ''; render();
+  try {
+    const data = await rpc('teach_student_find', { p_query: raw });
+    if (uid !== st.uid || st.add !== a) return;
+    a.res = data || [];
+  } catch (e) {
+    if (uid !== st.uid || st.add !== a) return;
+    console.error('[Teacher find]', e && e.code || '');
+    a.res = null; a.err = 'ค้นหาไม่สำเร็จ: ' + errText(e);
+  }
+  a.busy = '';
+  render();
+}
+async function addSubmit() {
+  const a = st.add, uid = st.uid, c = a.courses && a.courses.find(x => x.id === a.course);
+  if (!a.pick || !a.pick.customer_id) return;
+  if (!c) { a.err = 'เลือกคอร์สก่อน'; render(); return; }
+  a.err = ''; a.busy = 'create'; render();
+  try {
+    await rpc('teach_enroll_create', { p_customer: a.pick.customer_id, p_course: c.id, p_teacher: st.tid, p_price_agreed: Number(c.list_price), p_track: null, p_equipment: null,
+      p_started_on: null, p_note: null, p_source: 'console', p_teach_lang: 'th', p_list_price: null, p_paid_unknown: false });
+    if (uid !== st.uid || st.add !== a) return;
+    st.flash = 'ลงเรียนให้ ' + a.pick.full_name + ' (' + c.title + ') แล้ว ✓ — รอเจ้าของ/ผู้ดูแลบันทึกชำระก่อน จึงนัดรอบเรียนได้';
+    st.add = null;
+    render();
+    loadAll();
+  } catch (e) {
+    if (uid !== st.uid || st.add !== a) return;
+    console.error('[Teacher enroll]', e && e.code || '');
+    a.busy = ''; a.err = 'ลงเรียนไม่สำเร็จ: ' + errText(e);
+    render();
+  }
+}
+
+// ── ผูกนัดปฏิทิน (Edge Function gcal — ครูล้วนได้เฉพาะนัดที่ชื่อครูตรงตัวเอง) ──
+async function callFn(name, body) {
+  let data, error;
+  try { ({ data, error } = await db.functions.invoke(name, { body })); } catch (err) { return { error: { code: 'network', message: String(err && err.message || err) } }; }
+  if (!error) return data || {};
+  let payload = null;
+  try { payload = error.context && typeof error.context.json === 'function' ? await error.context.json() : null; } catch (e) { /* ไม่ใช่ JSON */ }
+  if (payload && payload.error) return payload;
+  if (error.context && error.context.status === 404) return { error: { code: 'not_configured', message: 'ยังไม่ได้ติดตั้งฟังก์ชัน ' + name } };
+  return { error: { code: 'network', message: error.message || String(error) } };
+}
+function parseTitle(raw) {                                // ตรงกับ parseGcalTitle ใน desk.html: [ห้อง] นำหน้า · ชื่อครูหลังตัวคั่น — – - ตัวสุดท้าย
+  let s = String(raw || '').trim(), room = '';
+  const m = s.match(/^\[([^\]]{1,40})\]\s*/);
+  if (m) { room = m[1].trim(); s = s.slice(m[0].length); }
+  let teacher = null;
+  const d = s.match(/^(.*\S)\s+[—–-]\s+([^—–-]+?)\s*$/);
+  if (d) { teacher = d[2].trim(); s = d[1].trim(); }
+  return { room, title: s || String(raw || '').trim(), teacher };
+}
+function linkChoices(s, lk) {
+  const me = String(st.me || '').trim().toLowerCase(), t0 = Date.parse(s.starts_at);
+  return lk.events.map(ev => ({ ev, p: parseTitle(ev.title), diff: Math.abs(Date.parse(ev.start + ':00+07:00') - t0) / 60000 }))
+    .filter(x => x.p.teacher && x.p.teacher.toLowerCase() === me).sort((a, b) => a.diff - b.diff);
+}
+async function openLink(sid) {
+  const d = st.det, s = sessOf(d.id).find(x => x.id === sid), uid = st.uid;
+  d.link = { sid, loading: true, events: [], error: '' };
+  render();
+  if (!s || !s.starts_at) { d.link = { sid, loading: false, events: [], error: 'รอบนี้ไม่มีเวลานัด' }; render(); return; }
+  const day = ymdOf(s.starts_at);
+  const res = await callFn('gcal', { from: day, to: day });
+  if (uid !== st.uid || st.det !== d || !d.link || d.link.sid !== sid) return;
+  if (res.error) {
+    d.link = { sid, loading: false, events: [], error: res.error.code === 'not_configured' ? 'ยังไม่ได้เชื่อมปฏิทิน Google — แจ้งเจ้าของร้าน'
+      : res.error.code === 'forbidden' ? 'บัญชีนี้ยังดึงปฏิทินไม่ได้ — แจ้งเจ้าของร้านให้ติดตั้งฟังก์ชันปฏิทินเวอร์ชันล่าสุด' : 'ดึงปฏิทินไม่สำเร็จ — ลองใหม่อีกครั้ง' };
+  } else {
+    d.link = { sid, loading: false, events: (res.events || []).filter(ev => ev && !ev.all_day && ev.uid && ev.start && ev.end), error: '' };
+  }
+  render();
+}
+function linkFormHtml(s) {
+  const lk = st.det.link && st.det.link.sid === s.id ? st.det.link : null;
+  let h = '<div class="form" id="formLink"><h3>ผูกกับนัดในปฏิทิน</h3>';
+  if (!lk || lk.loading) h += '<div class="empty">กำลังดึงนัดจากปฏิทิน…</div>';
+  else if (lk.error) h += '<div class="alert alert-red wk-red" id="linkErr" role="alert">' + esc(lk.error) + '</div>';
+  else {
+    const ch = linkChoices(s, lk);
+    if (!ch.length) h += '<div class="empty" id="linkNone">ไม่พบนัดของครู ' + esc(st.me) + ' ในปฏิทินของวันนั้น</div>';
+    else h += ch.map((x, i) => '<div class="card" data-ev="' + esc(x.ev.uid) + '"><strong>' + esc(x.ev.start.slice(11, 16)) + '–' + esc(x.ev.end.slice(11, 16)) + '</strong>' +
+      (x.diff <= GCAL_NEAR_MIN ? ' <span class="st st-ok">เวลาตรง</span>' : '') + '<div>' + esc(x.p.title) + '</div>' + (x.p.room || x.ev.location ? '<div class="sub">ห้อง ' + esc(x.p.room || x.ev.location) + '</div>' : '') +
+      '<div class="acts">' + btn('link-pick', 'ผูกนัดนี้', { i }) + '</div></div>').join('');
+  }
+  return h + '<div class="acts">' + btn('close-form', 'ปิด') + '</div></div>';
+}
+
 // ── แผงรายละเอียดนักเรียน ──
-function detBlank(id) { return { id, open: null, fv: {}, busy: '', err: '', ok: '', warn: [], notesLoaded: false }; }
+function detBlank(id) { return { id, open: null, fv: {}, busy: '', err: '', ok: '', warn: [], notesLoaded: false, link: null }; }
 const fvv = k => (st.det && st.det.fv[k] != null) ? String(st.det.fv[k]) : '';
 const inp = (k, label, o) => { o = o || {}; return '<div class="field"><label class="lbl" for="f_' + k + '">' + label + '</label><input id="f_' + k + '" class="input" data-f="' + k + '" type="' + (o.type || 'text') + '"' +
   (o.inputmode ? ' inputmode="' + o.inputmode + '"' : '') + (o.max ? ' max="' + esc(o.max) + '"' : '') + (o.min ? ' min="' + esc(o.min) + '"' : '') + (o.maxlength ? ' maxlength="' + o.maxlength + '"' : '') +
@@ -377,7 +532,7 @@ const sel = (k, label, opts) => '<div class="field"><label class="lbl" for="f_' 
 const ta = (k, label, o) => { o = o || {}; return '<div class="field"><label class="lbl" for="f_' + k + '">' + label + '</label><textarea id="f_' + k + '" class="input" data-f="' + k + '" rows="' + (o.rows || 4) + '"' +
   (o.maxlength ? ' maxlength="' + o.maxlength + '"' : '') + '>' + esc(fvv(k)) + '</textarea>' + (o.hint ? '<div class="hint">' + o.hint + '</div>' : '') + '</div>'; };
 const btn = (act, label, o) => { o = o || {}; return '<button class="btn' + (o.primary ? ' btn-primary' : '') + (o.danger ? ' btn-danger' : '') + ' btn-sm" type="button" data-act="' + act + '"' +
-  (o.k ? ' data-k="' + o.k + '"' : '') + (o.sid ? ' data-sid="' + esc(o.sid) + '"' : '') + (st.det && st.det.busy ? ' disabled' : '') + '>' + label + '</button>'; };
+  (o.k ? ' data-k="' + o.k + '"' : '') + (o.sid ? ' data-sid="' + esc(o.sid) + '"' : '') + (o.i != null ? ' data-i="' + Number(o.i) + '"' : '') + (st.det && st.det.busy ? ' disabled' : '') + '>' + label + '</button>'; };
 const formBar = (k, label, danger) => '<div class="acts">' + btn('submit', st.det.busy === k ? 'กำลังบันทึก…' : label, { primary: !danger, danger, k }) + btn('close-form', 'ยกเลิก') + '</div>';
 
 function lateOf(startsIso, notifiedYmd) {          // กติกาเดียวกับ teach_is_late_cancel ใน 047 (วันปฏิทินไทย · < 3 วัน = ช้า) — ไว้แสดงตัวอย่างก่อนกด ฐานเป็นผู้ตัดสินจริง
@@ -418,8 +573,11 @@ function sessRowHtml(r, s) {
     state = '<span class="st">ยกเลิก (' + esc(BY_TXT[s.cancel_by] || '') + ')</span>';
     when = (s.starts_at ? esc(whenOf(s.starts_at)) : '') + (s.late_cancel ? ' <span class="wk-red">แจ้งช้า — นับเป็นครั้งที่ใช้ไป</span>' : s.cancel_by === 'student' ? ' <span class="sub">แจ้งล่วงหน้า — ไม่นับเป็นครั้งที่ใช้ไป</span>' : '');
   }
+  const cal = s.status !== 'scheduled' ? '' : s.gcal_uid
+    ? '<div class="sub" data-cal="linked">ผูกกับนัดในปฏิทินแล้ว ✓' + (s.gcal_start ? ' (' + esc(whenOf(s.gcal_start)) + ')' : '') + '</div>'
+    : '<div class="sub" data-cal="none">ยังไม่ผูกกับนัดในปฏิทิน</div>';
   let h = '<div class="card" data-sid="' + esc(s.id) + '"><div class="pills">' + state + '</div><div>' + when + '</div>' +
-    '<div class="sub">' + (s.room ? 'ห้อง ' + esc(s.room) : '') + (s.teacher_id !== st.tid ? ' · สอนโดยครูท่านอื่น' : '') + '</div>' +
+    '<div class="sub">' + (s.room ? 'ห้อง ' + esc(s.room) : '') + (s.teacher_id !== st.tid ? ' · สอนโดยครูท่านอื่น' : '') + '</div>' + cal +
     (s.cancel_reason ? '<div class="sub">เหตุผล: ' + esc(s.cancel_reason) + '</div>' : '');
   if (st.notes.has(s.id) && !(here && d.open === 'note')) h += '<div class="note" data-note="' + esc(s.id) + '"><span class="sub">บันทึกการสอน</span><br>' + esc(st.notes.get(s.id)) + '</div>';
   if (here && d.open === 'done') {
@@ -437,9 +595,12 @@ function sessRowHtml(r, s) {
     h += '<div class="form" id="formNote"><h3>บันทึกการสอน</h3>' +
       ta('text', 'บันทึก (ไม่เกิน 4,000 ตัวอักษร · เว้นว่าง = ลบบันทึก)', { rows: 5, maxlength: 4000, hint: 'เห็นเฉพาะเจ้าของร้านและครูของนักเรียนคนนี้ — พนักงาน/ผู้ดูแลคนอื่นไม่เห็น' }) +
       formBar('note', 'บันทึก') + '</div>';
+  } else if (here && d.open === 'link') {
+    h += linkFormHtml(s);
   } else {
     let a = '';
-    if (s.status === 'scheduled') a += btn('open', 'ทำเครื่องหมายสอนแล้ว', { k: 'done', sid: s.id }) + btn('open', 'ยกเลิก / ไม่มา', { k: 'cancel', sid: s.id });
+    if (s.status === 'scheduled') a += btn('open', 'ทำเครื่องหมายสอนแล้ว', { k: 'done', sid: s.id }) + btn('open', 'ยกเลิก / ไม่มา', { k: 'cancel', sid: s.id }) +
+      (s.gcal_uid ? btn('unlink', 'ถอดนัดปฏิทิน', { sid: s.id }) : btn('open', 'ผูกนัดปฏิทิน', { k: 'link', sid: s.id }));
     a += btn('open', st.notes.has(s.id) ? 'แก้บันทึกการสอน' : 'บันทึกการสอน', { k: 'note', sid: s.id });
     h += '<div class="acts">' + a + '</div>';
   }
@@ -461,6 +622,7 @@ function detailHtml() {
     '<dt>เหลือ</dt><dd>' + Number(r.sessions_remaining) + ' ครั้ง</dd>' +
     '<dt>วันเริ่ม</dt><dd>' + (r.started_on ? esc(fmtDate(r.started_on)) : '<span class="sub">ยังไม่เริ่มเรียน</span>') + '</dd>' +
     '<dt>อายุคอร์ส</dt><dd>' + expiryHtml(r) + '</dd></dl></section>';
+  if (r.state === 'waiting_payment') h += '<div class="alert alert-warn" id="payWait"><span class="wk-red">รอชำระ</span> — รอเจ้าของ/ผู้ดูแลบันทึกชำระ จึงจะนัดรอบเรียนได้</div>';
   h += '<section class="sec"><h2>ข้อมูลติดต่อ</h2>' + contactHtml(r) + '</section>';
   const ss = sessOf(d.id).slice().sort((a, b) => sessKey(a).localeCompare(sessKey(b)));
   h += '<section class="sec" id="sessions"><h2>รอบเรียน <span class="sub">' + ss.length + ' รอบ</span></h2>' +
@@ -494,10 +656,13 @@ function mainHtml() {
   if (st.missing) h += '<div class="alert alert-warn" id="missing">ยังไม่ได้ติดตั้งระบบคอร์สเรียนในฐานข้อมูล — แจ้งเจ้าของร้าน</div>';
   if (st.error) h += '<div class="alert alert-red wk-red" role="alert">' + esc(st.error) + '</div>';
   if (st.det) return h + detailHtml();
+  if (st.add) return h + addHtml();
+  if (st.flash) h += '<div class="alert alert-ok" id="flash" role="status">' + esc(st.flash) + '</div>';
   h += statsHtml();
   h += '<div class="bar"><div class="tabs grow" role="tablist" id="tabs">' +
     '<button type="button" role="tab" data-tab="students" aria-selected="' + (st.tab === 'students') + '">นักเรียนของฉัน</button>' +
     '<button type="button" role="tab" data-tab="schedule" aria-selected="' + (st.tab === 'schedule') + '">ตารางสอน</button></div>' +
+    '<button class="btn btn-primary" id="addOpen" type="button" data-act="add-open">+ เพิ่มนักเรียน</button>' +
     '<button class="btn" id="reload" type="button">↻ รีเฟรช</button></div>';
   return h + (st.tab === 'schedule' ? scheduleHtml() : studentsHtml());
 }
@@ -520,6 +685,7 @@ function render() {
 // ── ทำงาน ──
 function openStudent(eid, sid) {
   if (!stuOf(eid)) return;
+  st.flash = '';
   st.det = detBlank(eid);
   render();
   window.scrollTo(0, 0);
@@ -534,7 +700,9 @@ function openForm(k, sid) {
   else if (k === 'note') Object.assign(d.fv, { text: st.notes.get(sid) || '' });
   else if (k === 'sched') Object.assign(d.fv, { date: '', start: '', end: '', room: '' });
   else if (k === 'ext') Object.assign(d.fv, { until: '', reason: '' });
+  d.link = null;
   render();
+  if (k === 'link') openLink(sid);
 }
 function failMsg(msg) { const d = st.det; d.err = msg; d.ok = ''; d.warn = []; render(); }
 async function run(label, fn) {
@@ -546,7 +714,7 @@ async function run(label, fn) {
   try {
     const res = await fn();
     if (uid !== st.uid || st.det !== d) return;
-    d.busy = ''; d.ok = (res && res.ok) || ''; d.warn = (res && res.warn) || []; d.open = null; d.fv = {};
+    d.busy = ''; d.ok = (res && res.ok) || ''; d.warn = (res && res.warn) || []; d.open = null; d.fv = {}; d.link = null;
     render();
     loadAll();
   } catch (e) {
@@ -609,10 +777,16 @@ $app.addEventListener('click', e => {
   if (b) {
     const d = st.det, a = b.dataset.act;
     if (a === 'back') { st.det = null; render(); return; }
+    if (a.startsWith('add-')) { addAct(a, b); return; }
     if (!d || d.busy) return;
     if (a === 'open') openForm(b.dataset.k, b.dataset.sid || '');
-    else if (a === 'close-form') { d.open = null; d.fv = {}; d.err = ''; render(); }
+    else if (a === 'close-form') { d.open = null; d.fv = {}; d.err = ''; d.link = null; render(); }
     else if (a === 'submit') submit(b.dataset.k);
+    else if (a === 'unlink') { const sid = b.dataset.sid; run('unlink', async () => { await rpc('teach_gcal_unlink', { p_session: sid }); return { ok: 'ถอดนัดปฏิทินแล้ว' }; }); }
+    else if (a === 'link-pick') {
+      const s = sessOf(d.id).find(x => x.id === d.fv.sid), x = s && d.link ? linkChoices(s, d.link)[Number(b.dataset.i)] : null;
+      if (x) run('link', async () => { await rpc('teach_gcal_link', { p_session: s.id, p_uid: x.ev.uid, p_start: x.ev.start + ':00+07:00' }); return { ok: 'ผูกนัดปฏิทินแล้ว ✓' }; });
+    }
     return;
   }
   const tab = e.target.closest('#tabs [data-tab]');
@@ -623,9 +797,11 @@ $app.addEventListener('click', e => {
 });
 $app.addEventListener('keydown', e => {
   if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.card.click[data-eid]') && !st.det) { e.preventDefault(); openStudent(e.target.dataset.eid, e.target.dataset.sid || ''); }
+  if (e.key === 'Enter' && e.target.id === 'a_phone' && st.add && !st.add.busy) { e.preventDefault(); addFind(); }
 });
 $app.addEventListener('input', e => {
   const t = e.target;
+  if (st.add && t.dataset.a) { st.add[t.dataset.a] = t.value; return; }
   if (t.id === 'q') { st.q = t.value; const pos = t.selectionStart; render(); const q = document.getElementById('q'); if (q) { q.focus(); try { q.setSelectionRange(pos, pos); } catch (x) { /* search input */ } } return; }
   if (!st.det || !t.dataset.f) return;
   st.det.fv[t.dataset.f] = t.type === 'checkbox' ? t.checked : t.value;
@@ -636,6 +812,7 @@ $app.addEventListener('input', e => {
 });
 $app.addEventListener('change', e => {
   const t = e.target;
+  if (st.add && t.dataset.a) { st.add[t.dataset.a] = t.value; if (t.dataset.a === 'course') render(); return; }
   if (!st.det || !t.dataset.f) return;
   st.det.fv[t.dataset.f] = t.value;
   if (t.dataset.struct) render();                                      // เลือกตัวเลือกที่ทำให้ฟอร์มเปลี่ยนรูป (ยกเลิก/ไม่มา · ใครยกเลิก)

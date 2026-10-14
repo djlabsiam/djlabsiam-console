@@ -13543,6 +13543,7 @@ function teStudentHtml() {
 }
 function teCandHtml() {
   const f = te.f;
+  if (!isManager()) return '';                  // ผู้สมัครเก่า = ทางลัดของ "กรอกย้อนหลัง" ซึ่งเป็นสิทธิ์เจ้าของ/ผู้ดูแล (060)
   if (te.members && te.members.error) return '<div class="alert alert-warn">' + escapeHtml(te.members.error) + '</div>';
   const all = teCandidates();
   const q = f.candQ.trim().toLowerCase();
@@ -13570,12 +13571,12 @@ function teDetailHtml() {
   if (!te.cat || te.cat.loading || !te.cat.loaded) {
     return te.cat && te.cat.error ? '<div class="alert alert-red">' + escapeHtml(te.cat.error) + '</div>' : '<div class="empty">กำลังโหลดรายการคอร์ส…</div>';
   }
-  const backfill = f.mode === 'backfill', course = teCourse(), mgr = isManager();
+  const mgr = isManager(), backfill = mgr && f.mode === 'backfill', course = teCourse();   // 060: ย้อนหลัง/ราคาที่ตกลง/ชำระ = เจ้าของ/ผู้ดูแลเท่านั้น
   const teachers = teTeachersOf(f.courseId);
   const lp = f.lang === 'en' ? teMoney(f.listPrice) : (course ? Number(course.list_price) : null);
   const agreed = teMoney(f.price);
   const tracks = course && Array.isArray(course.tracks) ? course.tracks.map(t => t && t.name).filter(Boolean) : [];
-  let h = '<div class="field"><span class="lbl">2. รูปแบบการลงเรียน</span><div class="te-seg" role="group" aria-label="รูปแบบ">' +
+  let h = !mgr ? '' : '<div class="field"><span class="lbl">2. รูปแบบการลงเรียน</span><div class="te-seg" role="group" aria-label="รูปแบบ">' +
     '<button type="button" data-act="mode" data-v="console" aria-pressed="' + !backfill + '">ลงเรียนใหม่</button>' +
     '<button type="button" data-act="mode" data-v="backfill" aria-pressed="' + backfill + '">กรอกย้อนหลัง (นักเรียนเก่า)</button></div>' +
     (backfill ? '<div class="alert alert-warn" style="margin-top:10px;">กรอกย้อนหลังเฉพาะนักเรียนที่ <strong>ยังมีสิทธิ์เหลืออยู่</strong> — ข้อมูลที่ไม่ครบ (วันชำระ/ยอด/สลิป) ปล่อยว่างได้ ระบบติดป้าย "กรอกย้อนหลัง · ข้อมูลอาจไม่ครบ" ให้</div>' : '') + '</div>';
@@ -13591,10 +13592,12 @@ function teDetailHtml() {
       (mgr ? '' : '<div class="hint">คอร์สภาษาอังกฤษตั้งราคาตั้งได้เฉพาะเจ้าของหรือผู้ดูแล — ให้ผู้ดูแลลงให้</div>') + '</div>' +
     (f.lang === 'en' ? '<div class="field"><label class="lbl" for="teListPrice">ราคาตั้งของคอร์สภาษาอังกฤษ (บาท)</label><input id="teListPrice" class="input" inputmode="decimal" data-f="listPrice" value="' + escapeHtml(f.listPrice) + '">' +
       '<div class="hint">ราคานี้ไม่อยู่ในไฟล์คอร์ส — กรอกเอง</div></div>' : '') +
+    (!mgr ? '<div class="field"><span class="lbl">ราคา</span><div id="tePriceFixed"><strong>' + (course ? escapeHtml(teFmt(course.list_price)) + ' บาท' : '—') + '</strong> <span class="te-sub">(ราคาตั้ง · แก้ไม่ได้)</span></div>' +
+      '<div class="hint">ราคาที่ตกลงต่างจากราคาตั้งได้เฉพาะเจ้าของหรือผู้ดูแลเป็นคนลงให้</div></div>' :
     '<div class="field"><label class="lbl" for="tePrice">ราคาที่ตกลง (บาท)' + (backfill ? ' — ไม่ทราบให้เว้นว่าง' : '') + '</label><input id="tePrice" class="input" inputmode="decimal" data-f="price" value="' + escapeHtml(f.price) + '">' +
       (course && f.lang === 'th' ? '<div class="hint">ราคาตั้ง ' + escapeHtml(teFmt(course.list_price)) + ' บาท</div>' : '') +
       (agreed !== null && Number.isFinite(agreed) && lp !== null && Number.isFinite(lp) && agreed !== lp
-        ? '<div class="hint wk-red" id="tePriceWarn">ราคาที่ตกลงต่างจากราคาตั้ง — ต้องใส่หมายเหตุบอกเหตุผล (เช่น ส่วนลดที่ตกลง)</div>' : '') + '</div>' +
+        ? '<div class="hint wk-red" id="tePriceWarn">ราคาที่ตกลงต่างจากราคาตั้ง — ต้องใส่หมายเหตุบอกเหตุผล (เช่น ส่วนลดที่ตกลง)</div>' : '') + '</div>') +
     '</div><div>' +
     (tracks.length ? '<div class="field"><label class="lbl" for="teTrack">แนวที่เลือก</label><select id="teTrack" class="input" data-f="track">' + teOpt('', '— ไม่ระบุ —', !f.track) +
       tracks.map(t => teOpt(t, t, t === f.track)).join('') + '</select></div>' : '') +
@@ -13613,7 +13616,9 @@ function teDetailHtml() {
       '</div></div></div>';
   }
   h += '<div class="card" style="padding:14px 18px;margin-bottom:16px;"><h3>การชำระ</h3>';
-  if (backfill) {
+  if (!mgr) {
+    h += '<div class="hint" id="tePayNote">บันทึกชำระทำโดยเจ้าของหรือผู้ดูแลเท่านั้น — ลงเรียนแล้วระบบจะรอชำระครบก่อน จึงนัดรอบเรียนได้</div>';
+  } else if (backfill) {
     h += '<div class="te-seg" role="group" aria-label="การชำระ">' +
       '<button type="button" data-act="pay" data-v="unknown" aria-pressed="' + (f.pay === 'unknown') + '">ชำระครบแล้ว (ไม่ทราบวันที่)</button>' +
       '<button type="button" data-act="pay" data-v="paid" aria-pressed="' + (f.pay === 'paid') + '">บันทึกงวดที่ทราบ</button>' +
@@ -13621,16 +13626,15 @@ function teDetailHtml() {
   } else {
     h += '<label class="lbl" style="display:flex;gap:10px;align-items:center;min-height:44px;"><input type="checkbox" data-act="paychk"' + (f.pay === 'paid' ? ' checked' : '') + '> ชำระแล้ว (บันทึกงวดแรกพร้อมการลงเรียน)</label>';
   }
-  if (f.pay === 'paid') {
+  if (mgr && f.pay === 'paid') {
     h += '<div class="wk-form-grid" style="margin-top:12px;"><div class="field"><label class="lbl" for="tePayDate">วันที่ชำระ</label><input id="tePayDate" class="input" type="date" data-f="payDate" max="' + todayBangkok() + '" value="' + escapeHtml(f.payDate) + '"></div>' +
       '<div class="field"><label class="lbl" for="tePayAmount">ยอด (บาท)</label><input id="tePayAmount" class="input" inputmode="decimal" data-f="payAmount" value="' + escapeHtml(f.payAmount) + '"></div>' +
-      '<div class="field"><label class="lbl" for="tePayMethod">วิธีชำระ</label><select id="tePayMethod" class="input" data-f="payMethod">' + TE_METHODS.map(([v, t]) => teOpt(v, t, v === f.payMethod)).join('') + '</select></div></div>' +
-      (!mgr ? '<div class="wk-red" id="tePayWarn" style="margin-top:10px;">บันทึกแล้วจะไม่แสดงยอดนี้อีก — ตรวจยอดและวันที่ก่อนกดบันทึก (แก้ภายหลังต้องให้เจ้าของหรือผู้ดูแลทำ)</div>' : '');
-  } else if (f.pay === 'unknown') {
+      '<div class="field"><label class="lbl" for="tePayMethod">วิธีชำระ</label><select id="tePayMethod" class="input" data-f="payMethod">' + TE_METHODS.map(([v, t]) => teOpt(v, t, v === f.payMethod)).join('') + '</select></div></div>';
+  } else if (mgr && f.pay === 'unknown') {
     h += '<div class="hint" style="margin-top:10px;">ระบบถือว่าชำระครบแล้วโดยไม่เก็บวัน/ยอด — แสดง "✓ ชำระครบ (ไม่ทราบวันที่)"</div>';
   }
   h += '</div>';
-  h += '<div class="hint" id="teSlipNote">แนบสลิป: ยังไม่เปิดใช้ (รอเจ้าของแก้นโยบายความเป็นส่วนตัวของเว็บก่อน) — ' + (backfill ? 'นักเรียนเก่าไม่มีสลิปได้ ไม่ใช่ข้อผิดพลาด (แสดงเป็น "ไม่มีสลิป (เก่า)")' : 'บันทึกชำระแล้วแนบสลิปทีหลังได้เมื่อเปิดใช้') + '</div>';
+  if (mgr) h += '<div class="hint" id="teSlipNote">แนบสลิป: ยังไม่เปิดใช้ (รอเจ้าของแก้นโยบายความเป็นส่วนตัวของเว็บก่อน) — ' + (backfill ? 'นักเรียนเก่าไม่มีสลิปได้ ไม่ใช่ข้อผิดพลาด (แสดงเป็น "ไม่มีสลิป (เก่า)")' : 'บันทึกชำระแล้วแนบสลิปทีหลังได้เมื่อเปิดใช้') + '</div>';
   h += (f.err ? '<div class="alert alert-red wk-red" id="teFormErr" role="alert">' + escapeHtml(f.err) + '</div>' : '') +
     '<div class="toolbar"><button class="btn btn-primary" type="button" id="teSave" data-act="save"' + (f.busy ? ' disabled' : '') + '>' + (f.busy ? 'กำลังบันทึก…' : 'บันทึกการลงเรียน') + '</button>' +
     '<button class="btn" type="button" data-act="clear"' + (f.busy ? ' disabled' : '') + '>ล้างฟอร์ม</button></div>';
@@ -13704,11 +13708,11 @@ async function teNewCustomer() {
   teEnrollRender();
 }
 function teFormCheck() {
-  const f = te.f, course = teCourse(), backfill = f.mode === 'backfill';
+  const f = te.f, course = teCourse(), mgr = isManager(), backfill = mgr && f.mode === 'backfill';
   if (!f.student) return 'เลือกนักเรียนก่อน';
   if (!course) return 'เลือกคอร์ส';
   if (!f.teacherId) return 'เลือกครูผู้สอน';
-  const price = teMoney(f.price);
+  const price = mgr ? teMoney(f.price) : Number(course.list_price);        // พนักงานทั่วไป: ราคาที่ตกลง = ราคาตั้งเสมอ (060)
   if (Number.isNaN(price) || (price !== null && price < 0)) return 'ราคาที่ตกลงต้องเป็นตัวเลขไม่ติดลบ';
   if (price === null && !backfill) return 'ใส่ราคาที่ตกลง';
   let lp = Number(course.list_price);
@@ -13729,7 +13733,7 @@ function teFormCheck() {
       if (f.sessDates[i] > today) return 'วันที่เรียนครั้งที่ ' + (i + 1) + ' ต้องไม่เกินวันนี้';
     }
   }
-  if (f.pay === 'paid') {
+  if (mgr && f.pay === 'paid') {
     const amt = teMoney(f.payAmount);
     if (amt === null || Number.isNaN(amt) || amt <= 0) return 'ใส่ยอดชำระ (มากกว่า 0)';
     if (!f.payDate) return 'ใส่วันที่ชำระ';
@@ -13743,7 +13747,7 @@ async function teEnrollSubmit() {
   if (f.busy) return;
   const bad = teFormCheck();
   if (bad) { f.err = bad; f.ok = ''; teEnrollRender(); return; }
-  const uid = currentUserId, cur = te, course = teCourse(), backfill = f.mode === 'backfill';
+  const uid = currentUserId, cur = te, course = teCourse(), mgr = isManager(), backfill = mgr && f.mode === 'backfill';
   f.busy = true; f.err = ''; f.ok = ''; teEnrollRender();
   let step = 'ลงเรียน';
   try {
@@ -13756,7 +13760,7 @@ async function teEnrollSubmit() {
       step = 'ลงเรียน';
       const { data, error } = await db.rpc('teach_enroll_create', {
         p_customer: f.student.customer_id, p_course: f.courseId, p_teacher: f.teacherId,
-        p_price_agreed: teMoney(f.price), p_track: f.track || null, p_equipment: f.equip || null,
+        p_price_agreed: mgr ? teMoney(f.price) : Number(course.list_price), p_track: f.track || null, p_equipment: f.equip || null,
         p_started_on: backfill && f.started ? f.started : null, p_note: f.note.trim() || null,
         p_source: backfill ? 'backfill' : 'console', p_teach_lang: f.lang,
         p_list_price: f.lang === 'en' ? teMoney(f.listPrice) : null, p_paid_unknown: backfill && f.pay === 'unknown',
@@ -13773,7 +13777,7 @@ async function teEnrollSubmit() {
       if (error) throw error;
       f.sessDone = true;
     }
-    if (f.pay === 'paid' && !f.payDone) {
+    if (mgr && f.pay === 'paid' && !f.payDone) {
       step = 'บันทึกการชำระ';
       if (!f.payReq) f.payReq = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 3 | 8)).toString(16); });
       const { error } = await db.rpc('teach_payment_record', {
@@ -13851,7 +13855,7 @@ function teFormClick(e) {
   else if (act === 'newToggle') { f.newOpen = !f.newOpen; teEnrollRender(); }
   else if (act === 'newCreate') teNewCustomer();
   else if (act === 'cand') {
-    const c = teCandidates().find(x => x.member.id === b.dataset.mid);
+    const c = isManager() ? teCandidates().find(x => x.member.id === b.dataset.mid) : null;
     if (!c) return;
     teSetStudent({ customer_id: c.customerId, member_id: c.member.id, name: c.member.full_name, phone: c.member.phone || '' });
     f.mode = 'backfill';
@@ -13859,6 +13863,7 @@ function teFormClick(e) {
     f.teacherId = f.pendingTeacher && f.courseId && teTeachersOf(f.courseId).some(t => t.id === f.pendingTeacher) ? f.pendingTeacher : '';
     teEnrollRender();
   } else if (act === 'mode') {
+    if (!isManager()) return;
     f.mode = b.dataset.v;
     if (f.mode === 'console') { f.sessN = 0; f.sessDates = []; f.started = ''; if (f.pay === 'unknown') f.pay = 'none'; }
     teEnrollRender();
@@ -13905,7 +13910,6 @@ const TE_WARN = {
 };
 const TE_LATE_DAYS = 3;               // แจ้งยกเลิกน้อยกว่า 3 วัน (นับวันปฏิทินไทย) = นับเป็นครั้งที่ใช้ไป — ต้องตรง teach_is_late_cancel ใน 047
 const TE_GCAL_NEAR_MIN = 30;          // นัดปฏิทินที่เวลาห่างไม่เกิน ±30 นาที ขึ้นก่อน
-const TE_PAY_WARN_BLIND = 'บันทึกแล้วจะไม่แสดงยอดนี้อีก — ตรวจยอดและวันที่ก่อนกดบันทึก (แก้ภายหลังต้องให้เจ้าของหรือผู้ดูแลทำ)';
 const TE_PAY_WARN_SEEN = 'บันทึกแล้วแก้/ลบเองไม่ได้ทันที — ตรวจยอดและวันที่ก่อนกดบันทึก (ลงผิดแก้ได้ที่ปุ่ม "แก้" ข้างรายการ โดยเจ้าของหรือผู้ดูแล)';
 const teUuid = () => (window.crypto && crypto.randomUUID) ? crypto.randomUUID()
   : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 3 | 8)).toString(16); });
@@ -14058,14 +14062,20 @@ function teDetPayHtml(r, d, cap) {
   if (r.closed_on) return h + '<div class="hint">การลงเรียนนี้ปิดแล้ว — บันทึกชำระเพิ่มไม่ได้</div></section>';
   if (d.open === 'pay') h += teFormPay(cap, d);
   else if (d.open === 'refund') h += teFormRefund(d);
-  else h += '<div class="toolbar">' + teBtn('open', '+ บันทึกชำระ', { k: 'pay' }) + (cap.mgr && cap.money ? teBtn('open', 'คืนเงิน', { k: 'refund' }) : '') + '</div>';
+  else if (cap.mgr) {
+    h += '<div class="toolbar">' + teBtn('open', '+ บันทึกชำระ', { k: 'pay' }) + (cap.money ? teBtn('open', 'คืนเงิน', { k: 'refund' }) : '') +
+      (cap.fix ? teBtn('open', 'ปรับราคาที่ตกลง (ส่วนลด)', { k: 'fix' }) : '') + '</div>';
+    // อาจารย์/พนักงานลงเรียนที่ราคาตั้งเสมอ (060) — ส่วนลดต้องปรับที่นี่ก่อนบันทึกชำระ ไม่งั้นยอดไม่ถึงราคา = ไม่ครบ = นัดรอบไม่ได้
+    if (cap.fix) h += '<div class="hint" id="tePriceAdjustHint">ได้ส่วนลด? ปรับ "ราคาที่ตกลง" ก่อนบันทึกชำระ — ลงเรียนใหม่ทุกใบเริ่มที่ราคาตั้ง ถ้ายอดชำระไม่ถึงราคาที่ตกลงจะยังไม่ครบและนัดรอบเรียนไม่ได้</div>';
+  }
+  else h += '<div class="hint" id="teDetPayOnlyMgr">บันทึกชำระได้เฉพาะเจ้าของหรือผู้ดูแล</div>';
   return h + '</section>';
 }
 function teFormPay(cap, d) {
   return '<div class="te-form" id="teFormPay"><h4>บันทึกชำระ</h4>' +
     teIn('date', 'วันที่ชำระ', { type: 'date', max: todayBangkok() }) + teIn('amount', 'ยอด (บาท)', { inputmode: 'decimal' }) +
     teSel('method', 'วิธีชำระ', TE_METHODS) + teIn('note', 'หมายเหตุ (ไม่เกิน 200 ตัวอักษร · ห้ามใส่เลขบัญชี/เบอร์โทร)', { maxlength: 200 }) +
-    '<div class="wk-red" id="teDetPayWarn">' + (cap.money ? TE_PAY_WARN_SEEN : TE_PAY_WARN_BLIND) + '</div>' + teFormBar('pay', 'บันทึกชำระ') + '</div>';
+    '<div class="wk-red" id="teDetPayWarn">' + TE_PAY_WARN_SEEN + '</div>' + teFormBar('pay', 'บันทึกชำระ') + '</div>';
 }
 function teFormRefund(d) {
   return '<div class="te-form" id="teFormRefund"><h4>คืนเงิน</h4>' +
@@ -14233,7 +14243,9 @@ function teDetSessHtml(r, d, cap) {
   if (!d.loaded) return h + '<div class="empty">กำลังโหลด…</div></section>';
   h += d.sess.length ? d.sess.map(s => teSessRowHtml(r, d, s, cap)).join('') : '<div class="empty">ยังไม่มีรอบเรียน</div>';
   if (r.closed_on) return h + '<div class="hint">การลงเรียนนี้ปิดแล้ว — นัดรอบใหม่ไม่ได้</div></section>';
-  return h + (d.open === 'sched' ? teFormSched(r, d) : '<div class="toolbar">' + teBtn('open', '+ นัดรอบเรียน', { k: 'sched' }) + '</div>') + '</section>';
+  const unpaid = r.paid_in_full === false && r.source !== 'backfill';      // ใบย้อนหลังที่ราคาว่างฐานไม่บล็อก — ปล่อยให้ฐานตัดสินและตอบเป็นข้อความไทย
+  return h + (unpaid ? '<div class="wk-red" id="teSchedBlocked">ยังไม่ชำระครบ — นัดรอบเรียนได้หลังเจ้าของหรือผู้ดูแลบันทึกชำระครบแล้ว</div>' : '') +
+    (d.open === 'sched' ? teFormSched(r, d) : '<div class="toolbar">' + teBtn('open', '+ นัดรอบเรียน', { k: 'sched' }) + '</div>') + '</section>';
 }
 function teFormSched(r, d) {
   const ids = new Set(te.cat ? te.cat.links.filter(l => l.course_id === r.course_id).map(l => l.teacher_id) : []);

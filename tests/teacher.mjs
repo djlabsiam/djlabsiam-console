@@ -330,6 +330,154 @@ async function runTests() {
 async function shot(name) { await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))); await sleep(150); await new Promise(r => { window.__shot = r; console.log('[SHOT] ' + name); }); }
 </script>`;
 
+// ── 5. เพิ่มนักเรียนเอง · ผูกนัดปฏิทิน (060 · เจ้าของสั่ง 14 ต.ค. 69) ──
+const T5 = `<script>
+window.addEventListener('load', () => setTimeout(runTests, 300));
+${COMMON}
+const add = id => $('addStu') && $('addStu').querySelector('#' + id);
+const aact = (a, extra) => { const b = $('app').querySelector('[data-act="' + a + '"]' + (extra || '')); if (!b) throw new Error('ไม่พบปุ่ม ' + a + (extra || '')); b.click(); };
+const typePhone = v => { const e = $('a_phone'); e.value = v; e.dispatchEvent(new Event('input', { bubbles: true })); };
+const findCalls = () => rpcCalls('teach_student_find');
+async function runTests() {
+  L('=== หน้าครู (5/5): เพิ่มนักเรียนเอง · ผูกนัดปฏิทิน ===');
+  seedManiac();
+  FAKE.customers.find(c => c.id === 'c2').phone = '0877772222';
+  FAKE.customers.find(c => c.id === 'c4').phone = '0899991111';
+  await sleep(300);
+  await signIn('maniac');
+  ok('มีปุ่ม "+ เพิ่มนักเรียน" ที่หน้ารายชื่อ (≥ 44px) · ยังไม่โหลดคอร์ส/ไม่เรียกค้นหา', !!$('addOpen') && $('addOpen').getBoundingClientRect().height >= 43.5
+    && !CALLS.some(c => c.table === 'courses' || c.table === 'course_teachers') && findCalls().length === 0);
+  $('addOpen').click(); await settle(300);
+  ok('เปิดฟอร์ม: มีช่องเบอร์ + ปุ่มค้นหา · โหลดเฉพาะคอร์สที่ตัวเองสอน (courses + course_teachers) · ยังไม่เรียกค้นหา',
+    !!$('a_phone') && !!$('app').querySelector('[data-act="add-find"]') && CALLS.some(c => c.table === 'courses') && CALLS.some(c => c.table === 'course_teachers') && findCalls().length === 0);
+  ok('ฟอร์มบอกว่าค้นด้วยชื่อไม่ได้ · แสดงเฉพาะชื่อกับเบอร์ 4 ตัวท้าย', /ค้นด้วยชื่อไม่ได้/.test($('addStu').textContent) && /4 ตัวท้าย/.test($('addStu').textContent));
+  // ค้นด้วยชื่อ/เบอร์ไม่ครบ: ไม่ยิงฐาน
+  typePhone('ปิติ'); aact('add-find'); await settle(200);
+  ok('พิมพ์ชื่อแทนเบอร์: ไม่ส่งฐาน · ข้อความแดงตัวหนา', findCalls().length === 0 && isRed($('addErr')) && /ค้นด้วยชื่อไม่ได้/.test($('addErr').textContent), $('addErr') && $('addErr').textContent);
+  typePhone('08777'); aact('add-find'); await settle(200);
+  ok('เบอร์ไม่ครบ 9 หลัก: ไม่ส่งฐาน', findCalls().length === 0 && isRed($('addErr')));
+  typePhone('0877772222 มานี'); aact('add-find'); await settle(200);
+  ok('เบอร์ปนตัวอักษร: ไม่ส่งฐาน', findCalls().length === 0);
+  // ค้นด้วยเบอร์เต็ม
+  typePhone('087-777-2222'); aact('add-find'); await settle(400);
+  ok('ค้นเบอร์เต็ม: ส่งตามที่พิมพ์ให้ฐานตัดสิน · เห็นชื่อ + เบอร์ปิด (4 ตัวท้าย) · ไม่เห็นเบอร์เต็ม/รหัสสมาชิก',
+    findCalls().length === 1 && findCalls()[0].args.p_query === '087-777-2222' && /มานี มีนา/.test($('addStu').textContent) && /[*]{6}2222/.test($('addStu').textContent)
+    && !/877772222|0877/.test($('addStu').textContent), $('addStu').textContent.slice(0, 160));
+  aact('add-pick', '[data-i="0"]'); await settle(200);
+  ok('เลือกแล้ว: ขึ้นฟอร์มคอร์ส · ตัวเลือกคอร์สมีเฉพาะที่ Maniac สอน (Basic DJ — ไม่มี Advance Scratch/คอร์สที่ปิด)', !!$('a_course')
+    && [...$('a_course').options].map(o => o.textContent).join('|') === '— เลือกคอร์ส —|Basic DJ Class', [...$('a_course').options].map(o => o.textContent).join('|'));
+  ok('ปุ่มลงเรียนปิดอยู่จนกว่าจะเลือกคอร์ส · ไม่มีช่องกรอกราคา/ชำระ/ย้อนหลัง/วันเริ่ม', $('app').querySelector('[data-act="add-submit"]').disabled === true
+    && [...$('addStu').querySelectorAll('input, textarea')].map(e => e.id).join() === 'a_phone' && !/ย้อนหลัง/.test($('addStu').textContent));
+  $('a_course').value = 'basic-dj-class'; $('a_course').dispatchEvent(new Event('change', { bubbles: true })); await settle(150);
+  ok('เลือกคอร์ส: เห็นราคาตั้ง 20,000 บาท อ่านอย่างเดียว · จำนวนครั้ง/อายุ · ข้อความแดงตัวหนา "ต้องรอเจ้าของ/ผู้ดูแลบันทึกชำระ"',
+    /20,000 บาท/.test($('coursePrice').textContent) && /แก้ไม่ได้/.test($('coursePrice').textContent) && isRed($('payNote')) && /บันทึกชำระ/.test($('payNote').textContent)
+    && $('app').querySelector('[data-act="add-submit"]').disabled === false);
+  await shot('t5-add-form');
+  // ฐานปฏิเสธ → ข้อความไทยของฐาน / ข้อความอังกฤษไม่หลุด
+  TEACH.fail.rpc_teach_enroll_create = 'ครูคนนี้ไม่ได้เปิดสอนคอร์สนี้ หรือถูกปิดใช้งาน';
+  aact('add-submit'); await settle(400);
+  ok('ฐานปฏิเสธเป็นข้อความไทย: แสดงตามที่ฐานตอบ · ฟอร์มยังอยู่ (ลองใหม่ได้)', /ครูคนนี้ไม่ได้เปิดสอนคอร์สนี้/.test($('addErr').textContent) && !!$('a_course') && isRed($('addErr')));
+  TEACH.fail.rpc_teach_enroll_create = 'duplicate key value violates unique constraint "e" DETAIL: Key (customer)=(c2) already exists';
+  aact('add-submit'); await settle(400);
+  ok('ข้อความอังกฤษดิบของฐานไม่ถูกแสดง (กันค่าในแถวหลุด)', /ฐานข้อมูลตอบกลับผิดปกติ/.test($('addErr').textContent) && !/duplicate|customer\\)=/.test($('addErr').textContent));
+  TEACH.fail = {};
+  const nE = rpcCalls('teach_enroll_create').length;
+  let release; TEACH.gateRpc = new Promise(r => { release = r; });
+  aact('add-submit'); await sleep(60);
+  ok('ระหว่างส่ง: ปุ่มลงเรียนถูกล็อก · ข้อความ "กำลังลงเรียน…"', $('app').querySelector('[data-act="add-submit"]').disabled === true && /กำลังลงเรียน/.test($('app').textContent));
+  $('app').querySelector('[data-act="add-submit"]').click(); $('app').querySelector('[data-act="add-submit"]').click();
+  TEACH.gateRpc = null; release(); await settle(800);
+  const ea = lastArgs('teach_enroll_create');
+  ok('กดซ้ำระหว่างส่ง: ลงเรียนครั้งเดียว · ค่าที่ส่ง = ตัวเอง(t3) · console · th · ราคา = ราคาตั้ง · ไม่มีย้อนหลัง/ชำระครบไม่ทราบวันที่/ราคาตั้งเอง',
+    rpcCalls('teach_enroll_create').length === nE + 1 && ea.p_customer === 'c2' && ea.p_course === 'basic-dj-class' && ea.p_teacher === 't3' && ea.p_price_agreed === 20000 && ea.p_source === 'console'
+    && ea.p_teach_lang === 'th' && ea.p_started_on === null && ea.p_paid_unknown === false && ea.p_list_price === null, J(ea));
+  ok('สำเร็จ: กลับหน้ารายชื่อ · แถบเขียวบอกว่ารอเจ้าของ/ผู้ดูแลบันทึกชำระก่อนนัดคาบ · นักเรียนใหม่ขึ้นในกลุ่ม "รอชำระ"',
+    !$('addStu') && /รอเจ้าของ\\/ผู้ดูแลบันทึกชำระก่อน จึงนัดรอบเรียนได้/.test(($('flash') || {}).textContent || '') && /รอชำระ [0-9]+ คน/.test(txt()) && !!cards().find(c => /มานี มีนา/.test(c.textContent)), ($('flash') || {}).textContent);
+  // สมาชิกที่ยังไม่มีแถวลูกค้า / ไม่พบ
+  $('addOpen').click(); await settle(300);
+  typePhone('081-000-0011'); aact('add-find'); await settle(400);
+  ok('เบอร์ที่มีแต่ในทะเบียนสมาชิก: เห็นชื่อ + เบอร์ปิด · ข้อความแดง "ให้ทีมงานสร้างลูกค้าก่อน" · ไม่มีปุ่มเลือก',
+    /ผู้สมัครทดสอบ หนึ่ง/.test($('addStu').textContent) && /[*]{6}0011/.test($('addStu').textContent) && /ให้ทีมงานสร้างลูกค้าก่อน/.test($('addStu').textContent)
+    && !$('app').querySelector('[data-act="add-pick"]') && isRed($('addStu').querySelector('.wk-red')));
+  typePhone('0800000099'); aact('add-find'); await settle(400);
+  ok('ไม่พบ: บอกตรง ๆ ว่าให้ทีมงานสร้างลูกค้า (อาจารย์สร้างลูกค้าใหม่เองไม่ได้) · ไม่มีปุ่มสร้างลูกค้า', !!$('addNone') && /สร้างลูกค้าใหม่เองไม่ได้/.test($('addNone').textContent) && !$('app').querySelector('[data-act="newToggle"], [data-act="newCreate"]'));
+  ok('ไม่เขียนตารางตรง ๆ ตลอดการเพิ่มนักเรียน (customers/enrollments) · ฟังก์ชันที่เขียน = teach_enroll_create เท่านั้น',
+    !CALLS.some(c => c.op === 'insert' || c.op === 'update' || c.op === 'delete' || c.op === 'upsert') && [...new Set(CALLS.filter(c => c.op === 'rpc').map(c => c.fn))].every(f => /^(my_teacher_id|teach_my_students|teach_student_find|teach_enroll_create)$/.test(f)));
+  aact('add-back'); await settle(100);
+
+  // ── นักเรียนที่ยังไม่ชำระ: ป้าย + ปุ่มนัดคาบ แสดงข้อความไทยจากฐาน ──
+  const newCard = cards().find(c => /มานี มีนา/.test(c.textContent));
+  ok('นักเรียนใหม่: การ์ดมีป้าย "รอชำระ"', !!newCard && /รอชำระ/.test(newCard.querySelector('.pills').textContent));
+  newCard.click(); await settle(500);
+  ok('แผงนักเรียนที่ยังไม่ชำระ: ข้อความ "รอชำระ — รอเจ้าของ/ผู้ดูแลบันทึกชำระ จึงจะนัดรอบเรียนได้" (แดง)', !!$('payWait') && isRed($('payWait').querySelector('.wk-red')) && /รอเจ้าของ\\/ผู้ดูแลบันทึกชำระ/.test($('payWait').textContent));
+  oform('sched'); await settle(100);
+  fillf('date', day(4)); fillf('start', '10:00'); fillf('end', '12:00');
+  submitK('sched'); await settle(500);
+  ok('นัดรอบของคนที่ยังไม่ชำระ: ฐานปฏิเสธ · แถบแดงข้อความไทยจากฐาน "ยังไม่ชำระครบ…" (ไม่ใช่ error ดิบ) · ไม่เกิดรอบ', /ยังไม่ชำระครบ/.test(errTxt()) && isRed($('detErr')) && !/permission|violates|42501/.test(errTxt()));
+  ok('ในแผงยังไม่มียอดเงิน/ราคาที่ตกลง/สลิปใด ๆ (ขอบเขตเดิมของหน้าครู)', !/฿|ราคาที่ตกลง|สลิป|ชำระสะสม|คงเหลือ/.test($('app').textContent.replace(/รอเจ้าของ[^ ]*บันทึกชำระ/g, '')));
+  dact('back'); await settle(100);
+
+  // ── ผูกนัดปฏิทิน ──
+  await ostu('e-month');
+  ok('รอบที่นัดไว้ยังไม่ผูก: ขึ้น "ยังไม่ผูกกับนัดในปฏิทิน" + ปุ่ม "ผูกนัดปฏิทิน" (≥ 44px)', !!sc('s2').querySelector('[data-cal="none"]') && has('open', '[data-k="link"][data-sid="s2"]')
+    && $('app').querySelector('[data-act="open"][data-k="link"][data-sid="s2"]').getBoundingClientRect().height >= 43.5);
+  const d5 = day(5);
+  window.FN.gcal = () => ({ events: [
+    { uid: 'g-m1', title: 'Basic DJ — Maniac', start: d5 + 'T10:00', end: d5 + 'T12:00', all_day: false, location: 'ห้องเล็ก 1' },
+    { uid: 'g-m2', title: '[ห้อง A] Mixing - maniac', start: d5 + 'T16:00', end: d5 + 'T18:00', all_day: false, location: '' },
+    { uid: 'g-n1', title: 'Scratch — Nutty', start: d5 + 'T10:00', end: d5 + 'T12:00', all_day: false, location: '' },
+    { uid: 'g-ad', title: 'วันหยุดร้าน — Maniac', start: d5 + 'T00:00', end: d5 + 'T23:59', all_day: true, location: '' },
+  ], color: null, teacher_colors: {} });
+  const ng = CALLS.filter(c => c.op === 'fn' && c.name === 'gcal').length;
+  oform('link', 's2'); await settle(500);
+  const gc = CALLS.filter(c => c.op === 'fn' && c.name === 'gcal');
+  ok('ผูกนัด: เรียก gcal ครั้งเดียว ด้วยวันของรอบเดียวกัน (from = to = วันนั้น)', gc.length === ng + 1 && gc[gc.length - 1].body.from === d5 && gc[gc.length - 1].body.to === d5, J(gc[gc.length - 1]));
+  const evs = [...$('formLink').querySelectorAll('[data-ev]')].map(e => e.dataset.ev);
+  ok('ตัวเลือก = เฉพาะนัดของครู Maniac (ไม่สนตัวพิมพ์ · มี [ห้อง] นำหน้า) · ไม่มีนัดของครูอื่น/นัดทั้งวัน · นัดที่เวลาตรงขึ้นก่อนพร้อมป้าย "เวลาตรง"',
+    evs.join() === 'g-m1,g-m2' && /เวลาตรง/.test($('formLink').querySelector('[data-ev="g-m1"]').textContent) && !/เวลาตรง/.test($('formLink').querySelector('[data-ev="g-m2"]').textContent), evs.join());
+  const pb = $('formLink').querySelector('[data-act="link-pick"]');
+  ok('ปุ่ม "ผูกนัดนี้" สูง ≥ 44px', pb.getBoundingClientRect().height >= 43.5);
+  const nL = rpcCalls('teach_gcal_link').length;
+  pb.click(); await settle(500);
+  const la = lastArgs('teach_gcal_link');
+  ok('ผูกแล้ว: teach_gcal_link ด้วยรหัสนัด + เวลาเริ่ม (+07:00) · ข้อความ "ผูกนัดปฏิทินแล้ว" · รอบขึ้น "ผูกกับนัดในปฏิทินแล้ว"',
+    rpcCalls('teach_gcal_link').length === nL + 1 && la.p_session === 's2' && la.p_uid === 'g-m1' && la.p_start === d5 + 'T10:00:00+07:00' && /ผูกนัดปฏิทินแล้ว/.test(okText()) && !!sc('s2').querySelector('[data-cal="linked"]'), J(la));
+  ok('รอบที่ผูกแล้ว: มีปุ่ม "ถอดนัดปฏิทิน" แทนปุ่มผูก', has('unlink', '[data-sid="s2"]') && !has('open', '[data-k="link"][data-sid="s2"]'));
+  const nU = rpcCalls('teach_gcal_unlink').length;
+  dact('unlink', '[data-sid="s2"]'); await settle(500);
+  ok('ถอด: teach_gcal_unlink · กลับเป็นยังไม่ผูก · ข้อความ "ถอดนัดปฏิทินแล้ว"', rpcCalls('teach_gcal_unlink').length === nU + 1 && !!sc('s2').querySelector('[data-cal="none"]') && /ถอดนัดปฏิทินแล้ว/.test(okText()));
+  // ปฏิทินล้ม/ไม่ตั้งค่า/ไม่พบนัด
+  window.FN.gcal = () => ({ error: { code: 'not_configured', message: 'x' } });
+  oform('link', 's2'); await settle(400);
+  ok('ปฏิทินยังไม่ตั้งค่า: ข้อความแดงตัวหนาเป็นภาษาไทย', /ยังไม่ได้เชื่อมปฏิทิน Google/.test($('linkErr').textContent) && isRed($('linkErr')));
+  dact('close-form'); await settle(100);
+  window.FN.gcal = () => ({ events: [{ uid: 'g-n2', title: 'Scratch — Nutty', start: d5 + 'T10:00', end: d5 + 'T12:00', all_day: false, location: '' }] });
+  oform('link', 's2'); await settle(400);
+  ok('ไม่มีนัดของครูคนนี้ในวันนั้น: ข้อความ "ไม่พบนัดของครู Maniac" (ไม่แสดงนัดของคนอื่นให้เลือก)', /ไม่พบนัดของครู Maniac/.test($('linkNone').textContent) && !$('formLink').querySelector('[data-ev]'));
+  dact('close-form'); await settle(100);
+  window.FN.gcal = () => { throw new Error('boom'); };
+  oform('link', 's2'); await settle(400);
+  ok('ปฏิทินล้มกลางทาง: ข้อความแดงไทย ไม่ใช่ข้อความดิบ', /ดึงปฏิทินไม่สำเร็จ/.test($('linkErr').textContent) && !/boom/.test($('linkErr').textContent));
+  dact('close-form'); await settle(100);
+  // ผู้เรียกที่ gcal ยังเป็นเวอร์ชันเก่า (403 forbidden)
+  window.FN.gcal = () => ({ error: { code: 'forbidden', message: 'บัญชีนี้ไม่ได้อยู่ในทีมงาน' } });
+  oform('link', 's2'); await settle(400);
+  ok('gcal ตอบ forbidden (ยังไม่ได้ deploy เวอร์ชันใหม่): ข้อความไทยบอกให้แจ้งเจ้าของ', /ติดตั้งฟังก์ชันปฏิทินเวอร์ชันล่าสุด/.test($('linkErr').textContent));
+  dact('close-form'); await settle(100);
+  ok('ตลอดการใช้งาน: ไม่ดึงตารางเงิน/สลิป/ลูกค้า/สมาชิก (หน้าครูยังไม่เห็นยอด)', !CALLS.some(c => /^(enrollment_money|enrollment_payments|customers|members|admins)$/.test(c.table || '')));
+  // ออกจากระบบกลางฟอร์ม: ล้างหมด
+  dact('back'); await settle(100);
+  $('addOpen').click(); await settle(300);
+  typePhone('0877772222'); aact('add-find'); await settle(300);
+  await signOut();
+  ok('ออกจากระบบกลางฟอร์มเพิ่มนักเรียน: ล้างฟอร์ม/ผลค้น/เบอร์ที่พิมพ์ออกจากหน้า (DOM)', !!$('loginForm') && !$('addStu') && !/มานี|2222|0877/.test($('app').innerHTML));
+  await signIn('maniac');
+  ok('เข้าใหม่: ฟอร์มเพิ่มนักเรียนไม่ค้าง · ไม่มีแถบเขียวของเดิม', !$('addStu') && !$('flash') && !!$('addOpen'));
+  L('RESULT:' + (fail ? 'FAIL' : 'PASS') + ' pass=' + pass + ' fail=' + fail);
+}
+async function shot(name) { await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))); await sleep(150); await new Promise(r => { window.__shot = r; console.log('[SHOT] ' + name); }); }
+</script>`;
+
 const mock = MOCK3 + '\n' + TEACH_MOCK;
 let allOk = true;
 for (const [label, tests, opts] of [
@@ -337,6 +485,7 @@ for (const [label, tests, opts] of [
   ['2 ทำงาน: สอนแล้ว · ยกเลิก · บันทึก · นัด · ขอขยาย', T2, { width: 1100, height: 900, coarse: false }],
   ['3 ตารางสอน · realtime · สลับบัญชี · XSS', T3, { width: 1100, height: 900, coarse: false }],
   ['4 iPhone 390×844', T4, { width: 390, height: 844, coarse: true }],
+  ['5 เพิ่มนักเรียนเอง · ผูกนัดปฏิทิน (060)', T5, { width: 1100, height: 900, coarse: false }],
 ]) {
   if (ONLY && !ONLY.test(label)) continue;
   console.log('\n--- ' + label + ' ---');
