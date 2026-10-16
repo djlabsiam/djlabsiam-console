@@ -950,6 +950,21 @@
   .login { position: fixed; inset: 0; z-index: 900; background: var(--bg); display: flex; align-items: center; justify-content: center; }
   .login-box { width: 400px; background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow); border-top: 3px solid var(--red); padding: 32px; }
   .login-box h1 { font-size: 24px; margin: 16px 0 4px; }
+  /* 2 กล่องคู่กัน: ทีมงาน | อาจารย์ — จอแคบ (มือถือ) เรียงบน-ล่าง · margin:auto ให้กลางจอเมื่อพอดี และเลื่อนดูได้เมื่อสูงเกินจอ */
+  .login { overflow-y: auto; }
+  .login-pair { display: flex; gap: 24px; align-items: stretch; justify-content: center; margin: auto; padding: 16px; width: 100%; max-width: 888px; box-sizing: border-box; }
+  .login-pair .login-box { flex: 1 1 0; width: auto; min-width: 0; max-width: 400px; box-sizing: border-box; }
+  .login-box h2 { font-size: 24px; margin: 16px 0 4px; }
+  .login-kind { font-weight: 700; font-size: 14px; padding: 4px 8px; border: 1px solid var(--black); margin-left: 4px; }
+  .login-teacher { border-top-color: var(--black); }
+  .login-teacher .btn { text-decoration: none; }
+  .login-teacher .hint:first-of-type { margin-bottom: 20px; }
+  .login-teacher-note { margin-top: 16px; }
+  .login-pair .login-box .btn { min-height: 44px; }
+  @media (max-width: 767px) {
+    .login-pair { flex-direction: column; align-items: center; gap: 16px; padding: 12px; }
+    .login-pair .login-box { width: 100%; max-width: 400px; flex: 0 0 auto; padding: 24px; }
+  }
 
   .toast {
     position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(16px);
@@ -1683,8 +1698,9 @@
 <body>
 
 <div class="login" id="loginOverlay" style="display:flex;">
-  <form class="login-box" onsubmit="event.preventDefault(); doLogin();">
-    <span class="brand-box">DJ LAB</span>
+ <div class="login-pair">
+  <form class="login-box" id="loginStaffBox" onsubmit="event.preventDefault(); doLogin();">
+    <span class="brand-box">DJ LAB</span> <span class="login-kind">ทีมงาน</span>
     <h1>คอนโซลร้าน DJ LAB SIAM</h1>
     <p class="hint" style="margin-bottom:20px;">เข้าสู่ระบบด้วยบัญชีทีมงาน — บัญชีเดียวกับหน้าจองห้อง สต็อก และขายสินค้า</p>
     <div class="field">
@@ -1697,11 +1713,20 @@
     </div>
     <label class="chk" style="margin-bottom:14px;"><input type="checkbox" id="loginRemember" checked> จำบัญชีนี้ไว้ในเครื่องนี้ (ครั้งหน้าสลับเข้าด้วย PIN)</label>
     <div class="alert alert-red" id="loginError" style="display:none;" role="alert"></div>
-    <a class="btn btn-block" id="loginTeacherLink" href="teacher.html" hidden style="margin-bottom:10px;">ไปหน้าครู (ดูนักเรียนและรอบเรียนของฉัน)</a>
     <button class="btn btn-primary btn-block" id="loginBtn" type="submit">เข้าสู่ระบบ</button>
     <button class="btn btn-block" id="loginCancelBtn" type="button" hidden style="margin-top:8px;" onclick="cancelAddAccount()">ยกเลิก กลับไปบัญชีเดิม</button>
     <div class="login-accts" id="loginAccounts" hidden></div>
   </form>
+  <!-- ทางเข้าของอาจารย์ — วางคู่กับฟอร์มทีมงานตั้งแต่ก่อนล็อกอิน (เจ้าของสั่ง 14 ต.ค. 69: อาจารย์มองไม่เห็นว่ามีทางเข้าของตัวเอง)
+       เป็นปุ่มไป teacher.html ซึ่งมีฟอร์มล็อกอินของตัวเอง (session เดียวกัน) — ไม่ทำฟอร์มซ้ำ -->
+  <section class="login-box login-teacher" id="loginTeacherBox" aria-labelledby="loginTeacherTitle">
+    <span class="brand-box">DJ LAB</span> <span class="login-kind">อาจารย์</span>
+    <h2 id="loginTeacherTitle">สำหรับอาจารย์</h2>
+    <p class="hint">ดูนักเรียนและรอบเรียนของฉัน</p>
+    <a class="btn btn-primary btn-block" id="loginTeacherLink" href="teacher.html">เข้าหน้าครู</a>
+    <p class="hint login-teacher-note">ใช้อีเมลและรหัสผ่านที่เจ้าของร้านให้ไว้ — หากเป็นทั้งทีมงานและอาจารย์ ให้เข้าทางช่อง “ทีมงาน”</p>
+  </section>
+ </div>
 </div>
 
 <div class="nav-scrim" onclick="setNav(false, true)" aria-hidden="true"></div>
@@ -3570,7 +3595,6 @@ async function doLogin() {
   const password = document.getElementById('loginPassword').value;
   const errBox = document.getElementById('loginError');
   errBox.style.display = 'none';
-  document.getElementById('loginTeacherLink').hidden = true;
   if (!email || !password) {
     errBox.textContent = 'กรุณากรอกอีเมลและรหัสผ่าน';
     errBox.style.display = '';
@@ -3619,6 +3643,8 @@ function isOwner() { return !!currentAdmin && currentAdmin.role === 'owner'; }
 function sectionAllowed(s) { return !!s && !(s.manager && !isManager()) && !(s.owner && !isOwner()); }
 const sectionRestricted = s => !!(s.manager || s.owner);
 
+function goTeacherPage() { location.replace('teacher.html'); }   // ฟังก์ชันแยกไว้ให้เทสต์ดักการเด้ง (เทสต์ไม่ให้หน้าออกจากไฟล์ที่ทดสอบ)
+
 function loginVisible() {
   return document.getElementById('loginOverlay').style.display !== 'none';
 }
@@ -3655,12 +3681,17 @@ async function handleAuthState(session) {
   if (!adminRow || !adminRow.is_active) {
     const errBox = document.getElementById('loginError');
     errBox.textContent = 'บัญชีนี้ยังไม่ได้รับสิทธิ์เข้าใช้งานระบบร้าน — แจ้งเจ้าของร้านหรือผู้ดูแลระบบให้เพิ่มสิทธิ์ทีมงานก่อน';
-    if (!adminRow) {                  // บัญชีครู (ไม่มีแถว admins) — บอกตรง ๆ ว่ายังไม่มีหน้าจอสำหรับครู (P1b) ไม่ใช่แค่ "ไม่มีสิทธิ์"
+    if (!adminRow) {                  // ไม่มีแถว admins — ถามว่าเป็นครูไหม (my_teacher_id ของฐาน ไม่เดาจากชื่อ)
       try {
         const tr = await db.rpc('my_teacher_id');
         if (tr && tr.data) {
-          errBox.textContent = 'บัญชีนี้เป็นบัญชีครู — ไม่ได้เข้าคอนโซลร้าน ใช้ "หน้าครู" เพื่อดูนักเรียนและรอบเรียนของคุณ';
-          document.getElementById('loginTeacherLink').hidden = false;
+          // อาจารย์ล้วนเข้ามาทางฟอร์มทีมงานโดยพลาด → พาไปหน้าครูเลย (C2) · ไม่ signOut: session เดียวกัน teacher.html ใช้ต่อได้ ไม่ต้องกรอกซ้ำ
+          // คนที่เป็นทั้งทีมงานและครูมีแถว admins จึงไม่ผ่านมาทางนี้ (เข้าคอนโซลตามเดิม)
+          errBox.textContent = 'บัญชีนี้เป็นบัญชีอาจารย์ — กำลังพาไปหน้าครู…';
+          errBox.style.display = '';
+          document.getElementById('loginBtn').disabled = false;
+          goTeacherPage();
+          return;
         }
       } catch (e) { /* ถามไม่สำเร็จ = ใช้ข้อความเดิม */ }
     }

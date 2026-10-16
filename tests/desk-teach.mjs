@@ -242,27 +242,93 @@ async function runTests() {
 const J = o => JSON.stringify(o);
 </script>`;
 
-// บัญชีครูล้วน / บัญชีไม่มีสิทธิ์ — เข้าคอนโซลไม่ได้ ต้องไม่พังและบอกตรง ๆ
+// บัญชีครูล้วน / บัญชีไม่มีสิทธิ์ — เข้าคอนโซลไม่ได้ · ครูล้วนถูกพาไปหน้าครูเอง (C2) · คนที่เป็นทั้งทีมงานและครูเข้าคอนโซลตามเดิม
 const TESTS_NOACCESS = `<script>
 window.addEventListener('load', () => setTimeout(runTests, 300));
 ${COMMON}
+let GOTEACHER = 0;
+goTeacherPage = () => { GOTEACHER++; };          // ดักการเด้ง (ของจริง = location.replace('teacher.html') ซึ่งพาหน้านี้ออกจากไฟล์ที่ทดสอบ)
+const signOuts = () => CALLS.filter(c => c.op === 'signOut').length;
 async function runTests() {
   L('=== คอร์สเรียน: บัญชีที่ไม่มีแถว admins ===');
   TEACH.seed();
   await login('Maniac');
   const err = $('loginError').textContent;
-  ok('บัญชีครูล้วน: เปิดคอนโซลแล้วไม่พัง · ยังอยู่หน้าเข้าสู่ระบบ', $('loginOverlay').style.display !== 'none' && !fatalText(), fatalText());
-  ok('ข้อความบอกชัดว่าเป็นบัญชีครู ให้ไปหน้าครู · มีลิงก์ teacher.html', /บัญชีนี้เป็นบัญชีครู/.test(err) && /หน้าครู/.test(err) && $('loginTeacherLink').hidden === false && $('loginTeacherLink').getAttribute('href') === 'teacher.html', err);
+  ok('บัญชีครูล้วน: เปิดคอนโซลแล้วไม่พัง · ไม่ได้เข้าคอนโซล', $('loginOverlay').style.display !== 'none' && !fatalText(), fatalText());
+  ok('บัญชีครูล้วน: พาไปหน้าครูอัตโนมัติ (เรียกเด้ง 1 ครั้ง) · บอกชัดว่ากำลังไปหน้าครู', GOTEACHER === 1 && /บัญชีอาจารย์/.test(err) && /หน้าครู/.test(err), GOTEACHER + ' ' + err);
+  ok('บัญชีครูล้วน: ไม่ออกจากระบบ (session เดียวกัน teacher.html ใช้ต่อได้ ไม่ต้องกรอกซ้ำ)', signOuts() === 0 && !!(await db.auth.getSession()).data.session, signOuts());
+  ok('บัญชีครูล้วน: ปุ่มเข้าสู่ระบบไม่ค้างเป็น disabled (ถ้าเด้งไม่สำเร็จกดต่อได้) · ลิงก์หน้าครูใน กล่องอาจารย์ ยังอยู่', $('loginBtn').disabled === false && !$('loginTeacherLink').hidden && $('loginTeacherLink').getAttribute('href') === 'teacher.html');
   ok('บัญชีครูล้วน: ไม่ได้ดึงรายการนักเรียนของร้านเลย', TEACH.loads === 0 && !CALLS.some(c => c.table === 'enrollment_overview'));
   ok('บัญชีครูล้วน: ไม่ได้เข้าระบบ (ไม่มี currentAdmin/currentUserId) · ไม่มีรายการค้างในหน้า', currentAdmin === null && currentUserId === null && rowIds().length === 0);
   ok('ถามว่าเป็นครูผ่าน my_teacher_id (ฟังก์ชันของฐาน) ไม่เดาจากชื่อ', CALLS.some(c => c.op === 'rpc' && c.fn === 'my_teacher_id'));
   await sleep(200);
   $('loginError').textContent = '';
+  const g0 = GOTEACHER, so0 = signOuts();
   await login('Ghost');
   const err2 = $('loginError').textContent;
-  ok('บัญชีที่ไม่ใช่ครูและไม่มีแถว admins: ข้อความเดิม "ยังไม่ได้รับสิทธิ์" (ไม่ใช่ข้อความบัญชีครู)', /ยังไม่ได้รับสิทธิ์/.test(err2) && !/บัญชีครู/.test(err2), err2);
+  ok('บัญชีที่ไม่ใช่ครูและไม่มีแถว admins: ข้อความเดิม "ยังไม่ได้รับสิทธิ์" (ไม่ใช่ข้อความบัญชีครู)', /ยังไม่ได้รับสิทธิ์/.test(err2) && !/บัญชีครู|บัญชีอาจารย์/.test(err2), err2);
+  ok('บัญชีที่ไม่ใช่ครู: ไม่ถูกเด้งไปหน้าครู · ออกจากระบบตามเดิม', GOTEACHER === g0 && signOuts() > so0, GOTEACHER + ' ' + signOuts());
+
+  // ถามฐานไม่สำเร็จ (my_teacher_id error) = ไม่รู้ว่าเป็นครูไหม → ห้ามเด้งมั่ว · ใช้ข้อความเดิม + ออกจากระบบ
+  TEACH.fail.rpc = 'connection reset';
+  const g1 = GOTEACHER;
+  await login('Maniac');
+  ok('my_teacher_id ล้มเหลว: ไม่เด้งไปหน้าครู · ข้อความเดิม "ยังไม่ได้รับสิทธิ์"', GOTEACHER === g1 && /ยังไม่ได้รับสิทธิ์/.test($('loginError').textContent), GOTEACHER + ' ' + $('loginError').textContent);
+  TEACH.fail = {};
+
+  // คนที่เป็นทั้งทีมงานและครู (TiBass มีแถว admins) — เข้าคอนโซลตามเดิม ไม่ถูกเด้ง
+  const g2 = GOTEACHER;
+  await login('TiBass');
+  ok('ทีมงานที่เป็นครูด้วย: เข้าคอนโซลตามเดิม (ปิดหน้าเข้าสู่ระบบ) · ไม่ถูกเด้งไปหน้าครู', $('loginOverlay').style.display === 'none' && currentAdmin && GOTEACHER === g2, GOTEACHER + ' ' + $('loginOverlay').style.display);
+  await logout();
+  const g3 = GOTEACHER;
+  await login('Zen');
+  ok('ทีมงานที่ไม่ใช่ครู: เข้าคอนโซลตามเดิม · ไม่ถูกเด้ง', $('loginOverlay').style.display === 'none' && GOTEACHER === g3);
   L('RESULT:' + (fail ? 'FAIL' : 'PASS') + ' pass=' + pass + ' fail=' + fail);
 }
+</script>`;
+
+// หน้าเข้าคอนโซลมี 2 กล่องคู่กันตั้งแต่ก่อนล็อกอิน: ทีมงาน | อาจารย์ (C2) · จอกว้างเรียงซ้าย-ขวา · มือถือเรียงบน-ล่าง
+const TESTS_LOGIN = `<script>
+window.addEventListener('load', () => setTimeout(runTests, 300));
+${COMMON}
+async function runTests() {
+  const W = window.innerWidth, PHONE = W < 768;
+  L('=== หน้าเข้าคอนโซล: กล่อง ทีมงาน | อาจารย์ (' + W + 'px) ===');
+  TEACH.seed();
+  const ov = $('loginOverlay'), sb = $('loginStaffBox'), tb = $('loginTeacherBox'), lk = $('loginTeacherLink');
+  const R = e => e.getBoundingClientRect();
+  ok('ยังไม่ล็อกอิน: หน้าเข้าสู่ระบบขึ้น ทั้ง 2 กล่องมองเห็น (ไม่ต้องล็อกอินก่อนถึงเห็นทางเข้าอาจารย์)', ov.style.display !== 'none' && R(sb).width > 0 && R(sb).height > 0 && R(tb).width > 0 && R(tb).height > 0 && !lk.hidden);
+  ok('กล่องทีมงาน: ฟอร์มเดิมครบ (อีเมล · รหัสผ่าน · จำบัญชี ติ๊กไว้ · เข้าสู่ระบบ · รายการบัญชีที่จำ)', sb.contains($('loginEmail')) && sb.contains($('loginPassword')) && $('loginRemember').checked && sb.contains($('loginBtn')) && sb.contains($('loginAccounts')) && sb.tagName === 'FORM');
+  ok('กล่องอาจารย์: หัวข้อ "สำหรับอาจารย์" + คำอธิบาย "ดูนักเรียนและรอบเรียนของฉัน" + ปุ่ม "เข้าหน้าครู" → teacher.html', tb.querySelector('h2').textContent === 'สำหรับอาจารย์' && /ดูนักเรียนและรอบเรียนของฉัน/.test(tb.textContent) && lk.textContent.trim() === 'เข้าหน้าครู' && lk.getAttribute('href') === 'teacher.html' && tb.contains(lk));
+  ok('ป้ายบอกชนิดกล่อง: ทีมงาน | อาจารย์ (เป็นตัวหนังสือ ไม่พึ่งสี)', sb.querySelector('.login-kind').textContent === 'ทีมงาน' && tb.querySelector('.login-kind').textContent === 'อาจารย์');
+  ok('ป้าย DJ LAB + ป้ายชนิดกล่อง อยู่บรรทัดเดียวกันและกว้างตามตัวหนังสือ (ไม่ถูกยืดเต็มกล่อง) ทั้ง 2 กล่อง', [sb, tb].every(b => { const a = R(b.querySelector('.brand-box')), k = R(b.querySelector('.login-kind')); return a.width < 120 && k.width < 120 && Math.abs(a.top - k.top) < 10; }), J([sb, tb].map(b => [R(b.querySelector('.brand-box')).width, R(b.querySelector('.login-kind')).width])));
+  ok('ปุ่ม "เข้าหน้าครู" ไม่มีขีดเส้นใต้ (หน้าตาเหมือนปุ่ม ไม่ใช่ลิงก์)', getComputedStyle(lk).textDecorationLine === 'none', getComputedStyle(lk).textDecorationLine);
+  ok('กล่องอาจารย์ไม่มีช่องกรอกรหัสผ่านซ้ำ (ไม่ชนตัวจัดการรหัสผ่านของเบราว์เซอร์) · กล่องทีมงานมีช่องเดียวชุดเดียว', !tb.querySelector('input') && document.querySelectorAll('#loginOverlay input[type=password]').length === 1);
+  ok('ไม่ล้นแนวนอน (ทั้งหน้า + ทั้ง 2 กล่องอยู่ในจอ)', document.documentElement.scrollWidth <= W + 1 && R(sb).left >= -0.5 && R(sb).right <= W + 0.5 && R(tb).left >= -0.5 && R(tb).right <= W + 0.5, document.documentElement.scrollWidth + ' ' + J([R(sb).left, R(sb).right, R(tb).left, R(tb).right]));
+  if (!PHONE) {
+    ok('จอกว้าง: 2 กล่องวางคู่กันซ้าย-ขวา (ทีมงานซ้าย · อาจารย์ขวา · แถวเดียวกัน)', Math.abs(R(sb).top - R(tb).top) < 2 && R(tb).left >= R(sb).right - 0.5 && R(sb).left < R(tb).left, J([R(sb).top, R(tb).top, R(sb).right, R(tb).left]));
+    ok('จอกว้าง: กล่องสูงเท่ากัน (ดูเป็นคู่) · กว้างเท่ากัน', Math.abs(R(sb).height - R(tb).height) < 2 && Math.abs(R(sb).width - R(tb).width) < 2, J([R(sb).height, R(tb).height]));
+    ok('จอกว้าง: 2 กล่องอยู่กลางจอแนวนอน', Math.abs((R(sb).left + R(tb).right) / 2 - W / 2) < 4, J([R(sb).left, R(tb).right, W]));
+  } else {
+    ok('มือถือ: 2 กล่องเรียงบน-ล่าง (ทีมงานบน · อาจารย์ล่าง) ความกว้างเต็มจอ ไม่ล้น', R(tb).top >= R(sb).bottom - 0.5 && Math.abs(R(sb).left - R(tb).left) < 2, J([R(sb).bottom, R(tb).top, R(sb).left, R(tb).left]));
+    ok('มือถือ: หน้าเข้าสู่ระบบสูงเกินจอ → ผู้ใช้เลื่อนเองได้ (overflow-y auto/scroll — scrollIntoView ของโค้ดเลื่อนกล่อง hidden ได้ นิ้วเลื่อนไม่ได้)', ov.scrollHeight <= ov.clientHeight + 1 || /auto|scroll/.test(getComputedStyle(ov).overflowY), ov.scrollHeight + ' ' + ov.clientHeight + ' ' + getComputedStyle(ov).overflowY);
+    lk.scrollIntoView({ block: 'center' }); await sleep(100);
+    ok('มือถือ: เลื่อนลงไปกดปุ่มเข้าหน้าครูได้ (กล่องอาจารย์ไม่ถูกตัดทิ้งนอกจอ)', R(lk).top >= 0 && R(lk).bottom <= window.innerHeight + 0.5, J([R(lk).top, R(lk).bottom, window.innerHeight]));
+    ov.scrollTop = 0; await sleep(50);
+    ok('มือถือ: เลื่อนขึ้นสุดแล้วเห็นหัวกล่องทีมงาน (ไม่ถูกตัดด้านบน)', R(sb).top >= -0.5, R(sb).top);
+  }
+  const btns = [...ov.querySelectorAll('button, a.btn')].filter(e => !e.hidden && R(e).width > 0);
+  ok('ปุ่มทุกปุ่มในหน้าเข้าสู่ระบบสูง ≥ 44px (เข้าสู่ระบบ · เข้าหน้าครู)', btns.length >= 2 && btns.every(e => R(e).height >= 43.5), J(btns.map(e => [e.id, R(e).height])));
+  const small = [...ov.querySelectorAll('*')].filter(e => e.children.length === 0 && (e.textContent || '').trim() && R(e).width > 0 && parseFloat(getComputedStyle(e).fontSize) < 14);
+  ok('ตัวหนังสือในหน้าเข้าสู่ระบบ ≥ 14px ทุกจุด', small.length === 0, J(small.map(e => [e.tagName, e.textContent.trim().slice(0, 20), getComputedStyle(e).fontSize])));
+  await shot('login-' + W);
+  // ล็อกอินทีมงานแล้ว 2 กล่องหายพร้อมหน้าเข้าสู่ระบบ (ไม่ค้างทับคอนโซล)
+  await login('Zen');
+  ok('ทีมงานล็อกอินผ่านกล่องซ้ายตามเดิม: หน้าเข้าสู่ระบบปิด ทั้ง 2 กล่องหาย', ov.style.display === 'none' && R(sb).width === 0 && R(tb).width === 0 && !!currentAdmin);
+  L('RESULT:' + (fail ? 'FAIL' : 'PASS') + ' pass=' + pass + ' fail=' + fail);
+}
+const J = o => JSON.stringify(o);
 </script>`;
 
 // iPhone (390px): ตารางเป็นการ์ด · หัวตารางหาย · ป้ายคอลัมน์โผล่หน้าค่า
@@ -765,6 +831,10 @@ for (const [label, tests, opts] of [
   ['ลงเรียน / ย้อนหลัง (ก้อน B)', TESTS_ENROLL, { width: 1366, height: 900, coarse: false }],
   ['ราคาคอร์ส (บล็อก ข)', TESTS_PRICES, { width: 1366, height: 900, coarse: false }],
   ['บัญชีครูล้วน/ไม่มีสิทธิ์', TESTS_NOACCESS, { width: 1366, height: 768, coarse: false }],
+  ['หน้าเข้าคอนโซล 2 กล่อง จอคอม 1366×768', TESTS_LOGIN, { width: 1366, height: 768, coarse: false }],
+  ['หน้าเข้าคอนโซล 2 กล่อง iPad 820×1180', TESTS_LOGIN, { width: 820, height: 1180, coarse: true }],
+  ['หน้าเข้าคอนโซล 2 กล่อง iPhone SE 375×667', TESTS_LOGIN, { width: 375, height: 667, coarse: true }],
+  ['หน้าเข้าคอนโซล 2 กล่อง iPhone แนวนอน 667×375', TESTS_LOGIN, { width: 667, height: 375, coarse: true }],
   ['iPhone 390×844', TESTS_PHONE, { width: 390, height: 844, coarse: true }],
 ]) {
   if (ONLY && !ONLY.test(label)) continue;
