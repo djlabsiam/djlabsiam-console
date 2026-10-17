@@ -660,6 +660,86 @@ async function runTests() {
   const ab = lastArgs('teach_enroll_create');
   ok('กรอกย้อนหลังโดยไม่เลือกการชำระ: paid_unknown = false (ไม่ตั้งธงชำระครบเอง) · ไม่มีวันเริ่ม · ไม่ส่งชำระ', rpcCalls('teach_enroll_create').length === nb + 1 && ab.p_source === 'backfill'
     && ab.p_paid_unknown === false && ab.p_started_on === null && rpcCalls('teach_payment_record').length === npay, J(ab));
+  ok('ไม่ได้กรอก "ไม่ทราบวัน": ไม่ส่ง p_prior_sessions เลย (ฐานที่ยังไม่รัน 065 ใช้ฟอร์มเดิมได้)', !('p_prior_sessions' in ab), J(ab));
+
+  // ── 12. เรียนไปแล้วอีก — ไม่ทราบวัน (065 · PLAN-prior-sessions) ──
+  TEACH.courses.find(c => c.id === 'old-course').is_active = true;          // คอร์ส 3 ครั้ง ไว้ทดสอบเพดานตอนเปลี่ยนคอร์ส
+  await logout(); await login('Nui'); await open();
+  tab('enroll'); await settle(600);
+  act('cand', '[data-mid="m4"]'); await settle(100);
+  await pickCourse('basic-dj-class'); fill('teTeacher', 't1'); await settle(50);
+  ok('ฟอร์มย้อนหลัง: ช่อง "รู้วัน" + ช่อง "เรียนไปแล้วอีก — ไม่ทราบวัน" อยู่คู่กัน · ตั้งต้น 0 · ยังไม่มีคำเตือนวันหมดอายุ',
+    !!E('tePriorN') && E('tePriorN').value === '0' && /รู้วัน/.test(pane().querySelector('label[for="teSessN"]').textContent) && /ไม่ทราบวัน/.test(pane().querySelector('label[for="tePriorN"]').textContent) && !E('tePriorExpiry'));
+  ok('บอกชัดว่าไม่ต้องเดาวัน และนับเป็นจำนวนครั้ง ไม่สร้างรอบเรียน', /ไม่ต้องเดาวัน/.test(E('tePriorHint').textContent) && /ไม่สร้างรอบเรียน/.test(E('tePriorHint').textContent));
+  fill('tePriorN', '99'); await settle(100);
+  ok('กรอกเกินเพดาน (99): ถูกบีบเหลือเพดานของช่อง (6 ครั้งของคอร์ส)', E('tePriorN').value === '6', E('tePriorN').value);
+  fill('tePriorN', '5'); await pickCourse('old-course'); await settle(100);
+  ok('เปลี่ยนไปคอร์ส 3 ครั้งทั้งที่กรอก 5 ไว้: ช่อง "ไม่ทราบวัน" ถูกบีบเหลือ 3', E('tePriorN').value === '3' && E('tePriorN').max === '3', E('tePriorN').value + '/' + E('tePriorN').max);
+  await pickCourse('basic-dj-class'); fill('teTeacher', 't1'); await settle(50);
+  fill('tePriorN', '2'); await settle(100);
+  act('mode', '[data-v="console"]'); await settle(100);
+  ok('สลับไป "ลงเรียนใหม่": ไม่มีช่อง "ไม่ทราบวัน"', !E('tePriorN'));
+  act('mode', '[data-v="backfill"]'); await settle(100);
+  ok('สลับกลับ "กรอกย้อนหลัง": ค่าที่กรอกไว้ถูกล้างเป็น 0 (ไม่ค้างส่งไปกับใบลงเรียนใหม่)', E('tePriorN').value === '0' && E('teSessN').value === '0', E('tePriorN').value);
+  fill('teTeacher', 't1'); fill('tePriorN', '2'); await settle(100);
+  ok('กรอก 2 (ไม่ใส่วันเริ่ม): คำเตือน "ไม่ทราบวันหมดอายุ" แดงตัวหนา · สรุปรวม 2/6', !!E('tePriorExpiry') && isRed(E('tePriorExpiry')) && /ไม่ทราบวันหมดอายุ/.test(E('tePriorExpiry').textContent) && /รวมสองช่อง 2\\/6/.test(E('tePriorHint').textContent), E('tePriorHint').textContent);
+  fill('teStarted', day(-30)); await settle(100);
+  ok('ใส่วันเริ่มเรียนแล้ว: คำเตือนหายไป', !E('tePriorExpiry'));
+  fill('teStarted', ''); await settle(100);
+  fill('teSessN', '5'); await settle(100);
+  ok('รู้วัน 5 + ไม่ทราบวัน 2 เกินคอร์ส (6): ช่อง "ไม่ทราบวัน" ถูกบีบเหลือ 1 · เพดานช่องนี้ = จำนวนที่เหลือ', E('tePriorN').value === '1' && E('tePriorN').max === '1', E('tePriorN').value + '/' + E('tePriorN').max);
+  fill('teSessN', '1'); await settle(100);
+  pane().querySelectorAll('[data-sd]')[0].value = day(-12); pane().querySelectorAll('[data-sd]')[0].dispatchEvent(new Event('input', { bubbles: true }));
+  fill('tePriorN', '3'); await settle(100);
+  ok('รู้วัน 1 → เพดาน "ไม่ทราบวัน" เพิ่มเป็น 5 (6 − 1) · กรอก 3 ได้', E('tePriorN').max === '5' && E('tePriorN').value === '3', E('tePriorN').max);
+  act('pay', '[data-v="unknown"]'); await settle(100);
+  fill('tePrice', ''); await settle(50);
+  // ตรวจก่อนส่ง: ผลรวมเกินคอร์ส (ข้ามตัวบีบของช่อง ด้วยการยกเพดานช่องผ่านโค้ด) → ไม่ส่งฐาน
+  const np0 = rpcCalls('teach_enroll_create').length;
+  E('tePriorN').max = '99'; fill('tePriorN', '9'); await settle(100);
+  act('save'); await settle(100);
+  ok('ผลรวมเกินคอร์ส (1 + 9 > 6, ผ่านโค้ดข้ามเพดานของช่อง): ไม่ส่งฐาน · ข้อความแดงบอกรวมเกิน', /เกินจำนวนครั้งของคอร์ส/.test(errText()) && isRed(E('teFormErr')) && rpcCalls('teach_enroll_create').length === np0, errText());
+  fill('tePriorN', '5'); await settle(100);
+  // ฐานที่ยังไม่รัน 065: ข้อความไทยบอกชัด ไม่ใช่รหัสเฉย ๆ (ใช้ผลรวม 1 + 5 = 6 พอดีคอร์ส → ต้องผ่านด่านหน้าจอไปถึงฐาน)
+  TEACH.fail.rpc_teach_enroll_create = 'Could not find the function public.teach_enroll_create(p_course, p_prior_sessions) in the schema cache';
+  act('save'); await settle(400);
+  ok('ฐานยังไม่รัน 065: ข้อความไทย "ยังไม่ได้รัน migration 065" แดงตัวหนา · ไม่ขึ้นสำเร็จ (ผลรวมพอดีคอร์สผ่านด่านหน้าจอ)', /migration 065/.test(errText()) && isRed(E('teFormErr')) && !okText(), errText());
+  TEACH.fail = {};
+  fill('tePriorN', '3'); await settle(100);
+  act('save'); await settle(800);
+  const ap = lastArgs('teach_enroll_create');
+  ok('ส่ง p_prior_sessions = 3 พร้อมค่า backfill เดิม (source · ไม่มีวันเริ่ม · paid_unknown)', rpcCalls('teach_enroll_create').length === np0 + 2 && ap.p_prior_sessions === 3 && ap.p_source === 'backfill' && ap.p_started_on === null && ap.p_paid_unknown === true, J(ap));
+  const bp = lastArgs('teach_session_backfill');
+  ok('รอบรู้วัน 1 ครั้งยังลงด้วย teach_session_backfill ตามเดิม (ไม่รวมครั้งที่ไม่ทราบวัน)', !!bp && bp.p_dates.length === 1 && bp.p_dates[0] === day(-12), J(bp));
+  ok('ไม่มีรอบปลอม: ที่ส่งฐานมีแค่วันที่ผู้ใช้กรอก 1 วัน', TEACH.sessions_bf.filter(x => x.enrollment === TEACH.created[TEACH.created.length - 1].id).reduce((n, x) => n + x.dates.length, 0) === 1);
+  await sleep(300);
+  tab('active'); await settle(100);
+  const pc = TEACH.created[TEACH.created.length - 1], pr = document.querySelector('#teBody .te-row[data-id="' + pc.id + '"]');
+  ok('แถวใหม่ในแท็บกำลังเรียน: เรียนแล้ว 4/6 (3 ไม่ทราบวัน + 1 รู้วัน) + ข้อความ "รวมเรียนมาก่อนเข้าระบบ 3 ครั้ง (ไม่ทราบวัน)"', !!pr && /4\\/6/.test(pr.textContent) && /รวมเรียนมาก่อนเข้าระบบ 3 ครั้ง \\(ไม่ทราบวัน\\)/.test(pr.textContent), pr && pr.textContent);
+  const pcell = pr && pr.querySelector('[data-l="หมดอายุ"]'), scell = pr && pr.querySelector('[data-l="วันเริ่ม"]');
+  ok('หมดอายุ = "ไม่ทราบวันหมดอายุ" แดงตัวหนา (ไม่ใช่ "หมดอายุแล้ว") · วันเริ่ม = "ไม่ทราบ"', !!pcell && /ไม่ทราบวันหมดอายุ/.test(pcell.textContent) && !/หมดอายุแล้ว/.test(pcell.textContent) && isRed(pcell.querySelector('.wk-red')) && /ไม่ทราบ/.test(scell.textContent), pcell && pcell.textContent);
+  ok('ใบที่มี "ไม่ทราบวัน" ไม่ขึ้นป้าย "นักเรียนเดิม — ไม่มีข้อมูลการเรียนเก่า"', !/นักเรียนเดิม — ไม่มีข้อมูลการเรียนเก่า/.test(pr.textContent));
+  // ใบย้อนหลังที่ไม่มีข้อมูลเลย → ป้ายนักเรียนเดิม (ใบใหม่: prior 0 · ไม่มีรอบ · ไม่มีวันเริ่ม)
+  tab('enroll'); await settle(100);
+  await findBy('ปิติ'); act('pick', '[data-i="0"]'); await settle(100);
+  act('mode', '[data-v="backfill"]'); await settle(100);
+  await pickCourse('basic-dj-class'); fill('teTeacher', 't1'); await settle(50);
+  act('pay', '[data-v="unknown"]'); fill('tePrice', ''); await settle(50);
+  act('save'); await settle(800);
+  const a0 = lastArgs('teach_enroll_create');
+  ok('ไม่กรอกอะไรเลยในช่อง prior (0): ไม่ส่ง p_prior_sessions · ฟอร์มเดิมทำงานเหมือนเดิม', a0.p_source === 'backfill' && !('p_prior_sessions' in a0), J(a0));
+  await sleep(300);
+  tab('queue'); await settle(100);
+  const nh = document.querySelector('#teBody .te-row[data-id="' + TEACH.created[TEACH.created.length - 1].id + '"]');
+  ok('ใบย้อนหลังที่ไม่มีข้อมูลการเรียนเลย: ขึ้นป้าย "นักเรียนเดิม — ไม่มีข้อมูลการเรียนเก่า" (ไม่ใช่ "ไม่ทราบวันหมดอายุ")', !!nh && /นักเรียนเดิม — ไม่มีข้อมูลการเรียนเก่า/.test(nh.textContent) && !/ไม่ทราบวันหมดอายุ/.test(nh.textContent), nh && nh.textContent);
+  // ใบที่มีรอบแล้ว (นัดไว้แม้ยังไม่สอน) ไม่ใช่ "ไม่มีข้อมูลเลย" → ป้ายหาย
+  const nhRow = TEACH.rows.find(r => r.id === TEACH.created[TEACH.created.length - 1].id); nhRow.session_rows = 1;
+  TEACH.fireRt('class_sessions'); await sleep(900);
+  const nh2 = document.querySelector('#teBody .te-row[data-id="' + nhRow.id + '"]');
+  ok('ใบย้อนหลังที่มีรอบแล้ว (session_rows > 0): ป้าย "นักเรียนเดิม" หาย', !!nh2 && !/นักเรียนเดิม — ไม่มีข้อมูลการเรียนเก่า/.test(nh2.textContent), nh2 && nh2.textContent);
+  tab('active'); await settle(100);
+  const eb = document.querySelector('#teBody .te-row[data-id="e-backfill"]');
+  ok('ใบย้อนหลังที่มีวันเริ่มเรียน (e-backfill): ไม่ขึ้นป้าย "นักเรียนเดิม"', !!eb && /กรอกย้อนหลัง · ข้อมูลอาจไม่ครบ/.test(eb.textContent) && !/นักเรียนเดิม — ไม่มีข้อมูลการเรียนเก่า/.test(eb.textContent), eb && eb.textContent);
   L('RESULT:' + (fail ? 'FAIL' : 'PASS') + ' pass=' + pass + ' fail=' + fail);
 }
 const J = o => JSON.stringify(o);

@@ -13388,8 +13388,16 @@ function tePayHtml(r) {
   if (r.paid_in_full === false) return '<span class="st st-warn">ยังไม่ครบ</span>' + n;
   return '';
 }
+// 065: เรียนมาก่อนเข้าระบบ (ไม่ทราบวัน) = ตัวเลขใน prior_sessions_used · ฐานที่ยังไม่รัน 065 ไม่มีคอลัมน์ = 0
+const tePrior = r => Number(r.prior_sessions_used) || 0;
+const teHasPrior = r => r.prior_sessions_used !== undefined && r.prior_sessions_used !== null;     // ยังไม่รัน 065 = ไม่มีคอลัมน์ → ไม่วาดช่อง/ไม่ส่ง patch
+const teNoHistory = r => r.source === 'backfill' && r.session_rows === 0 && tePrior(r) === 0 && !r.started_on;     // session_rows ไม่มี (ยังไม่รัน 065) = ไม่รู้จริง → ไม่ขึ้นป้าย
+const tePriorNote = r => tePrior(r) > 0 ? '<div class="te-sub">รวมเรียนมาก่อนเข้าระบบ ' + tePrior(r) + ' ครั้ง (ไม่ทราบวัน)</div>' : '';
 function teExpiryHtml(r) {
-  if (!r.effective_expiry) return '<span class="te-sub">ยังไม่เริ่มเรียน</span>';
+  if (!r.effective_expiry) {
+    if (tePrior(r) > 0) return '<div class="wk-red">ไม่ทราบวันหมดอายุ</div><div class="te-sub">เรียนมาก่อนเข้าระบบ · ไม่ทราบวันเริ่มเรียน</div>';
+    return '<span class="te-sub">ยังไม่เริ่มเรียน</span>';
+  }
   const d = teDays(r.effective_expiry), date = fmtDate(r.effective_expiry);
   const ext = r.extended_until ? '<div class="te-sub">ขยายอายุแล้ว</div>' : '';
   if (r.state === 'expired') return '<div class="wk-red">หมดอายุแล้ว เหลือ ' + Number(r.sessions_remaining) + ' ครั้ง</div><div class="te-sub">' + date + '</div>' + ext;
@@ -13409,12 +13417,13 @@ function teRowHtml(r) {
       (nk.nick ? '<div class="te-sub">ชื่อเล่น ' + escapeHtml(nk.nick) + '</div>' : '') +
       '<div class="te-pills">' + (stateTxt ? '<span class="st st-off">' + stateTxt + closed + '</span>' : '') + tePayHtml(r) +
       (nk.minor ? '<span class="st st-off">ผู้เยาว์</span>' : '') +
-      (r.source === 'backfill' ? '<span class="st st-off">กรอกย้อนหลัง · ข้อมูลอาจไม่ครบ</span>' : '') + '</div></div>' +
+      (r.source === 'backfill' ? '<span class="st st-off">กรอกย้อนหลัง · ข้อมูลอาจไม่ครบ</span>' : '') +
+      (teNoHistory(r) ? '<span class="st st-off">นักเรียนเดิม — ไม่มีข้อมูลการเรียนเก่า</span>' : '') + '</div></div>' +
     '<div role="cell" data-l="คอร์ส">' + escapeHtml(r.course_title) + (r.teach_lang === 'en' ? ' <span class="st st-off">สอนภาษาอังกฤษ</span>' : '') + '</div>' +
     '<div role="cell" data-l="ครู">' + escapeHtml(r.teacher_name || '') + '</div>' +
     '<div role="cell" data-l="เรียนแล้ว"><span class="te-prog" aria-hidden="true"><i style="width:' + pct + '%"></i></span> <strong>' + done + '/' + tot + '</strong>' +
-      (used > done ? '<div class="te-sub">ใช้สิทธิ์ ' + used + ' ครั้ง (รวมไม่มา/แจ้งช้า)</div>' : '') + '</div>' +
-    '<div role="cell" data-l="วันเริ่ม">' + (r.started_on ? fmtDate(r.started_on) : '<span class="te-sub">—</span>') + '</div>' +
+      (used > done ? '<div class="te-sub">ใช้สิทธิ์ ' + used + ' ครั้ง (รวมไม่มา/แจ้งช้า)</div>' : '') + tePriorNote(r) + '</div>' +
+    '<div role="cell" data-l="วันเริ่ม">' + (r.started_on ? fmtDate(r.started_on) : '<span class="te-sub">' + (tePrior(r) > 0 ? 'ไม่ทราบ' : '—') + '</span>') + '</div>' +
     '<div role="cell" data-l="หมดอายุ">' + teExpiryHtml(r) + '</div>' +
     '<div role="cell" data-l="ครั้งถัดไป">' + (r.next_session_at ? escapeHtml(teWhen(r.next_session_at)) : '<span class="te-sub">—</span>') + '</div>' +
   '</div>';
@@ -13510,7 +13519,7 @@ const TE_METHODS = [['transfer', 'โอน'], ['promptpay', 'พร้อมเ
 const TE_CAND_SHOW = 40;
 function teFormBlank() {
   return { student: null, found: null, q: '', newOpen: false, newName: '', newPhone: '', mode: 'console', courseId: '', teacherId: '', lang: 'th',
-    price: '', priceTouched: false, listPrice: '', track: '', equip: '', note: '', started: '', sessN: 0, sessDates: [],
+    price: '', priceTouched: false, listPrice: '', track: '', equip: '', note: '', started: '', sessN: 0, sessDates: [], priorN: 0,
     pay: 'none', payDate: '', payAmount: '', payMethod: 'transfer', busy: false, err: '', ok: '', candQ: '', candOpen: false,
     createdId: null, sessDone: false, payDone: false, payReq: null };
 }
@@ -13520,6 +13529,7 @@ function teErrText(e) {
   const m = String((e && e.message) || '');
   if (/[ก-๙]/.test(m)) return m;                                                 // ข้อความไทยของฟังก์ชันฐาน
   if ((e && e.code === '42501') || /row-level security|permission denied/i.test(m)) return 'ไม่มีสิทธิ์ทำรายการนี้';
+  if (/p_prior_sessions/.test(m)) return 'ฐานข้อมูลยังไม่ได้รัน migration 065 (ช่อง "เรียนไปแล้วอีก — ไม่ทราบวัน") — ให้เจ้าของรันก่อน หรือเว้นช่องนี้เป็น 0';
   if (WORK_NO_TABLE.test(m)) return 'ยังไม่ได้รัน migration 047 ในฐานข้อมูล';
   return 'ฐานข้อมูลตอบกลับผิดปกติ' + (e && e.code ? ' (รหัส ' + e.code + ')' : '');
 }
@@ -13687,10 +13697,14 @@ function teDetailHtml() {
     h += '<div class="card" style="padding:14px 18px;margin-bottom:16px;"><h3>รอบที่เรียนไปแล้ว</h3><div class="wk-form-grid"><div>' +
       '<div class="field"><label class="lbl" for="teStarted">วันเริ่มเรียน (โดยประมาณได้ · เว้นว่างถ้าไม่ทราบ)</label><input id="teStarted" class="input" type="date" data-f="started" max="' + todayBangkok() + '" value="' + escapeHtml(f.started) + '">' +
         '<div class="hint">ระบบนับอายุคอร์สจากวันนี้ (3 เดือนตามคอร์ส) · ผ่อนผันวันหมดอายุ = เจ้าของตั้งภายหลัง</div></div>' +
-      '<div class="field"><label class="lbl" for="teSessN">เรียนไปแล้วกี่ครั้ง' + (course ? ' (คอร์สนี้ ' + Number(course.sessions_total) + ' ครั้ง)' : '') + '</label>' +
-        '<input id="teSessN" class="input" type="number" min="0" max="' + (course ? Number(course.sessions_total) : 100) + '" step="1" data-f="sessN" value="' + Number(f.sessN) + '"></div></div><div>' +
+      '<div class="field"><label class="lbl" for="teSessN">เรียนไปแล้ว — รู้วัน (กี่ครั้ง)' + (course ? ' (คอร์สนี้ ' + Number(course.sessions_total) + ' ครั้ง)' : '') + '</label>' +
+        '<input id="teSessN" class="input" type="number" min="0" max="' + (course ? Number(course.sessions_total) : 100) + '" step="1" data-f="sessN" value="' + Number(f.sessN) + '"></div>' +
+      '<div class="field"><label class="lbl" for="tePriorN">เรียนไปแล้วอีก — ไม่ทราบวัน (กี่ครั้ง)</label>' +
+        '<input id="tePriorN" class="input" type="number" min="0" max="' + (course ? Math.max(0, Number(course.sessions_total) - Number(f.sessN)) : 100) + '" step="1" data-f="priorN" value="' + Number(f.priorN) + '">' +
+        '<div class="hint" id="tePriorHint">ไม่ต้องเดาวัน — ระบบนับเป็นจำนวนครั้ง ไม่สร้างรอบเรียน' + (course ? ' · รวมสองช่อง ' + (Number(f.sessN) + Number(f.priorN)) + '/' + Number(course.sessions_total) + ' ครั้ง' : '') + '</div>' +
+        (Number(f.priorN) > 0 && !f.started ? '<div class="hint wk-red" id="tePriorExpiry">ไม่ใส่วันเริ่มเรียน = ระบบไม่ทราบวันหมดอายุ (เจ้าของ/ผู้ดูแลตั้งวันเริ่มภายหลังได้ที่ "แก้ข้อมูลการลงเรียน")</div>' : '') + '</div></div><div>' +
       (f.sessDates.length ? '<span class="lbl">วันที่เรียนแต่ละครั้ง (ใส่วันโดยประมาณได้)</span>' + f.sessDates.map((d, i) =>
-        '<div class="field"><input class="input" type="date" data-sd="' + i + '" aria-label="วันที่เรียนครั้งที่ ' + (i + 1) + '" max="' + todayBangkok() + '" value="' + escapeHtml(d) + '"></div>').join('') : '<div class="hint">ยังไม่ได้เรียนเลย = ใส่ 0</div>') +
+        '<div class="field"><input class="input" type="date" data-sd="' + i + '" aria-label="วันที่เรียนครั้งที่ ' + (i + 1) + '" max="' + todayBangkok() + '" value="' + escapeHtml(d) + '"></div>').join('') : '<div class="hint">ไม่มีวันที่ให้ใส่ = ใส่ 0 (เรียนไปแล้วแต่ไม่ทราบวัน ใช้ช่อง "เรียนไปแล้วอีก")</div>') +
       '</div></div></div>';
   }
   h += '<div class="card" style="padding:14px 18px;margin-bottom:16px;"><h3>การชำระ</h3>';
@@ -13810,6 +13824,9 @@ function teFormCheck() {
       if (!f.sessDates[i]) return 'ใส่วันที่เรียนครั้งที่ ' + (i + 1) + ' (วันโดยประมาณได้)';
       if (f.sessDates[i] > today) return 'วันที่เรียนครั้งที่ ' + (i + 1) + ' ต้องไม่เกินวันนี้';
     }
+    const p = Number(f.priorN);
+    if (!Number.isInteger(p) || p < 0) return 'จำนวนครั้งที่เรียนไปแล้ว (ไม่ทราบวัน) ต้องเป็นจำนวนเต็มตั้งแต่ 0 ขึ้นไป';
+    if (n + p > Number(course.sessions_total)) return 'จำนวนครั้งที่เรียนไปแล้วรวม (รู้วัน ' + n + ' + ไม่ทราบวัน ' + p + ') เกินจำนวนครั้งของคอร์ส (' + course.sessions_total + ' ครั้ง)';
   }
   if (mgr && f.pay === 'paid') {
     const amt = teMoney(f.payAmount);
@@ -13842,6 +13859,7 @@ async function teEnrollSubmit() {
         p_started_on: backfill && f.started ? f.started : null, p_note: f.note.trim() || null,
         p_source: backfill ? 'backfill' : 'console', p_teach_lang: f.lang,
         p_list_price: f.lang === 'en' ? teMoney(f.listPrice) : null, p_paid_unknown: backfill && f.pay === 'unknown',
+        ...(backfill && Number(f.priorN) > 0 ? { p_prior_sessions: Number(f.priorN) } : {}),      // ส่งเฉพาะเมื่อมี — ฐานที่ยังไม่รัน 065 ใช้ฟอร์มเดิมได้
       });
       if (uid !== currentUserId || te !== cur) return;
       if (error || !data) throw error || new Error('ไม่ได้รับรหัสการลงเรียนกลับมา');
@@ -13908,10 +13926,15 @@ function teFormChange(el) {
     if (c && f.lang === 'th' && !f.priceTouched) f.price = String(c.list_price);
     const max = c ? Number(c.sessions_total) : 100;
     if (Number(f.sessN) > max) { f.sessN = max; f.sessDates = f.sessDates.slice(0, max); }
+    if (Number(f.sessN) + Number(f.priorN) > max) f.priorN = max - Number(f.sessN);
+    teEnrollRender();
+  } else if (k === 'priorN') {
+    f.priorN = Math.max(0, Math.min(Number(el.max) || 100, parseInt(el.value, 10) || 0));
     teEnrollRender();
   } else if (k === 'sessN') {
     let n = Math.max(0, Math.min(Number(el.max) || 100, parseInt(el.value, 10) || 0));
     f.sessN = n;
+    if (n + Number(f.priorN) > (Number(el.max) || 100)) f.priorN = Math.max(0, (Number(el.max) || 100) - n);
     while (f.sessDates.length < n) f.sessDates.push(f.started || '');
     f.sessDates.length = n;
     teEnrollRender();
@@ -13943,7 +13966,7 @@ function teFormClick(e) {
   } else if (act === 'mode') {
     if (!isManager()) return;
     f.mode = b.dataset.v;
-    if (f.mode === 'console') { f.sessN = 0; f.sessDates = []; f.started = ''; if (f.pay === 'unknown') f.pay = 'none'; }
+    if (f.mode === 'console') { f.sessN = 0; f.sessDates = []; f.priorN = 0; f.started = ''; if (f.pay === 'unknown') f.pay = 'none'; }
     teEnrollRender();
   } else if (act === 'lang') { f.lang = b.dataset.v; if (f.lang === 'th') f.listPrice = ''; teEnrollRender(); }
   else if (act === 'pay') { f.pay = b.dataset.v; teEnrollRender(); }
@@ -14255,13 +14278,15 @@ function teDetSummaryHtml(r) {
     '<div class="te-pills">' + (stateTxt ? '<span class="st st-off">' + stateTxt + closed + '</span>' : '') +
     (r.teach_lang === 'en' ? '<span class="st st-off">สอนภาษาอังกฤษ</span>' : '') +
     (nk.minor ? '<span class="st st-off">ผู้เยาว์</span>' : '') +
-    (r.source === 'backfill' ? '<span class="st st-off">กรอกย้อนหลัง · ข้อมูลอาจไม่ครบ</span>' : '') + '</div>' +
+    (r.source === 'backfill' ? '<span class="st st-off">กรอกย้อนหลัง · ข้อมูลอาจไม่ครบ</span>' : '') +
+    (teNoHistory(r) ? '<span class="st st-off">นักเรียนเดิม — ไม่มีข้อมูลการเรียนเก่า</span>' : '') + '</div>' +
     '<dl class="te-dl">' +
       (nk.nick ? '<dt>ชื่อเล่น</dt><dd>' + escapeHtml(nk.nick) + '</dd>' : '') +
       '<dt>ครู</dt><dd>' + escapeHtml(r.teacher_name || '') + '</dd>' +
       '<dt>เรียนแล้ว</dt><dd><strong>' + done + '/' + tot + '</strong> ครั้ง' + (used > done ? ' <span class="te-sub">(ใช้สิทธิ์ ' + used + ' ครั้ง รวมไม่มา/แจ้งช้า)</span>' : '') +
-        ' · ' + Number(r.hours_done || 0) + '/' + Number(r.hours_total || 0) + ' ชม.</dd>' +
-      '<dt>วันเริ่ม</dt><dd>' + (r.started_on ? fmtDate(r.started_on) : '<span class="te-sub">ยังไม่เริ่มเรียน</span>') + '</dd>' +
+        ' · ' + Number(r.hours_done || 0) + '/' + Number(r.hours_total || 0) + ' ชม.' + tePriorNote(r) +
+        (tePrior(r) > 0 ? '<div class="te-sub">ชั่วโมงนับเฉพาะรอบที่บันทึกไว้ (ไม่ประมาณชั่วโมงของครั้งที่ไม่ทราบวัน)</div>' : '') + '</dd>' +
+      '<dt>วันเริ่ม</dt><dd>' + (r.started_on ? fmtDate(r.started_on) : '<span class="te-sub">' + (tePrior(r) > 0 ? 'ไม่ทราบ (เรียนมาก่อนเข้าระบบ)' : 'ยังไม่เริ่มเรียน') + '</span>') + '</dd>' +
       '<dt>หมดอายุ</dt><dd>' + teExpiryHtml(r) + '</dd>' +
       (r.extension_note ? '<dt>หมายเหตุขยายอายุ</dt><dd>' + escapeHtml(r.extension_note) + ' <span class="te-sub">(ทั้งทีมเห็น)</span></dd>' : '') +
       (r.track ? '<dt>แนว</dt><dd>' + escapeHtml(r.track) + '</dd>' : '') +
@@ -14517,6 +14542,9 @@ function teFormFix(r, d) {
     teIn('started', 'วันเริ่มเรียน', { type: 'date', max: todayBangkok(), hint: 'เปลี่ยนแล้วระบบคำนวณวันหมดอายุใหม่ · ล้างไม่ได้ถ้ามีรอบที่สอนแล้ว' }) +
     (tracks.length ? teSel('track', 'แนวที่เลือก', [['', '— ไม่ระบุ —']].concat(tracks.map(t => [t, t]))) : '') +
     teSel('equip', 'ชุดอุปกรณ์', [['', '— ไม่ระบุ —']].concat(eq.map(t => [t, t]))) +
+    (r.source === 'backfill' && teHasPrior(r)
+      ? teIn('prior', 'เรียนมาก่อนเข้าระบบ — ไม่ทราบวัน (ครั้ง)', { type: 'number', min: '0', max: String(Math.max(0, Number(r.sessions_total) - (Number(r.sessions_used) - tePrior(r)))), inputmode: 'numeric',
+          hint: 'นับรวมเป็นครั้งที่เรียนแล้ว · ไม่ใช่รอบเรียนและไม่มีชั่วโมง · รวมกับรอบที่บันทึกวันไว้ต้องไม่เกิน ' + Number(r.sessions_total) + ' ครั้ง' }) : '') +
     (d.hasMoney ? teIn('price', 'ราคาที่ตกลง (บาท)' + (r.source === 'backfill' ? ' — เว้นว่าง = ไม่ทราบ' : ''), { inputmode: 'decimal' }) : '') +
     (r.source === 'backfill' ? '<div class="field"><label class="lbl" style="display:flex;gap:10px;align-items:center;min-height:44px;"><input type="checkbox" id="teD_unknown" data-df="unknown" data-struct="1"' +
       (d.fv.unknown ? ' checked' : '') + '> ชำระครบแล้ว (ไม่ทราบวันที่/ยอด)</label></div>' : '') +
@@ -14575,7 +14603,7 @@ function teDetOpenForm(k, sid) {
   else if (k === 'cancel') Object.assign(d.fv, { as: 'cancelled', by: 'student', notified: today, reason: '' });
   else if (k === 'note') Object.assign(d.fv, { text: d.notes.get(sid) || '' });
   else if (k === 'fix') Object.assign(d.fv, { teacher: r.teacher_id, started: r.started_on || '', track: r.track || '', equip: r.equipment || '',
-    note: r.note || '', price: d.price != null ? String(d.price) : '', unknown: !!r.paid_unknown });
+    note: r.note || '', price: d.price != null ? String(d.price) : '', unknown: !!r.paid_unknown, prior: String(tePrior(r)) });
   else if (k === 'close') Object.assign(d.fv, { reason: '', on: today });
   else if (k === 'ext') Object.assign(d.fv, { until: '', note: '' });
   else if (k === 'extreq') Object.assign(d.fv, { until: '', reason: '' });
@@ -14730,6 +14758,12 @@ function teDetSubmit(k) {
       patch.note = String(fv.note).trim() || null;
     }
     if (r.source === 'backfill' && !!fv.unknown !== !!r.paid_unknown) patch.paid_unknown = !!fv.unknown;
+    if (r.source === 'backfill' && teHasPrior(r)) {
+      const np = Number(String(fv.prior).trim() === '' ? NaN : fv.prior), cap = Number(r.sessions_total) - (Number(r.sessions_used) - tePrior(r));
+      if (!Number.isInteger(np) || np < 0) return teDetFail('จำนวนครั้งที่เรียนมาก่อนต้องเป็นจำนวนเต็มตั้งแต่ 0 ขึ้นไป');
+      if (np > cap) return teDetFail('จำนวนครั้งที่เรียนมาก่อนเกินที่เหลือ — รวมกับรอบที่บันทึกวันไว้แล้วต้องไม่เกิน ' + Number(r.sessions_total) + ' ครั้ง (ใส่ได้สูงสุด ' + cap + ')');
+      if (np !== tePrior(r)) patch.prior_sessions_used = np;
+    }
     if (d.hasMoney) {
       const np = teMoney(fv.price);
       if (Number.isNaN(np) || (np !== null && np < 0)) return teDetFail('ราคาที่ตกลงต้องเป็นตัวเลขไม่ติดลบ');

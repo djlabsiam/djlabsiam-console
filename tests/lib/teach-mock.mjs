@@ -39,7 +39,7 @@ const TEACH = { rows: [], profiles: [], sessions: [], ext: [], subs: [], status:
     started_on: null, expires_on: null, extended_until: null, extension_note: null, effective_expiry: null, closed_on: null, closed_reason: null,
     paid_unknown: false, source: 'console', note: null, created_at: new Date(Date.now() - 20 * 86400000).toISOString(),
     sessions_done: 0, sessions_used: 0, hours_done: '0', sessions_remaining: 6, last_session_on: null, next_session_at: null,
-    paid_in_full: true, payment_count: 1, state: 'queued' }, o);
+    paid_in_full: true, payment_count: 1, state: 'queued', prior_sessions_used: 0, session_rows: 0 }, o);
   TEACH.seed = () => {
     TEACH.fail = {}; TEACH.missing = false; TEACH.noSource = false; TEACH.noCourseWrite = false; TEACH.priceWrites = []; TEACH.cal = { mode: 'ok', busy: [], failUpsert: null, failRemove: null, raceConflict: false, events: [] }; TEACH.gate = null; TEACH.loads = 0;
     TEACH.rows = [
@@ -250,11 +250,18 @@ const TEACH = { rows: [], profiles: [], sessions: [], ext: [], subs: [], status:
       if (agreed != null && agreed < 0) return E('ราคาที่ตกลงต้องไม่ติดลบ');
       if (source !== 'backfill' && (a.p_started_on || a.p_paid_unknown)) return E('วันเริ่มเรียนและ "ชำระครบ (ไม่ทราบวันที่)" ใช้ได้เฉพาะการกรอกย้อนหลัง');
       if (a.p_started_on && a.p_started_on > TODAY) return E('วันเริ่มเรียนต้องไม่เกินวันนี้');
+      const prior = a.p_prior_sessions === undefined ? 0 : a.p_prior_sessions;
+      if (prior === null || !Number.isInteger(prior) || prior < 0) return E('จำนวนครั้งที่เรียนมาก่อนต้องเป็นจำนวนเต็มตั้งแต่ 0 ขึ้นไป');
+      if (prior > 0) {
+        if (source !== 'backfill') return E('จำนวนครั้งที่เรียนมาก่อนใช้ได้เฉพาะการกรอกย้อนหลัง');
+        if (prior > course.sessions_total) return E('จำนวนครั้งที่เรียนมาก่อนเกินจำนวนครั้งของคอร์ส (' + course.sessions_total + ' ครั้ง)');
+      }
       const id = 'new-e' + (++TEACH.seq);
       const row = R(id, { customer_id: a.p_customer, course_id: course.id, course_title: course.title, teacher_id: teacher.id, teacher_name: teacher.display_name, teach_lang: lang,
         sessions_total: course.sessions_total, list_price: String(list), started_on: a.p_started_on || null, source, paid_unknown: !!a.p_paid_unknown, note: a.p_note || null,
         track: a.p_track || null, equipment: a.p_equipment || null, paid_in_full: !!a.p_paid_unknown, payment_count: 0, created_at: new Date().toISOString(),
-        state: a.p_started_on ? 'active' : (a.p_paid_unknown ? 'queued' : 'waiting_payment') });
+        prior_sessions_used: prior, sessions_done: prior, sessions_used: prior, sessions_remaining: course.sessions_total - prior,
+        state: prior >= course.sessions_total && prior > 0 ? 'completed' : (a.p_started_on || prior > 0) ? 'active' : (a.p_paid_unknown ? 'queued' : 'waiting_payment') });
       if (a.p_started_on) { const d = new Date(a.p_started_on + 'T12:00:00Z'); d.setUTCMonth(d.getUTCMonth() + course.valid_months); row.expires_on = row.effective_expiry = d.toISOString().slice(0, 10); }
       TEACH.rows.unshift(row);
       TEACH.created.push({ id, customer_id: a.p_customer, args: clone(a), role });
@@ -273,7 +280,8 @@ const TEACH = { rows: [], profiles: [], sessions: [], ext: [], subs: [], status:
       if (e.sessions_used + ds.length > e.sessions_total) return E('จำนวนครั้งที่เรียนรวมเกินจำนวนครั้งของคอร์ส (' + e.sessions_total + ' ครั้ง)');
       if (ds.some(d => !d || d > TODAY)) return E('วันที่เรียนต้องไม่ว่างและไม่เกินวันนี้');
       e.sessions_done += ds.length; e.sessions_used += ds.length; e.sessions_remaining = Math.max(0, e.sessions_total - e.sessions_used);
-      if (!e.started_on) { e.started_on = ds.slice().sort()[0]; const d = new Date(e.started_on + 'T12:00:00Z'); d.setUTCMonth(d.getUTCMonth() + 3); e.expires_on = e.effective_expiry = d.toISOString().slice(0, 10); e.state = 'active'; }
+      e.session_rows = (e.session_rows || 0) + ds.length; e.__bfRows = (e.__bfRows || 0) + ds.length;
+      if (!e.started_on && !e.prior_sessions_used) { e.started_on = ds.slice().sort()[0]; const d = new Date(e.started_on + 'T12:00:00Z'); d.setUTCMonth(d.getUTCMonth() + 3); e.expires_on = e.effective_expiry = d.toISOString().slice(0, 10); e.state = 'active'; }
       TEACH.sessions_bf.push({ enrollment: a.p_enrollment, dates: ds.slice() });
       return OK(ds.length);
     },
@@ -306,7 +314,8 @@ const TEACH = { rows: [], profiles: [], sessions: [], ext: [], subs: [], status:
           contact_line: minor ? null : (k.line || null), contact_ig: minor ? null : (k.ig || null), contact_phone: minor ? null : (c.phone || null),
           guardian_name: minor ? (p.guardian_name || null) : null, guardian_contact: minor ? (p.guardian_contact || null) : null, guardian_contact_kind: minor ? (p.guardian_contact_kind || null) : null,
           course_title: r.course_title, teach_lang: r.teach_lang, state: r.state, sessions_total: r.sessions_total, sessions_used: r.sessions_used, sessions_done: r.sessions_done,
-          sessions_remaining: r.sessions_remaining, started_on: r.started_on, effective_expiry: r.effective_expiry, next_session_at: r.next_session_at };
+          sessions_remaining: r.sessions_remaining, started_on: r.started_on, effective_expiry: r.effective_expiry, next_session_at: r.next_session_at,
+          prior_sessions_used: r.prior_sessions_used || 0, session_rows: r.session_rows || 0, source: r.source };
       }));
     },
   });
@@ -316,12 +325,12 @@ const TEACH = { rows: [], profiles: [], sessions: [], ext: [], subs: [], status:
     const used = x => x.status === 'done' || x.status === 'no_show' || (x.status === 'cancelled' && x.late_cancel);
     const doneRows = ss.filter(x => x.status === 'done');
     if (ss.length || e.__touchedSess) {
-      e.sessions_done = doneRows.length; e.sessions_used = ss.filter(used).length;
+      e.sessions_done = doneRows.length + (e.prior_sessions_used || 0); e.sessions_used = ss.filter(used).length + (e.prior_sessions_used || 0); e.session_rows = ss.length + (e.__bfRows || 0);
       e.hours_done = String(doneRows.reduce((a, x) => a + Number(x.hours), 0)); e.sessions_remaining = Math.max(0, e.sessions_total - e.sessions_used);
       const sc = ss.filter(x => x.status === 'scheduled' && Date.parse(x.starts_at) >= Date.now()).map(x => x.starts_at).sort();
       e.next_session_at = sc[0] || null;
       e.last_session_on = doneRows.map(x => x.held_on).sort().pop() || null;
-      if (!e.started_on && doneRows.length) { e.started_on = doneRows.map(x => x.held_on).sort()[0]; const d = new Date(e.started_on + 'T12:00:00Z'); d.setUTCMonth(d.getUTCMonth() + e.valid_months); e.expires_on = d.toISOString().slice(0, 10); }
+      if (!e.started_on && doneRows.length && !e.prior_sessions_used) { e.started_on = doneRows.map(x => x.held_on).sort()[0]; const d = new Date(e.started_on + 'T12:00:00Z'); d.setUTCMonth(d.getUTCMonth() + e.valid_months); e.expires_on = d.toISOString().slice(0, 10); }
     }
     e.effective_expiry = e.extended_until || e.expires_on || null;
     if (ps.length) {
@@ -329,8 +338,9 @@ const TEACH = { rows: [], profiles: [], sessions: [], ext: [], subs: [], status:
       const price = TEACH.money[e.id], net = ps.reduce((a, p) => a + Number(p.amount), 0);
       e.paid_in_full = !!e.paid_unknown || (price != null ? net >= price : true);
     } else if (e.paid_unknown) e.paid_in_full = true;
-    e.state = e.closed_on ? 'closed' : e.sessions_used >= e.sessions_total ? 'completed' : !e.started_on && e.paid_in_full ? 'queued' : !e.started_on ? 'waiting_payment'
-      : TODAY <= e.effective_expiry ? 'active' : 'expired';
+    const pr = e.prior_sessions_used || 0;      // 065: เริ่มแล้ว = มีวันเริ่ม หรือเรียนมาก่อนเข้าระบบ · ไม่ทราบวันหมดอายุ = active
+    e.state = e.closed_on ? 'closed' : e.sessions_used >= e.sessions_total ? 'completed' : !e.started_on && !pr && e.paid_in_full ? 'queued' : !e.started_on && !pr ? 'waiting_payment'
+      : !e.effective_expiry ? 'active' : TODAY <= e.effective_expiry ? 'active' : 'expired';
   }
   TEACH.recalc = recalc;
   const isMgr = r => r === 'owner' || r === 'admin';
@@ -354,7 +364,7 @@ const TEACH = { rows: [], profiles: [], sessions: [], ext: [], subs: [], status:
       const ss = TEACH.sessions.filter(x => x.enrollment_id === e.id);
       const used = ss.filter(x => x.status === 'done' || x.status === 'no_show' || (x.status === 'cancelled' && x.late_cancel)).length, sched = ss.filter(x => x.status === 'scheduled').length;
       const warnings = [];
-      if (used + sched >= e.sessions_total) warnings.push('over_sessions');
+      if (used + sched + (e.prior_sessions_used || 0) >= e.sessions_total) warnings.push('over_sessions');
       const exp = e.extended_until || e.expires_on;
       if (exp && bkkYmd(a.p_starts) > exp) warnings.push('after_expiry');
       const s0 = Date.parse(a.p_starts), e0 = Date.parse(a.p_ends);
@@ -435,8 +445,8 @@ const TEACH = { rows: [], profiles: [], sessions: [], ext: [], subs: [], status:
       const role = roleOf(me), e = enr(a.p_id), p = a.p_patch;
       if (!isMgr(role)) return E('แก้การลงเรียนได้เฉพาะเจ้าของหรือผู้ดูแล');
       if (!p || typeof p !== 'object' || !Object.keys(p).length) return E('ไม่มีช่องที่จะแก้');
-      const bad = Object.keys(p).find(k => ['teacher_id', 'started_on', 'track', 'equipment', 'note', 'paid_unknown', 'price_agreed'].indexOf(k) < 0);
-      if (bad) return E('แก้ช่อง "' + bad + '" ไม่ได้ (แก้ได้: teacher_id started_on track equipment note paid_unknown price_agreed)');
+      const bad = Object.keys(p).find(k => ['teacher_id', 'started_on', 'track', 'equipment', 'note', 'paid_unknown', 'price_agreed', 'prior_sessions_used'].indexOf(k) < 0);
+      if (bad) return E('แก้ช่อง "' + bad + '" ไม่ได้ (แก้ได้: teacher_id started_on track equipment note paid_unknown price_agreed prior_sessions_used)');
       if (!e) return E('ไม่พบการลงเรียนนี้');
       if (e.closed_on && role !== 'owner') return E('การลงเรียนนี้ปิดแล้ว แก้ได้เฉพาะเจ้าของ');
       if ('teacher_id' in p) {
@@ -446,6 +456,13 @@ const TEACH = { rows: [], profiles: [], sessions: [], ext: [], subs: [], status:
       if ('started_on' in p && p.started_on && p.started_on > TODAY) return E('วันเริ่มเรียนต้องไม่เกินวันนี้');
       if ('paid_unknown' in p && p.paid_unknown && e.source !== 'backfill') return E('"ชำระครบ (ไม่ทราบวันที่)" ใช้ได้เฉพาะการลงเรียนที่กรอกย้อนหลัง');
       if ('price_agreed' in p && p.price_agreed === null && e.source !== 'backfill') return E('ต้องมีราคาที่ตกลง (ล้างเป็นว่างได้เฉพาะการลงเรียนที่กรอกย้อนหลัง)');
+      if ('prior_sessions_used' in p) {
+        const v = p.prior_sessions_used;
+        if (typeof v !== 'number' || !Number.isInteger(v) || v < 0 || v > 999) return E('จำนวนครั้งที่เรียนมาก่อนต้องเป็นจำนวนเต็มตั้งแต่ 0 ขึ้นไป');
+        if (v > 0 && e.source !== 'backfill') return E('ตั้งจำนวนครั้งที่เรียนมาก่อนได้เฉพาะการลงเรียนที่กรอกย้อนหลัง');
+        if (v + (e.sessions_used - (e.prior_sessions_used || 0)) > e.sessions_total) return E('จำนวนครั้งที่เรียนรวมเกินจำนวนครั้งของคอร์ส (' + e.sessions_total + ' ครั้ง) — รวมรอบที่บันทึกวันไว้แล้ว');
+      }
+      if ('prior_sessions_used' in p) { const d = p.prior_sessions_used - (e.prior_sessions_used || 0); e.prior_sessions_used = p.prior_sessions_used; e.sessions_done += d; e.sessions_used += d; e.sessions_remaining = Math.max(0, e.sessions_total - e.sessions_used); }
       if ('teacher_id' in p) { e.teacher_id = p.teacher_id; e.teacher_name = (TEACH.teachers.find(t => t.id === p.teacher_id) || {}).display_name; }
       if ('started_on' in p) { e.started_on = p.started_on; e.expires_on = p.started_on ? addMonths(p.started_on, e.valid_months) : null; }
       if ('track' in p) e.track = p.track; if ('equipment' in p) e.equipment = p.equipment; if ('note' in p) e.note = p.note;

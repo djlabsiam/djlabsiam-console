@@ -315,6 +315,31 @@ async function runTests() {
   submit('fix'); await settle(600);
   ok('ยกเลิกติ๊ก: patch มี paid_unknown false เท่านั้น', J(lastArgs('teach_enroll_fix')) === J({ p_id: 'e-backfill', p_patch: { paid_unknown: false } }), J(lastArgs('teach_enroll_fix')));
 
+  // ── เรียนมาก่อนเข้าระบบ — ไม่ทราบวัน (065) ──
+  openForm('fix'); await settle(300);
+  ok('ใบกรอกย้อนหลัง: ฟอร์มแก้มีช่อง "เรียนมาก่อนเข้าระบบ — ไม่ทราบวัน (ครั้ง)" · ค่าเดิม 0 · เพดาน = จำนวนครั้งที่เหลือหลังหักรอบที่บันทึกแล้ว (6 − 1 = 5) · อธิบายว่าไม่ใช่รอบเรียนและไม่มีชั่วโมง',
+    !!$('teD_prior') && $('teD_prior').value === '0' && $('teD_prior').max === '5' && /ไม่ใช่รอบเรียนและไม่มีชั่วโมง/.test(E('teFormFix').textContent));
+  const nfp = rpcCalls('teach_enroll_fix').length;
+  dfill('prior', '9'); submit('fix'); await settle(150);
+  ok('ใส่เกินที่เหลือ (9 > 5): ไม่ส่งฐาน · ข้อความแดงตัวหนาบอกเกินและใส่ได้สูงสุด 5', rpcCalls('teach_enroll_fix').length === nfp && /ใส่ได้สูงสุด 5/.test(detErr()) && isRed(E('teDetErr')), detErr());
+  dfill('prior', '1.5'); submit('fix'); await settle(150);
+  ok('ใส่ไม่ใช่จำนวนเต็ม: ไม่ส่งฐาน · "ต้องเป็นจำนวนเต็มตั้งแต่ 0"', rpcCalls('teach_enroll_fix').length === nfp && /จำนวนเต็มตั้งแต่ 0/.test(detErr()), detErr());
+  dfill('prior', '2'); dfill('started', ''); submit('fix'); await settle(600);
+  ok('ตั้ง 2 พร้อมล้างวันเริ่ม: patch มี prior_sessions_used = 2 (ตัวเลข) กับ started_on null เท่านั้น',
+    J(lastArgs('teach_enroll_fix')) === J({ p_id: 'e-backfill', p_patch: { started_on: null, prior_sessions_used: 2 } }) || J(lastArgs('teach_enroll_fix')) === J({ p_id: 'e-backfill', p_patch: { prior_sessions_used: 2, started_on: null } }), J(lastArgs('teach_enroll_fix')));
+  ok('แผงสรุป: เรียนแล้ว 3/6 · "รวมเรียนมาก่อนเข้าระบบ 2 ครั้ง (ไม่ทราบวัน)" · วันเริ่ม "ไม่ทราบ (เรียนมาก่อนเข้าระบบ)" · ชั่วโมงนับเฉพาะรอบที่บันทึก (ไม่ประมาณ)',
+    /3\\/6/.test($('teDetHead').textContent) && /รวมเรียนมาก่อนเข้าระบบ 2 ครั้ง [(]ไม่ทราบวัน[)]/.test($('teDetHead').textContent) && /ไม่ทราบ [(]เรียนมาก่อนเข้าระบบ[)]/.test($('teDetHead').textContent)
+    && /ชั่วโมงนับเฉพาะรอบที่บันทึกไว้/.test($('teDetHead').textContent), $('teDetHead').textContent.slice(0, 300));
+  ok('หมดอายุ = "ไม่ทราบวันหมดอายุ" แดงตัวหนา (ไม่ใช่ "หมดอายุแล้ว") · สถานะ กำลังเรียน', [...$('teDetHead').querySelectorAll('.wk-red')].some(e => /ไม่ทราบวันหมดอายุ/.test(e.textContent) && isRed(e)) && !/หมดอายุแล้ว/.test($('teDetHead').textContent) && /กำลังเรียน/.test($('teDetHead').textContent) && !/นักเรียนเดิม — ไม่มีข้อมูลการเรียนเก่า/.test($('teDetHead').textContent));
+  ok('ฟอร์มแก้ปิดหลังบันทึก · ใบนี้ยังเป็นกำลังเรียน (ไม่ตกเป็นรอคิว/หมดอายุ) หลังตั้งเรียนมาก่อน + ไม่มีวันเริ่ม', !E('teFormFix') && TEACH.rows.find(r => r.id === 'e-backfill').state === 'active' && TEACH.rows.find(r => r.id === 'e-backfill').effective_expiry === null);
+  openForm('fix'); await settle(200);
+  ok('เปิดฟอร์มแก้อีกครั้ง: ค่าเดิม 2 · เพดาน = 6 − 1 = 5 (รอบที่บันทึกวันไว้ไม่เปลี่ยน)', $('teD_prior').value === '2' && $('teD_prior').max === '5', $('teD_prior').value + '/' + $('teD_prior').max);
+  dact('close-form'); await settle(100);
+  await openEnroll('active', 'e-active');
+  openForm('fix'); await settle(200);
+  ok('ใบที่ลงหน้าคอนโซล (ไม่ใช่ย้อนหลัง): ไม่มีช่อง "เรียนมาก่อนเข้าระบบ" ในฟอร์มแก้', !$('teD_prior'));
+  dact('close-form'); await settle(100);
+
   // ── ปิดคอร์ส ──
   await openEnroll('active', 'e-month');
   ok('ก่อนปิด: มีปุ่ม "ปิดคอร์ส" · ไม่มีปุ่ม "เปิดคอร์สกลับ"', has('open', '[data-k="close"]') && !has('reopen'));

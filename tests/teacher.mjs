@@ -490,6 +490,7 @@ const tick = id => { const e = $(id); e.checked = !e.checked; e.dispatchEvent(ne
 const setDate = (i, v) => { const e = $('app').querySelector('[data-ad="' + i + '"]'); e.value = v; e.dispatchEvent(new Event('input', { bubbles: true })); e.dispatchEvent(new Event('change', { bubbles: true })); };
 const setStarted = v => { const e = $('a_started'); e.value = v; e.dispatchEvent(new Event('input', { bubbles: true })); e.dispatchEvent(new Event('change', { bubbles: true })); };
 const addDate = () => aact('add-adddate');
+const setPrior = v => { const e = $('a_prior'); e.value = v; e.dispatchEvent(new Event('input', { bubbles: true })); e.dispatchEvent(new Event('change', { bubbles: true })); };
 const enrolls = () => rpcCalls('teach_enroll_create'), backs = () => rpcCalls('teach_session_backfill');
 const errT = () => ($('addErr') || {}).textContent || '';
 async function openForm(phone, cid) {
@@ -593,13 +594,88 @@ async function runTests() {
   ok('ลงรอบล้ม: ลงเรียนไปแล้ว 1 ใบ · ข้อความแดง "ลงเรียนแล้ว แต่ลงรอบย้อนหลังไม่สำเร็จ" + ข้อความไทยของฐาน · ฟอร์มยังอยู่',
     enrolls().length === nE2 + 1 && backs().length === nB2 + 1 && isRed($('addErr')) && \/ลงเรียนแล้ว แต่ลงรอบย้อนหลังไม่สำเร็จ\/.test(errT()) && \/เกินจำนวนครั้งของคอร์ส\/.test(errT()) && !!$('addForm'), errT());
   ok('หลังสร้างใบแล้ว: ล็อกคอร์ส\/สวิตช์\/วันเริ่ม\/ชำระ (กันเปลี่ยนค่าที่ส่งไปแล้ว) · ปุ่มเป็น "ลงรอบย้อนหลังที่ค้างอีกครั้ง"',
-    $('a_course').disabled && $('a_back').disabled && $('a_started').disabled && $('a_paid').disabled && \/ลงรอบย้อนหลังที่ค้างอีกครั้ง\/.test($('app').querySelector('[data-act="add-submit"]').textContent));
+    $('a_course').disabled && $('a_back').disabled && $('a_started').disabled && $('a_paid').disabled && $('a_prior').disabled &&\/ลงรอบย้อนหลังที่ค้างอีกครั้ง\/.test($('app').querySelector('[data-act="add-submit"]').textContent));
   TEACH.fail = {};
   aact('add-submit'); await settle(700);
   ok('กดซ้ำ: ไม่สร้างใบซ้ำ (teach_enroll_create ยังเท่าเดิม) · ลงรอบอีก 1 ครั้งเรียกด้วยใบเดิม · สำเร็จ',
     enrolls().length === nE2 + 1 && backs().length === nB2 + 2 && backs()[backs().length - 1].args.p_enrollment === backs()[backs().length - 2].args.p_enrollment && !$('addStu') && \/ลงเรียนย้อนหลังให้\/.test(($('flash') || {}).textContent || ''));
 
-  \/\/ ── 6. พนักงานที่เป็นครู (064): ลงย้อนหลังให้ตัวเองได้ · ราคาว่าง ──
+  // ── 5b. เรียนไปแล้วอีก — ไม่ทราบวัน (065 · PLAN-prior-sessions) ──
+  ok('ไม่ได้กรอก "ไม่ทราบวัน": ไม่ส่ง p_prior_sessions เลย (ฐานที่ยังไม่รัน 065 ใช้ฟอร์มเดิมได้)', !('p_prior_sessions' in ce) && !('p_prior_sessions' in c2) && !('p_prior_sessions' in enrolls()[nE2].args));
+  const nh = TEACH.created.filter(x => x.args.p_customer === 'c4')[0];
+  await sleep(300);
+  const nhCard = nh && document.querySelector('[data-eid="' + nh.id + '"]');
+  ok('ใบย้อนหลังที่ไม่ได้กรอกอะไรเลย (prior 0 · ไม่มีรอบ · ไม่มีวันเริ่ม): การ์ดขึ้นป้าย "นักเรียนเดิม — ไม่มีข้อมูลการเรียนเก่า"', !!nhCard && nhCard.textContent.includes('นักเรียนเดิม — ไม่มีข้อมูลการเรียนเก่า'), nhCard && nhCard.textContent);
+  FAKE.customers.find(c => c.id === 'c3').phone = '0833334444';
+  await openForm('0833334444');
+  tick('a_back'); await settle(100);
+  ok('ฟอร์มย้อนหลังมีช่อง "เรียนไปแล้วอีก — ไม่ทราบวัน" · ว่างตั้งต้น · สูง ≥ 44px · ตัวหนังสือ ≥ 16px · ยังไม่มีคำเตือนวันหมดอายุ',
+    !!$('a_prior') && $('a_prior').value === '' && $('a_prior').getBoundingClientRect().height >= 43.5 && parseFloat(getComputedStyle($('a_prior')).fontSize) >= 16 && !$('priorExpiry'));
+  ok('บอกชัดว่าไม่ต้องเดาวัน · นับเป็นจำนวนครั้ง ไม่สร้างรอบเรียน', $('priorHint').textContent.includes('ไม่ต้องเดาวัน') && $('priorHint').textContent.includes('ไม่สร้างรอบเรียน'));
+  setPrior('2'); await settle(100);
+  ok('กรอก 2 (ไม่ใส่วันเริ่ม): คำเตือนแดงตัวหนา "ไม่ทราบวันหมดอายุ" · สรุปรวม 2/6', !!$('priorExpiry') && isRed($('priorExpiry')) && $('priorExpiry').textContent.includes('ไม่ทราบวันหมดอายุ') && $('priorHint').textContent.includes('2/6'), $('priorHint').textContent);
+  setStarted(day(-30)); await settle(100);
+  ok('ใส่วันเริ่มเรียนแล้ว: คำเตือนหายไป', !$('priorExpiry'));
+  setStarted(''); await settle(100);
+  addDate(); await settle(60); setDate(0, day(-5));
+  ok('เพิ่มวันที่ 1 ช่อง: เพดานช่อง "ไม่ทราบวัน" = 6 − 1 = 5 · สรุปรวม 3/6', $('a_prior').max === '5' && $('priorHint').textContent.includes('3/6'), $('a_prior').max + ' ' + $('priorHint').textContent);
+  setPrior('9'); await settle(100);
+  const nE5 = enrolls().length;
+  aact('add-submit'); await settle(100);
+  ok('มีวัน 1 + ไม่ทราบวัน 9 เกินคอร์ส (6) (ใส่ผ่านโค้ดข้ามเพดานช่อง): ไม่ส่งฐาน · แดงตัวหนา "เกินจำนวนครั้งของคอร์ส"', enrolls().length === nE5 && isRed($('addErr')) && errT().includes('เกินจำนวนครั้งของคอร์ส'), errT());
+  setPrior('-1'); aact('add-submit'); await settle(100);
+  ok('ค่าติดลบ: ไม่ส่งฐาน · "ต้องเป็นจำนวนเต็มตั้งแต่ 0"', enrolls().length === nE5 && errT().includes('จำนวนเต็มตั้งแต่ 0'), errT());
+  setPrior('1.5'); aact('add-submit'); await settle(100);
+  ok('ค่าไม่ใช่จำนวนเต็ม: ไม่ส่งฐาน', enrolls().length === nE5 && errT().includes('จำนวนเต็มตั้งแต่ 0'), errT());
+  setPrior('5'); await settle(80);
+  tick('a_paid'); await settle(50);
+  TEACH.fail.rpc_teach_enroll_create = 'Could not find the function public.teach_enroll_create(p_course, p_prior_sessions) in the schema cache';
+  aact('add-submit'); await settle(500);
+  ok('ฐานยังไม่รัน 065: ข้อความไทย "ยังไม่ได้รัน migration 065" แดงตัวหนา · ไม่ขึ้นว่าสำเร็จ · ฟอร์มยังอยู่ (ผลรวม 1 + 5 = 6 พอดีคอร์ส ผ่านด่านหน้าจอไปถึงฐาน)', isRed($('addErr')) && errT().includes('migration 065') && !!$('addForm') && enrolls().length === nE5 + 1, errT());
+  TEACH.fail = {};
+  setPrior('2'); await settle(80);
+  await sleep(50);
+  const nB5 = backs().length;
+  aact('add-submit'); await settle(800);
+  const cp = enrolls()[enrolls().length - 1].args, cbp = backs()[backs().length - 1];
+  ok('ส่ง p_prior_sessions = 2 พร้อมค่า backfill เดิม (ตัวเอง · source · ไม่มีวันเริ่ม · ชำระครบไม่ทราบวันที่ · ราคาว่าง)', cp.p_prior_sessions === 2 && cp.p_source === 'backfill' && cp.p_teacher === 't3' && cp.p_started_on === null && cp.p_paid_unknown === true && cp.p_price_agreed === null, J(cp));
+  ok('รอบที่รู้วัน 1 ครั้งลงด้วย teach_session_backfill ตามเดิม · ไม่มีรอบปลอมของครั้งที่ไม่ทราบวัน', backs().length === nB5 + 1 && J(cbp.args.p_dates) === J([day(-5)]), J(cbp && cbp.args));
+  ok('แถบเขียว: ลงรอบรู้วัน 1 ครั้ง + เรียนมาก่อนเข้าระบบ 2 ครั้ง (ไม่ทราบวัน)', !$('addStu') && $('flash').textContent.includes('ลงรอบที่เรียนไปแล้ว 1 ครั้ง') && $('flash').textContent.includes('เรียนมาก่อนเข้าระบบ 2 ครั้ง (ไม่ทราบวัน)'), ($('flash') || {}).textContent);
+  await sleep(300);
+  const pe = TEACH.created[TEACH.created.length - 1], peCard = document.querySelector('[data-eid="' + pe.id + '"]');
+  ok('การ์ดนักเรียน: เรียนแล้ว 3/6 (2 ไม่ทราบวัน + 1 รู้วัน) · "รวมเรียนมาก่อนเข้าระบบ 2 ครั้ง (ไม่ทราบวัน)" · วันหมดอายุ = "ไม่ทราบวันหมดอายุ" แดงตัวหนา (ไม่ใช่ "หมดอายุแล้ว") · ไม่ขึ้นป้ายนักเรียนเดิม',
+    !!peCard && peCard.textContent.includes('3/6') && peCard.textContent.includes('รวมเรียนมาก่อนเข้าระบบ 2 ครั้ง (ไม่ทราบวัน)') && peCard.textContent.includes('ไม่ทราบวันหมดอายุ') && !peCard.textContent.includes('หมดอายุแล้ว')
+    && !peCard.textContent.includes('นักเรียนเดิม — ไม่มีข้อมูลการเรียนเก่า') && [...peCard.querySelectorAll('.wk-red')].some(e => e.textContent.includes('ไม่ทราบวันหมดอายุ') && isRed(e)), peCard && peCard.textContent);
+  peCard.click(); await settle(300);
+  ok('แผงนักเรียน: เรียนแล้ว 3/6 + เหลือ 3 · วันเริ่ม = "ไม่ทราบ (เรียนมาก่อนเข้าระบบ)" · อายุคอร์ส = ไม่ทราบวันหมดอายุ (แดงตัวหนา) · ไม่ประมาณชั่วโมง',
+    $('head').textContent.includes('3/6') && $('head').textContent.includes('ไม่ทราบ (เรียนมาก่อนเข้าระบบ)') && $('head').textContent.includes('รวมเรียนมาก่อนเข้าระบบ 2 ครั้ง (ไม่ทราบวัน)')
+    && [...$('head').querySelectorAll('.wk-red')].some(e => e.textContent.includes('ไม่ทราบวันหมดอายุ') && isRed(e)) && !$('head').textContent.includes('ชม.'), $('head').textContent);
+
+  aact('back'); await settle(200);
+  // ใบที่มี "ไม่ทราบวัน" อย่างเดียว (ไม่มีรอบ ไม่มีวันเริ่ม): ไม่ขึ้นป้ายนักเรียนเดิม · มีข้อความรวมเรียนมาก่อน
+  FAKE.customers.find(c => c.id === 'c6').phone = '0844445555';
+  await openForm('0844445555');
+  tick('a_back'); await settle(80); setPrior('2'); await settle(80); tick('a_paid'); await settle(50);
+  aact('add-submit'); await settle(800);
+  await sleep(300);
+  const po = TEACH.created[TEACH.created.length - 1], poCard = document.querySelector('[data-eid="' + po.id + '"]');
+  ok('ใบที่มีแต่ "ไม่ทราบวัน" 2 ครั้ง (ไม่มีรอบ ไม่มีวันเริ่ม): การ์ดมีข้อความรวมเรียนมาก่อน · ไม่ขึ้นป้าย "นักเรียนเดิม — ไม่มีข้อมูลการเรียนเก่า"',
+    !!poCard && poCard.textContent.includes('รวมเรียนมาก่อนเข้าระบบ 2 ครั้ง (ไม่ทราบวัน)') && !poCard.textContent.includes('นักเรียนเดิม — ไม่มีข้อมูลการเรียนเก่า'), poCard && poCard.textContent);
+  // ใบย้อนหลังที่มีรอบแล้ว (นัดไว้ ยังไม่สอน → ยังไม่มีวันเริ่ม): ป้ายนักเรียนเดิมต้องหาย
+  nhCard && (TEACH.rows.find(r => r.id === nh.id).session_rows = 1);
+  TEACH.fireRt('class_sessions'); await sleep(900);
+  const nhCard2 = document.querySelector('[data-eid="' + nh.id + '"]');
+  ok('ใบย้อนหลังที่มีรอบแล้ว (session_rows > 0): ป้าย "นักเรียนเดิม" หาย', !!nhCard2 && !nhCard2.textContent.includes('นักเรียนเดิม — ไม่มีข้อมูลการเรียนเก่า'), nhCard2 && nhCard2.textContent);
+  // ปิดสวิตช์ย้อนหลังหลังกรอก "ไม่ทราบวัน" ค้างไว้ → ใบลงเรียนใหม่ต้องไม่พก prior ไปด้วย
+  FAKE.customers.find(c => c.id === 'c8').phone = '0855556666';
+  await openForm('0855556666');
+  tick('a_back'); await settle(80); setPrior('2'); await settle(80); tick('a_back'); await settle(80);
+  aact('add-submit'); await settle(800);
+  const cc = enrolls()[enrolls().length - 1].args;
+  ok('กรอก "ไม่ทราบวัน" แล้วปิดสวิตช์ย้อนหลัง: ส่งเป็นลงเรียนใหม่ (console) และไม่ส่ง p_prior_sessions', cc.p_source === 'console' && cc.p_customer === 'c8' && !('p_prior_sessions' in cc), J(cc));
+
+  // ── 6. พนักงานที่เป็นครู (064): ลงย้อนหลังให้ตัวเองได้ · ราคาว่าง ──
+  const nB6 = backs().length;
   await signOut();
   await signIn('nutty');
   await openForm('0877772222');
@@ -608,7 +684,7 @@ async function runTests() {
   aact('add-submit'); await settle(600);
   const cr = TEACH.created.filter(x => x.args.p_teacher === 't2' && x.args.p_source === 'backfill');
   ok('พนักงานที่เป็นครู (064): ลงย้อนหลังให้ตัวเองได้ · ส่ง teach_enroll_create ครั้งเดียว · ราคาที่ส่งเป็น null · ไม่มีข้อความผิดพลาด · ไม่ลงรอบ (ไม่ได้ใส่วัน)',
-    enrolls().length === nE3 + 1 && cr.length === 1 && cr[0].args.p_price_agreed === null && cr[0].role === 'staff' && errT() === '' && backs().length === nB2 + 2, errT());
+    enrolls().length === nE3 + 1 && cr.length === 1 && cr[0].args.p_price_agreed === null && cr[0].role === 'staff' && errT() === "" && backs().length === nB6, errT());
   await signOut();
 
   \/\/ ── 7. ไม่ดึง\/ไม่วาดของที่ไม่ใช่ของครู ──
