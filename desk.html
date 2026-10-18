@@ -855,6 +855,9 @@
   .sn.sold { color: var(--text2); background: var(--surface2); }
   .sn.defective { border-style: dashed; border-color: var(--red); color: #8A0012; }
   .sn.reserved { background: var(--warn-soft); border-color: #E8D1A0; color: var(--warn); }
+  .sn.demo { border-style: dotted; border-color: var(--black); }
+  .sn-acts { display: flex; flex-direction: column; gap: 6px; }
+  .sn-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
   .sn.hit { background: var(--black); border-color: var(--black); color: #fff; }
 
 
@@ -1418,6 +1421,9 @@
     /* แผงสินค้าขวาเปิดอยู่ (เหลือ ~436px): ปุ่ม ใกล้หมด/หมด ลงบรรทัดใหม่ชิดขวา แทนการดันแถวล้นจอ (ชิปยังพับเข้า "+n" ตามเดิม) */
     .wall-bar { flex-wrap: wrap; }
     .flags { margin-left: auto; }
+    /* แผงขวาเปิดอยู่ (พื้นที่ทำงานเหลือ ~490px): ช่องยิง + โหมด + DEMO + สินค้าใหม่ ใส่แถวเดียวไม่พอ → ปุ่มท้ายแถวลงบรรทัดใหม่ แทนดันหน้าเลื่อนแนวนอน */
+    .wall-top { flex-wrap: wrap; }
+    .wall-top .scanbox { flex: 1 1 220px; }
   }
 
   /* ---- < 1100px: เมนูซ้ายเป็นลิ้นชัก · แถบบนสองแถว · แผงรายละเอียดลอยทับด้านขวา ---- */
@@ -1980,6 +1986,7 @@
               <button type="button" data-mode="receive" aria-pressed="false" onclick="setWallMode('receive')">รับเข้า</button>
               <button type="button" data-mode="count" aria-pressed="false" onclick="setWallMode('count')">นับ</button>
             </div>
+            <button type="button" class="flag flag-demo" id="flagDemo" onclick="openDemoList()" title="เครื่องโชว์/ทดลองที่ร้าน — ไม่นับในยอดสต็อก"><span class="sw" aria-hidden="true"></span>DEMO <b id="nDemo">0</b></button>
             <button class="btn" id="addProductBtn" type="button" onclick="adGotoRow('products', null)" hidden>+ สินค้าใหม่</button>
           </div>
           <div class="wall-bar">
@@ -3488,7 +3495,7 @@ const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const BRAND_OPTIONS = ['Pioneer DJ', 'AlphaTheta', 'NEO by OYAIDE', 'Other'];    // ยี่ห้อเดิมตาม CHECK ของ 001 — ใช้เป็นตัวเลือกสำรองตอนยังไม่มีตาราง product_brands (migration 045)
 const TYPE_LABEL = { in: '▲ รับเข้า', out: '▼ ตัดออก', adjustment: '◆ ปรับยอด' };
-const UNIT_STATUS_LABEL = { in_stock: 'อยู่ในสต็อก', sold: 'ขายแล้ว', reserved: 'จองไว้', defective: 'มีตำหนิ' };
+const UNIT_STATUS_LABEL = { in_stock: 'อยู่ในสต็อก', sold: 'ขายแล้ว', reserved: 'จองไว้', defective: 'มีตำหนิ', demo: 'DEMO' };
 
 // ลำดับในเมนูซ้าย · key = คีย์ลัด Alt+key — ตัวเลขยังเป็นของหมวดคอนโซลเดิมตามเดิมทุกตัว (พนักงานกดจนติดมือแล้ว)
 // หมวดพนักงานที่มาทีหลังใช้ตัวอักษรแทนการเลื่อนเลขทั้งแถว: H หน้าแรก · B กระดาน · M จดหมาย · C ปฏิทิน
@@ -3561,6 +3568,7 @@ const HOME = 'home';   // หมวดเริ่มต้นหลังล็
 
 let products = [];
 let stockLevelMap = {};
+let demoUnits = [];                 // เครื่องที่ย้ายเข้า DEMO อยู่ (product_units.status = 'demo' · migration 067)
 let movements = [];
 let customers = [];
 let sales = [];
@@ -3856,7 +3864,7 @@ bkPollSchedule();
 // โหลดข้อมูล — query ชุดเดียวกับ stock.html / sales.html
 // ---------------------------------------------------------------------------
 async function loadAll() {
-  await Promise.all([loadProducts(), loadBrands(), loadStockLevels(), loadMovements(), loadCustomers(), loadSalesHistory(), loadStats(),
+  await Promise.all([loadProducts(), loadBrands(), loadStockLevels(), loadMovements(), loadDemoUnits(), loadCustomers(), loadSalesHistory(), loadStats(),
                      loadBookings(), loadBookingSettings()]);
   renderAll();
   bkOpenDeepLink();               // ลิงก์ #booking:<id> (เช่น จากแจ้งเตือนการจอง) เปิดใบนั้นเมื่อข้อมูลพร้อม
@@ -3884,6 +3892,13 @@ async function loadStockLevels() {
   if (error) { console.error('[Load stock levels]', error); showFatalError('โหลดยอดคงเหลือไม่สำเร็จ: ' + error.message); return; }
   stockLevelMap = {};
   (data || []).forEach(row => { stockLevelMap[row.product_id] = row.current_qty; });
+}
+
+// เครื่อง DEMO ทั้งร้าน (ก่อนรัน 067 ไม่มีแถวสถานะนี้ = ว่าง ไม่ error) — ยอดสต็อกไม่รวมเครื่องเหล่านี้อยู่แล้ว (ลง stock_movements ตอนย้าย)
+async function loadDemoUnits() {
+  const { data, error } = await db.from('product_units').select('id, product_id, serial_no, received_at').eq('status', 'demo').order('serial_no');
+  if (error) { console.error('[Load demo units]', error); showFatalError('โหลดรายการเครื่อง DEMO ไม่สำเร็จ: ' + error.message); return; }
+  demoUnits = data || [];
 }
 
 const MOVE_SELECT = 'id, type, qty, reason, created_at, product_id, admin_id, ref_sale_id, products:product_id(name, sku), admins:admin_id(full_name)';
@@ -4364,6 +4379,7 @@ function renderWallFlags(merged) {
   const pool = merged.filter(p => wallVisible(p, 'flags'));
   document.getElementById('nLow').textContent = pool.filter(p => stockStatus(p) === 'low').length;
   document.getElementById('nOut').textContent = pool.filter(p => stockStatus(p) === 'out').length;
+  document.getElementById('nDemo').textContent = demoUnits.length;
   document.getElementById('flagLow').setAttribute('aria-pressed', String(wall.low));
   document.getElementById('flagOut').setAttribute('aria-pressed', String(wall.out));
 }
@@ -4523,8 +4539,13 @@ function refreshDrawerCount() {
   if (box && p) box.innerHTML = drawerCountHtml(p);
 }
 
-const UNIT_ORDER = ['in_stock', 'reserved', 'defective', 'sold'];
+const UNIT_ORDER = ['in_stock', 'demo', 'reserved', 'defective', 'sold'];
 let drawerUnits = [];
+// เครื่องที่อยู่ในสต็อก / DEMO มีปุ่มย้ายเข้า-คืนต่อเครื่อง (migration 067) · สถานะอื่นย้ายไม่ได้ จึงไม่มีปุ่ม
+const UNIT_ACT = { in_stock: { demo: true, label: 'ย้ายเข้า DEMO' }, demo: { demo: false, label: 'คืนเข้าสต็อก' } };
+function unitChipHtml(u, st, hi) {
+  return '<span class="sn ' + st + (u.serial_no === hi ? ' hit' : '') + '" title="รับเข้า ' + formatDateTime(u.received_at) + '">' + escapeHtml(u.serial_no) + '</span>';
+}
 function unitsHtml(list, hi, all) {
   if (!list.length) return '<div class="hint" style="margin-top:14px;">รุ่นนี้ไม่ได้เก็บซีเรียลรายเครื่อง</div>';
   return '<div class="sec-title">ซีเรียลรายเครื่อง</div>' + UNIT_ORDER.map(st => {
@@ -4532,11 +4553,15 @@ function unitsHtml(list, hi, all) {
     if (!xs.length) return '';
     // เครื่องที่ขายแล้วสะสมไปเรื่อย ๆ — โชว์ล่าสุด 12 เครื่อง ที่เหลือกดดูได้
     const cap = st === 'sold' && !all ? 12 : Infinity;
-    return '<div class="sn-group"><h4><b>' + xs.length + '</b>' + escapeHtml(UNIT_STATUS_LABEL[st] || st) + '</h4><div class="sn-list">' +
-      xs.slice(0, cap).map(u => '<span class="sn ' + st + (u.serial_no === hi ? ' hit' : '') + '" title="รับเข้า ' + formatDateTime(u.received_at) + '">' +
-        escapeHtml(u.serial_no) + '</span>').join('') +
-      (xs.length > cap ? '<button class="btn btn-sm btn-ghost" type="button" onclick="document.getElementById(\'dUnits\').innerHTML = unitsHtml(drawerUnits, null, true)">ดูทั้งหมด ' + xs.length + ' เครื่อง</button>' : '') +
-      '</div></div>';
+    const act = UNIT_ACT[st];
+    return '<div class="sn-group"><h4><b>' + xs.length + '</b>' + escapeHtml(UNIT_STATUS_LABEL[st] || st) + '</h4>' +
+      (act
+        ? '<div class="sn-acts">' + xs.map(u => '<div class="sn-row">' + unitChipHtml(u, st, hi) +
+            '<button class="btn btn-sm" type="button" onclick="drawerDemoForm(\'' + u.id + '\', ' + act.demo + ', \'drawer\')">' + act.label + '</button></div>').join('') + '</div>'
+        : '<div class="sn-list">' + xs.slice(0, cap).map(u => unitChipHtml(u, st, hi)).join('') +
+          (xs.length > cap ? '<button class="btn btn-sm btn-ghost" type="button" onclick="document.getElementById(\'dUnits\').innerHTML = unitsHtml(drawerUnits, null, true)">ดูทั้งหมด ' + xs.length + ' เครื่อง</button>' : '') +
+          '</div>') +
+      '</div>';
   }).join('');
 }
 
@@ -4568,6 +4593,7 @@ async function openProduct(id, hiSerial) {
       '<dt>บาร์โค้ด EAN-13</dt><dd>' + escapeHtml(p.barcode_ean13 || '— ยังไม่ผูก') + '</dd></dl>' +
     // stock.html ให้แก้ข้อมูลสินค้าได้เฉพาะเจ้าของร้าน/ผู้ดูแล (RLS products_admin_write) — ใช้เกณฑ์เดียวกัน
     (w ? '<div class="actions"><button class="btn btn-sm" type="button" onclick="adGotoRow(\'products\', ' + q + ')">แก้ไขข้อมูลสินค้า</button></div>' : '') +
+    '<div id="drDemo"></div>' +
     '<div id="dUnits"><div class="hint">กำลังโหลดซีเรียล...</div></div>' +
     '<div class="sec-title">การเคลื่อนไหวล่าสุด</div><div id="dMoves"><div class="hint">กำลังโหลด...</div></div>' +
     '<button class="btn btn-sm btn-ghost" type="button" style="margin-top:8px;" onclick="gotoProductHistory(' + q + ')">ดูประวัติทั้งหมดของรุ่นนี้ →</button>');
@@ -4575,7 +4601,7 @@ async function openProduct(id, hiSerial) {
   drawerId = id;
 
   const [u, m] = await Promise.all([
-    db.from('product_units').select('serial_no, status, received_at').eq('product_id', id).order('received_at', { ascending: false }),
+    db.from('product_units').select('id, serial_no, status, received_at').eq('product_id', id).order('received_at', { ascending: false }),
     db.from('stock_movements').select(MOVE_SELECT).eq('product_id', id).order('created_at', { ascending: false }).limit(10),
   ]);
   if (token !== detailToken) return;
@@ -4665,6 +4691,70 @@ async function drawerMoveSubmit(id, type) {
   showToast('✅ บันทึก' + (type === 'out' ? 'ตัดออก ' + qty : 'ปรับยอด ' + (qty > 0 ? '+' : '') + qty) + ' ชิ้นแล้ว');
   await loadAll();
   if (drawerId === id && detailOpen()) openProduct(id);
+}
+
+// ---- ย้ายเครื่องเข้า / คืนจาก DEMO (migration 067 · unit_set_demo) --------------------
+// เครื่องโชว์/ทดลองที่ร้าน: ย้ายเข้า = หักออกจากยอดสต็อกขาย · คืน = กลับเข้ายอด — สถานะ + รายการใน stock_movements เปลี่ยนในฟังก์ชันเดียวฝั่งฐาน
+// หน้านี้ไม่ลง movement เอง (กฎข้อ 5 — เพิ่มได้อย่างเดียว) · from: 'drawer' = ลิ้นชักสินค้า · 'list' = รายการ DEMO ทั้งร้าน (ใช้เลือกว่าจะเปิดอะไรใหม่หลังบันทึก)
+function demoUnitById(id) { return drawerUnits.concat(demoUnits).find(u => u.id === id); }
+function drawerDemoForm(unitId, toDemo, from) {
+  const u = demoUnitById(unitId);
+  const box = document.getElementById('drDemo');
+  if (!u || !box) { showToast('⚠️ ไม่พบเครื่องนี้ในรายการ ลองเปิดหน้านี้ใหม่'); return; }
+  const title = toDemo ? 'ย้ายเข้า DEMO' : 'คืนเข้าสต็อก';
+  box.innerHTML = '<form class="dr-form" onsubmit="event.preventDefault(); drawerDemoSubmit(\'' + unitId + '\', ' + toDemo + ', \'' + from + '\')">' +
+    '<h3>' + title + ' · ' + escapeHtml(u.serial_no) + '</h3>' +
+    '<p class="hint" style="margin:0 0 10px;">' + (toDemo
+      ? 'เครื่องนี้จะถูกหักออกจากยอดสต็อกขาย และขายไม่ได้จนกว่าจะคืนเข้าสต็อก (เป็นเครื่องโชว์/ทดลองที่ร้าน)'
+      : 'เครื่องนี้จะกลับเข้ายอดสต็อกและขายได้ตามปกติ') + '</p>' +
+    '<div class="field"><label class="lbl" for="drDemoNote">โน้ต (ไม่บังคับ)</label>' +
+      '<input class="input" id="drDemoNote" maxlength="200" placeholder="' + (toDemo ? 'เช่น ตั้งโชว์หน้าร้าน' : 'เช่น ลูกค้าขอซื้อ') + '"></div>' +
+    '<div class="actions"><button class="btn btn-primary" id="drDemoBtn" type="submit">ยืนยัน' + title + '</button>' +
+    '<button class="btn" type="button" onclick="document.getElementById(\'drDemo\').innerHTML = \'\'">ยกเลิก</button></div>' +
+    '<p class="hint">บันทึกแล้วลงประวัติสต็อกถาวร แก้หรือลบไม่ได้ — ถ้าทำผิดให้กดย้อนกลับด้านตรงข้าม</p></form>';
+  box.scrollIntoView({ block: 'nearest' });
+  document.getElementById('drDemoNote').focus();
+}
+async function drawerDemoSubmit(unitId, toDemo, from) {
+  const note = document.getElementById('drDemoNote').value.trim();
+  const btn = document.getElementById('drDemoBtn');
+  const pid = drawerId;
+  const what = toDemo ? 'ย้ายเข้า DEMO' : 'คืนเข้าสต็อก';
+  btn.disabled = true;
+  try {
+    const { error } = await db.rpc('unit_set_demo', { p_unit: unitId, p_demo: toDemo, p_note: note || null });
+    if (error) {
+      console.error('[unit_set_demo]', error);
+      // ยังไม่มีฟังก์ชันในฐาน = migration 067 ยังไม่ได้รัน — บอกตรง ๆ ไม่โชว์ข้อความดิบของ PostgREST
+      const noFn = error.code === 'PGRST202' || (/unit_set_demo/.test(error.message || '') && /schema cache|find the function/i.test(error.message || ''));
+      showFatalError(noFn ? what + ' ยังไม่ได้ — ฐานข้อมูลยังไม่มีคำสั่งนี้ (ต้องรัน migration 067 ก่อน)' : what + ' ไม่สำเร็จ: ' + error.message);
+      return;
+    }
+  } catch (err) {
+    showFatalError('ติดต่อเซิร์ฟเวอร์ไม่สำเร็จ: ' + err.message);
+    return;
+  } finally {
+    btn.disabled = false;
+  }
+  showToast('✅ ' + what + ' แล้ว');
+  await loadAll();
+  if (from === 'list') openDemoList();
+  else if (pid && drawerId === pid && detailOpen()) openProduct(pid);
+}
+// รายการเครื่อง DEMO ทั้งร้าน (ปุ่ม "เครื่อง DEMO" บนผนัง) — จัดตามรุ่น คืนเข้าสต็อกได้จากตรงนี้เลย
+function openDemoList() {
+  const by = {};
+  demoUnits.forEach(u => { (by[u.product_id] = by[u.product_id] || []).push(u); });
+  const models = Object.keys(by).map(pid => { const p = products.find(x => x.id === pid); return { pid, name: p ? p.name : 'ไม่ทราบรุ่น' }; })
+    .sort((a, b) => a.name.localeCompare(b.name, 'th'));
+  openDetail('เครื่อง DEMO (' + demoUnits.length + ')',
+    '<p class="hint" style="margin-top:0;">เครื่องโชว์/ทดลองที่ร้าน — ไม่นับในยอดสต็อก และขายไม่ได้จนกว่าจะคืนเข้าสต็อก</p>' +
+    '<div id="drDemo"></div>' +
+    (models.length ? models.map(m => '<div class="sn-group"><h4><b>' + by[m.pid].length + '</b>' + escapeHtml(m.name) + '</h4><div class="sn-acts">' +
+      by[m.pid].map(u => '<div class="sn-row">' + unitChipHtml(u, 'demo') +
+        '<button class="btn btn-sm" type="button" onclick="drawerDemoForm(\'' + u.id + '\', false, \'list\')">คืนเข้าสต็อก</button></div>').join('') + '</div>' +
+      '<button class="btn btn-sm btn-ghost" type="button" style="margin-top:6px;" onclick="openProduct(\'' + m.pid + '\')">เปิดรุ่นนี้ →</button></div>').join('')
+      : '<div class="hint">ตอนนี้ไม่มีเครื่อง DEMO</div>'));
 }
 
 // ---- รูปสินค้า (ถัง product-images · migration 030) --------------------------
@@ -5137,6 +5227,10 @@ async function countScan(value) {
     Object.keys(cnt.units).forEach(id => { if (cnt.units[id].includes(value)) { pid = id; serial = value; } });
     if (!pid) {
       const f = await findByBarcode(value);
+      if (f.product && f.viaSerial && f.unit && f.unit.status === 'demo') {
+        trayNote('ซีเรียล ' + value + ' เป็นเครื่อง DEMO — ไม่นับรวมในยอดสต็อก ไม่ต้องนับ', true);
+        return;
+      }
       if (f.product && f.viaSerial && f.unit && f.unit.status !== 'in_stock') {
         trayNote('ซีเรียล ' + value + ' สถานะ "' + (UNIT_STATUS_LABEL[f.unit.status] || f.unit.status) + '" ไม่ควรอยู่บนชั้น — ไม่ได้นับ แจ้งเจ้าของร้าน', true);
         return;
@@ -5544,6 +5638,9 @@ function addToCart(productId) {
 // บรรทัดที่มีซีเรียลล็อกจำนวนเท่าจำนวนซีเรียลเสมอ เพราะฝั่งฐานข้อมูลแตกเป็น
 // sale_items บรรทัดละเครื่อง (product_unit_id เก็บได้ค่าเดียว)
 function addUnitToCart(product, unit) {
+  if (unit.status === 'demo') {
+    return 'ซีเรียล ' + unit.serial_no + ' เป็นเครื่อง DEMO ของร้าน — ต้อง "คืนเข้าสต็อก" ที่ผนังสต็อกก่อนจึงจะขายได้';
+  }
   if (unit.status !== 'in_stock') {
     return 'ซีเรียล ' + unit.serial_no + ' ขายออกไปแล้วหรือไม่พร้อมขาย (สถานะ ' + unit.status + ')';
   }
