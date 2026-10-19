@@ -96,6 +96,7 @@
 <header class="top">
   <span class="logo"><b>DJ LAB</b>หน้าครู</span>
   <span class="who" id="who"></span>
+  <a class="btn btn-sm" id="profileLink" href="teacher-profile.html" hidden>โปรไฟล์ของฉัน (ขึ้นเว็บ)</a>
   <button class="btn btn-sm" id="logoutBtn" type="button" hidden>ออกจากระบบ</button>
 </header>
 <main class="wrap" id="app" aria-live="polite"><div class="empty">กำลังโหลด…</div></main>
@@ -232,6 +233,7 @@ function reset() {
   st = blank();
   document.getElementById('who').textContent = '';
   document.getElementById('logoutBtn').hidden = true;
+  document.getElementById('profileLink').hidden = true;
   $app.innerHTML = '';
 }
 
@@ -263,6 +265,7 @@ async function loadAll() {
   if (!me.error && me.data && me.data[0]) st.me = me.data[0].display_name || '';
   document.getElementById('who').textContent = st.me ? 'ครู ' + st.me : '';
   document.getElementById('logoutBtn').hidden = false;
+  document.getElementById('profileLink').hidden = false;          // หน้าโปรไฟล์ครูบนเว็บ (068) — เฉพาะผู้ที่ my_teacher_id ไม่ว่าง (หน้านี้เปิดได้เฉพาะครูอยู่แล้ว)
   if (st.det) await loadNotes(st.det.id, true);
   render();
 }

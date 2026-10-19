@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#111111">
+<meta name="robots" content="noindex">
+<title>DJ LAB SIAM — โปรไฟล์ของฉัน</title>
+<style>
+  :root {
+    --bg: #F4F2EC;
+    --surface: #FFFFFF;
+    --surface2: #ECE9E0;
+    --black: #111111;
+    --red: #CC001A;
+    --text: #111111;
+    --text2: #4A4740;
+    --line: #D9D5CA;
+    --line-strong: #111111;
+    --ok: #17692E;
+    --ok-soft: #E3F1E7;
+    --warn-soft: #FFF1C7;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 "Noto Sans Thai", "Segoe UI", -apple-system, system-ui, sans-serif; min-height: 100vh; min-height: 100dvh; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  .top { position: sticky; top: 0; z-index: 20; background: var(--black); color: #fff; border-bottom: 3px solid var(--red); padding: 10px 16px; padding-top: calc(10px + env(safe-area-inset-top)); display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .top .logo { font-weight: 800; letter-spacing: .5px; }
+  .top .logo b { background: var(--red); padding: 2px 8px; margin-right: 8px; }
+  .top .who { margin-left: auto; font-size: 14px; text-align: right; overflow-wrap: anywhere; }
+  .top a, .top .btn { color: #fff; border-color: #fff; background: transparent; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 16px 16px 48px; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 16px; border: 1px solid var(--line-strong); background: var(--surface); font-weight: 600; cursor: pointer; border-radius: 0; text-decoration: none; color: var(--text); }
+  .btn:disabled { color: #6E6B64; background: var(--surface2); cursor: not-allowed; }
+  .btn-primary { background: var(--black); color: #fff; }
+  .btn-primary:disabled { color: #fff; background: #6E6B64; }
+  .btn-danger { border-color: var(--red); color: var(--red); }
+  .btn-sm { min-height: 44px; padding: 0 12px; font-size: 14px; }
+  .field { margin-bottom: 14px; }
+  .lbl { display: block; font-weight: 700; margin-bottom: 4px; font-size: 15px; }
+  .input { width: 100%; min-height: 44px; padding: 8px 10px; border: 1px solid var(--line-strong); background: var(--surface); font-size: 16px; border-radius: 0; }
+  textarea.input { min-height: 160px; resize: vertical; }
+  .hint { font-size: 14px; color: var(--text2); margin-top: 4px; }
+  .cnt { font-size: 14px; color: var(--text2); text-align: right; }
+  .wk-red { color: var(--red); font-weight: 700; }
+  .alert { padding: 10px 14px; border: 1px solid var(--line-strong); background: var(--surface); margin-bottom: 14px; font-size: 14px; overflow-wrap: anywhere; }
+  .alert-red { border-color: var(--red); }
+  .alert-warn { background: var(--warn-soft); }
+  .alert-ok { border-color: var(--ok); color: var(--ok); background: var(--ok-soft); font-weight: 600; }
+  .alert ul { margin: 6px 0 0; padding-left: 20px; }
+  .layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+  @media (max-width: 900px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+  .card { background: var(--surface); border: 1px solid var(--line); padding: 14px 16px; margin-bottom: 14px; overflow-wrap: anywhere; }
+  .card h2 { font-size: 17px; margin: 0 0 10px; }
+  .row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+  .row .input { flex: 1; min-width: 0; }
+  .acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; align-items: center; }
+  .pf { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 10px; border: 1px solid var(--line); padding: 8px; margin-bottom: 8px; background: var(--surface2); }
+  .pf img { width: 96px; height: 96px; object-fit: cover; background: #fff; border: 1px solid var(--line); }
+  .pf .btns { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+  .pv h3 { font-size: 22px; margin: 0 0 8px; }
+  .pv .bio { white-space: pre-wrap; margin: 0 0 12px; }
+  .pv ul { margin: 0 0 12px; padding-left: 20px; }
+  .pv .links { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  .pv .shots { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .pv .shots img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border: 1px solid var(--line); background: #fff; }
+  .pv .empty { color: var(--text2); }
+  .empty { padding: 18px 0; color: var(--text2); text-align: center; }
+  .chk { display: flex; align-items: center; gap: 10px; min-height: 44px; font-weight: 600; }
+  .chk input { width: 22px; height: 22px; flex: none; }
+  .login { max-width: 420px; margin: 40px auto; background: var(--surface); border: 1px solid var(--line-strong); padding: 20px; }
+  .login h1 { font-size: 20px; margin: 0 0 12px; }
+  .pill { display: inline-block; font-size: 14px; font-weight: 700; padding: 0 8px; border: 1px solid var(--red); color: var(--red); background: var(--surface); }
+</style>
+</head>
+<body>
+<header class="top">
+  <span class="logo"><b>DJ LAB</b>โปรไฟล์ของฉัน</span>
+  <a class="btn btn-sm" id="backLink" href="teacher.html">← กลับ</a>
+  <span class="who" id="who"></span>
+  <button class="btn btn-sm" id="logoutBtn" type="button" hidden>ออกจากระบบ</button>
+</header>
+<main class="wrap" id="app" aria-live="polite"><div class="empty">กำลังโหลด…</div></main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+// ===========================================================================
+// โปรไฟล์ของฉัน (migration 068 · เจ้าของสั่ง 18 ต.ค. 69) — ครูแก้โปรไฟล์ตัวเองในคอนโซล แล้ว "ขึ้นเว็บทันที" (djlabsiam.com/teachers/<ชื่อ>/) ไม่มีขั้นอนุมัติ
+//   ใครเห็นอะไร: ครู (ล้วน/พนักงาน) = ฟอร์มของตัวเองอย่างเดียว · เจ้าของ/ผู้ดูแล = เลือกครูได้ทั้ง 6 + สวิตช์ซ่อนโปรไฟล์ (ครูเห็นแค่ป้ายถ้าถูกซ่อน) · คนอื่น = ข้อความ "หน้านี้สำหรับครู"
+//   สิทธิ์ตัวจริงอยู่ที่ฐาน (RLS + CHECK + trigger + นโยบายถังรูป) — หน้านี้ตรวจซ้ำอีกชั้นด้วยกติกาเดียวกัน (เวกเตอร์ชุดเดียวกับเทสต์ฐาน: tests/lib/teacher-profile-vectors.json)
+//   อ่านผ่าน: rpc my_teacher_id · admins (บทบาทตัวเอง) · teacher_profiles · teachers (ชื่อ) · เขียนผ่าน: update teacher_profiles (เฉพาะคอลัมน์โปรไฟล์ + is_hidden ของเจ้าของ/ผู้ดูแล) · อัปโหลดรูปเข้าถัง teacher-portfolio
+//   ไม่มี insert/delete ตารางโปรไฟล์ (แถวสร้างด้วย migration) · ไม่ลบไฟล์ในถัง (เอารูปออกจากรายการเท่านั้น — ให้เจ้าของ undo ย้อนรูปได้)
+// ⚠️ ข้อความทุกช่อง = esc เสมอ · ห้ามใส่ลิงก์จากข้อมูลครูโดยไม่ผ่านตัวตรวจโฮสต์ · ห้าม console.log เนื้อหาโปรไฟล์
+// ⚠️ บันทึกเทียบเลข rev (จำนวนเต็มที่ trigger นับ) — ไม่เทียบ updated_at (ไมโครวินาทีหายเมื่อผ่าน Date) · 0 แถว = แถบแดง ไม่ขึ้นสำเร็จหลอก
+// ⚠️ ตัวแปรฐานข้อมูลชื่อ db เท่านั้น (ห้ามชื่อ supabase)
+// ===========================================================================
+function showFatalError(msg) {
+  let box = document.getElementById('fatalError');
+  if (!box) {
+    box = document.createElement('div');
+    box.id = 'fatalError';
+    box.setAttribute('role', 'alert');
+    box.style.cssText = 'position:fixed;left:0;right:0;top:0;z-index:99999;background:#CC001A;color:#fff;font:15px/1.5 sans-serif;padding:12px 40px 12px 16px;white-space:pre-wrap;word-break:break-word;max-height:45vh;overflow:auto;';
+    const close = document.createElement('button');
+    close.textContent = '✕';
+    close.setAttribute('aria-label', 'ปิดข้อความ');
+    close.style.cssText = 'position:absolute;top:6px;right:8px;background:transparent;border:none;color:#fff;font-size:19px;padding:4px 8px;cursor:pointer;';
+    close.addEventListener('click', () => box.remove());
+    box.appendChild(close);
+    document.body.appendChild(box);
+  }
+  let t = box.querySelector('.msg');
+  if (!t) { t = document.createElement('div'); t.className = 'msg'; box.appendChild(t); }
+  t.textContent = msg;
+}
+window.addEventListener('error', e => showFatalError('เกิดข้อผิดพลาดในหน้านี้: ' + e.message));
+window.addEventListener('unhandledrejection', e => showFatalError('เกิดข้อผิดพลาด: ' + ((e.reason && e.reason.message) || e.reason)));
+
+const SUPABASE_URL = 'https://vvtefgjseihadsmvuntd.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ2dGVmZ2pzZWloYWRzbXZ1bnRkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU2OTM5ODUsImV4cCI6MjEwMTI2OTk4NX0.tgRD7_5hZuUG4zvajnIbe-tuNPNqELURSHIYtnh-MyM';
+if (!window.supabase || !window.supabase.createClient) {
+  showFatalError('โหลดไลบรารีระบบไม่สำเร็จ — ตรวจอินเทอร์เน็ตแล้วรีเฟรชหน้า');
+  throw new Error('supabase-js not loaded');
+}
+const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const BUCKET = 'teacher-portfolio';
+const WEB_BASE = 'https://djlabsiam.com/teachers/';
+const NO_TABLE = /does not exist|schema cache|Could not find|PGRST20[24]|42P01|42883/i;
+const MAX_BYTES = 1000000;               // เพดานของถัง 1 MB (1,048,576) — ย่อให้ต่ำกว่าเล็กน้อย
+const MAX_EDGE = 1600;
+const SOCIALS = [['instagram', 'Instagram', 'https://www.instagram.com/ชื่อผู้ใช้'], ['facebook', 'Facebook', 'https://www.facebook.com/ชื่อเพจ'],
+                 ['youtube', 'YouTube', 'https://www.youtube.com/@ชื่อช่อง'], ['tiktok', 'TikTok', 'https://www.tiktok.com/@ชื่อผู้ใช้']];
+
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+// ── ตัวตรวจ: สำเนาของ tp_* ใน migration 068 (แก้ที่ใดต้องแก้ทั้งสองที่ — เทสต์ใช้เวกเตอร์ชุดเดียวกัน) · คืน '' = ผ่าน · ไม่ผ่านคืนข้อความไทย ──
+const TP = (() => {
+  const INVIS = new RegExp('[\\u200b-\\u200f\\u202a-\\u202e\\u2060-\\u2069\\ufeff]');
+  const CTRL_NL = new RegExp('[\\u0001-\\u0009\\u000b-\\u001f\\u007f]');          // bio: ขึ้นบรรทัดใหม่ (\n) ได้
+  const CTRL = new RegExp('[\\u0001-\\u001f\\u007f]');
+  const LINK = /(:\/\/|www\.)/i;
+  const len = s => Array.from(s).length;
+  const trimLen = s => len(s.replace(/^ +| +$/g, ''));                                // btrim ของฐานตัดเฉพาะช่องว่าง
+  const SOC_RE = {
+    instagram: /^https:\/\/(www\.)?instagram\.com\/[A-Za-z0-9._]{1,30}\/?$/,
+    facebook: /^https:\/\/(www\.)?facebook\.com\/[A-Za-z0-9.-]{5,50}\/?$/,
+    tiktok: /^https:\/\/(www\.)?tiktok\.com\/@[A-Za-z0-9._]{2,24}\/?$/,
+    youtube: /^https:\/\/(www\.)?youtube\.com\/(@[A-Za-z0-9._-]{3,30}|channel\/[A-Za-z0-9_-]{20,30}|c\/[A-Za-z0-9._-]{1,40})\/?$/,
+  };
+  const text = (t, max, nl, min) => {
+    if (typeof t !== 'string') return 'ไม่ใช่ข้อความ';
+    if (len(t) > max) return 'ยาวเกิน ' + max + ' ตัวอักษร (ตอนนี้ ' + len(t) + ')';
+    if (trimLen(t) < min) return 'ต้องไม่ว่าง';
+    if (/[<>]/.test(t)) return 'มีตัวอักษร < หรือ > (ใส่ข้อความล้วนเท่านั้น)';
+    if (INVIS.test(t)) return 'มีตัวอักษรล่องหน';
+    if ((nl ? CTRL_NL : CTRL).test(t)) return nl ? 'มีตัวควบคุมที่ไม่รองรับ' : 'มีตัวควบคุมหรือขึ้นบรรทัดใหม่ (ช่องนี้บรรทัดเดียว)';
+    if (LINK.test(t)) return 'มีลิงก์ในข้อความ (ใส่ลิงก์ได้เฉพาะช่องโซเชียล)';
+    return '';
+  };
+  const isObj = v => v !== null && typeof v === 'object' && !Array.isArray(v);
+  const highlights = j => {
+    if (!Array.isArray(j)) return 'จุดเด่นต้องเป็นรายการ';
+    if (j.length > 6) return 'จุดเด่นได้ไม่เกิน 6 รายการ';
+    for (let i = 0; i < j.length; i++) { const e = typeof j[i] === 'string' ? text(j[i], 80, false, 1) : 'ไม่ใช่ข้อความ'; if (e) return 'จุดเด่นข้อ ' + (i + 1) + ': ' + e; }
+    return '';
+  };
+  const socials = j => {
+    if (!isObj(j)) return 'ลิงก์โซเชียลผิดรูปแบบ';
+    for (const k of Object.keys(j)) {
+      const re = SOC_RE[k], v = j[k];
+      if (!re) return 'ไม่รองรับช่อง ' + k;
+      if (typeof v !== 'string' || v.length > 200 || !re.test(v)) return 'ลิงก์ ' + k + ' ไม่ถูกต้อง — ใช้ลิงก์โปรไฟล์ https ของเว็บนั้นตรง ๆ (ไม่มี ? # หรือชื่อที่ไม่ตรง)';
+    }
+    return '';
+  };
+  const video = v => (v === null || (typeof v === 'string' && /^[A-Za-z0-9_-]{11}$/.test(v))) ? '' : 'รหัสวิดีโอ YouTube ต้องเป็น 11 ตัว (ตัวอักษร ตัวเลข - _)';
+  const portfolio = (j, slug) => {
+    if (!Array.isArray(j) || !slug) return 'รูป Portfolio ผิดรูปแบบ';
+    if (j.length > 8) return 'รูป Portfolio ได้ไม่เกิน 8 รูป';
+    const re = new RegExp('^' + slug + '/[A-Za-z0-9_-]{1,60}\\.(jpg|webp)$');
+    for (let i = 0; i < j.length; i++) {
+      const e = j[i], n = 'รูปที่ ' + (i + 1) + ': ';
+      if (!isObj(e) || Object.keys(e).length !== 2 || typeof e.path !== 'string' || typeof e.alt !== 'string') return n + 'ข้อมูลผิดรูปแบบ';
+      if (!re.test(e.path)) return n + 'ชื่อไฟล์ไม่ถูกต้อง';
+      const a = text(e.alt, 120, false, 1);
+      if (a) return n + 'คำอธิบายรูป (alt) ' + (trimLen(e.alt) < 1 ? 'ต้องกรอก' : a);
+    }
+    return '';
+  };
+  const bio = t => text(t, 1200, true, 0);
+  return { text, bio, highlights, socials, video, portfolio, SOC_RE, INVIS };
+})();
+
+// ── ทำความสะอาดข้อความที่ครูวาง (ตัวล่องหน U+200B ฯลฯ ติดมากับข้อความไทยที่ก๊อปมาบ่อย) — ตัดให้เงียบ ๆ แล้ว "แจ้งผู้ใช้" · ฐานยังปฏิเสธตามเดิม ──
+const INVIS_G = new RegExp(TP.INVIS.source, 'g');
+function cleanText(s, nl) {
+  let t = String(s == null ? '' : s), n = 0;
+  t = t.replace(INVIS_G, () => { n++; return ''; });
+  t = t.replace(/\r\n?/g, '\n');
+  t = nl ? t.replace(/[\u0001-\u0009\u000b-\u001f\u007f]/g, ' ') : t.replace(/[\u0001-\u001f\u007f]/g, ' ');
+  return { text: t, removed: n };
+}
+function normSocial(v) {
+  let s = String(v == null ? '' : v).trim().replace(INVIS_G, '');
+  if (!s) return '';
+  s = s.replace(/[?#].*$/, '');                                      // ตัด query / hash (ฐานไม่รับ)
+  if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(s)) s = 'https://' + s.replace(/^\/+/, '');
+  s = s.replace(/^http:\/\//i, 'https://');
+  const m = /^(https:\/\/)([^/]*)(.*)$/i.exec(s);
+  return m ? m[1].toLowerCase() + m[2].toLowerCase() + m[3] : s;      // โฮสต์ตัวพิมพ์เล็ก (ฐานบังคับ) · ชื่อใน path คงตัวพิมพ์เดิม
+}
+function ytId(v) {
+  const s = String(v == null ? '' : v).trim();
+  if (!s) return null;
+  if (/^[A-Za-z0-9_-]{11}$/.test(s)) return s;
+  const m = /^https:\/\/(?:www\.|m\.)?(?:youtube\.com\/(?:watch\?(?:[^#]*&)?v=|embed\/|shorts\/|live\/)|youtu\.be\/)([A-Za-z0-9_-]{11})(?:[?&#\/].*)?$/.exec(s);
+  return m ? m[1] : undefined;                                        // undefined = อ่านไม่ออก (ขึ้นข้อความแดง)
+}
+
+// ── สถานะ ──
+function blank() {
+  return { uid: null, tid: null, role: null, phase: 'boot', rows: [], names: {}, sel: null, f: null, notes: [], errs: [], flash: '', busy: false, missing: false, error: '',
+           loaded: false, tok: 0, loginErr: '', loginBusy: false, dirty: false, uploading: false };
+}
+let st = blank();
+const $app = document.getElementById('app');
+const isMgr = () => st.role === 'owner' || st.role === 'admin';
+const rowOf = id => st.rows.find(r => r.id === id) || null;
+const curRow = () => rowOf(st.sel);
+
+function errText(e) {
+  const m = String((e && e.message) || '');
+  if (/[ก-๙]/.test(m)) return m;
+  if ((e && e.code === '42501') || /row-level security|permission denied/i.test(m)) return 'ไม่มีสิทธิ์ทำรายการนี้';
+  if (NO_TABLE.test(m)) return 'ฐานข้อมูลยังไม่ได้ติดตั้งระบบโปรไฟล์ครู (migration 068) — แจ้งเจ้าของร้าน';
+  if (e && e.code === '23514') return 'ข้อมูลไม่ผ่านกติกาของฐานข้อมูล — ตรวจความยาว/ลิงก์/ตัวอักษรอีกครั้ง';
+  return 'ฐานข้อมูลตอบกลับผิดปกติ' + (e && e.code ? ' (รหัส ' + e.code + ')' : '');
+}
+
+// ── เข้าสู่ระบบ ──
+async function onSession(session) {
+  const uid = session && session.user ? session.user.id : null;
+  if (uid && uid === st.uid && st.phase !== 'login') return;
+  reset();
+  if (!uid) { st.phase = 'login'; render(); return; }
+  st.uid = uid;
+  st.phase = 'check';
+  render();
+  const [me, ad] = await Promise.all([db.rpc('my_teacher_id'), db.from('admins').select('role').eq('id', uid).eq('is_active', true).maybeSingle()]);
+  if (uid !== st.uid) return;
+  if (me.error && !NO_TABLE.test(me.error.message || '')) { showFatalError('ตรวจสิทธิ์ครูไม่สำเร็จ: ' + errText(me.error)); }
+  st.tid = me.error ? null : (me.data || null);
+  st.role = !ad.error && ad.data ? ad.data.role : null;
+  if (!st.tid && !isMgr()) { st.phase = 'notAllowed'; render(); return; }
+  st.phase = 'main';
+  document.getElementById('backLink').setAttribute('href', st.role ? 'desk.html' : 'teacher.html');
+  render();
+  loadAll();
+}
+function reset() {
+  st = blank();
+  document.getElementById('who').textContent = '';
+  document.getElementById('logoutBtn').hidden = true;
+  $app.innerHTML = '';
+}
+
+// ── โหลด ──
+const COLS = 'id, slug, bio, highlights, socials, video_id, portfolio, is_hidden, rev, updated_at';
+async function loadAll(keepForm) {
+  if (!st.uid) return;
+  const uid = st.uid, tok = ++st.tok;
+  const [pr, tn] = await Promise.all([db.from('teacher_profiles').select(COLS).order('slug'), db.from('teachers').select('id, display_name')]);
+  if (uid !== st.uid || tok !== st.tok) return;
+  st.loaded = true;
+  if (pr.error) {
+    console.error('[Profile load]', pr.error.code || '');
+    st.rows = [];
+    st.missing = NO_TABLE.test(pr.error.message || '');
+    st.error = st.missing ? '' : 'โหลดโปรไฟล์ไม่สำเร็จ: ' + errText(pr.error);
+    if (st.error) showFatalError(st.error);
+  } else {
+    st.missing = false; st.error = '';
+    st.rows = pr.data || [];
+    st.names = {};
+    (tn.data || []).forEach(t => { st.names[t.id] = t.display_name; });
+    if (!rowOf(st.sel)) st.sel = rowOf(st.tid) ? st.tid : (st.rows[0] ? st.rows[0].id : null);
+    if (!keepForm || !st.f) loadForm();
+  }
+  const mine = st.tid && st.names[st.tid];
+  document.getElementById('who').textContent = mine ? 'ครู ' + mine : (st.role === 'owner' ? 'เจ้าของร้าน' : st.role === 'admin' ? 'ผู้ดูแล' : '');
+  document.getElementById('logoutBtn').hidden = false;
+  render();
+}
+function loadForm() {
+  const r = curRow();
+  st.notes = []; st.errs = []; st.dirty = false;
+  if (!r) { st.f = null; return; }
+  const soc = {};
+  SOCIALS.forEach(([k]) => { soc[k] = (r.socials && typeof r.socials[k] === 'string') ? r.socials[k] : ''; });
+  st.f = { bio: r.bio || '', hl: Array.isArray(r.highlights) ? r.highlights.slice() : [], soc, video: r.video_id || '',
+           pf: Array.isArray(r.portfolio) ? r.portfolio.map(p => ({ path: p.path, alt: p.alt })) : [] };
+}
+
+// ── รวมค่าในฟอร์ม → ข้อมูลที่จะส่ง (ทำความสะอาด + ตรวจซ้ำด้วยกติกาเดียวกับฐาน) · คืน { patch, errs, notes } ──
+function collect() {
+  const f = st.f, r = curRow(), errs = [], notes = [];
+  const note = (what, n) => { if (n) notes.push('ตัดตัวอักษรล่องหนออก ' + n + ' ตัว (' + what + ')'); };
+  const b = cleanText(f.bio, true); note('ประวัติ', b.removed);
+  b.text = b.text.replace(/ +\n/g, '\n').replace(/^\s+|\s+$/g, '');                 // ตัดช่องว่างท้ายบรรทัด/หัวท้ายข้อความ
+  const hl = [];
+  f.hl.forEach((h, i) => { const c = cleanText(h, false); note('จุดเด่นข้อ ' + (i + 1), c.removed); const t = c.text.replace(/^ +| +$/g, ''); if (t) hl.push(t); });
+  const soc = {};
+  SOCIALS.forEach(([k, label]) => { const v = normSocial(f.soc[k]); if (v) soc[k] = v; });
+  let video = null;
+  if (String(f.video || '').trim()) { video = ytId(f.video); if (video === undefined) { errs.push('วิดีโอ: อ่านรหัสจากลิงก์ไม่ได้ — วางลิงก์ YouTube (youtube.com/watch?v=… หรือ youtu.be/…) หรือรหัส 11 ตัว'); video = null; } }
+  const pf = f.pf.map((p, i) => { const c = cleanText(p.alt, false); note('คำอธิบายรูปที่ ' + (i + 1), c.removed); return { path: p.path, alt: c.text.replace(/^ +| +$/g, '') }; });
+  let e;
+  if ((e = TP.bio(b.text))) errs.push('ประวัติ: ' + e);
+  if ((e = TP.highlights(hl))) errs.push(e);
+  if ((e = TP.socials(soc))) errs.push(e);
+  if ((e = TP.video(video))) errs.push(e);
+  if ((e = TP.portfolio(pf, r && r.slug))) errs.push(e);
+  return { patch: { bio: b.text, highlights: hl, socials: soc, video_id: video, portfolio: pf }, errs, notes };
+}
+
+// ── วาด ──
+function loginHtml() {
+  return '<form class="login" id="loginForm" autocomplete="on"><h1>เข้าสู่ระบบ — โปรไฟล์ของฉัน</h1>' +
+    '<div class="field"><label class="lbl" for="lgEmail">อีเมล</label><input id="lgEmail" class="input" type="email" autocomplete="username" required></div>' +
+    '<div class="field"><label class="lbl" for="lgPass">รหัสผ่าน</label><input id="lgPass" class="input" type="password" autocomplete="current-password" required></div>' +
+    (st.loginErr ? '<div class="alert alert-red wk-red" id="loginErr" role="alert">' + esc(st.loginErr) + '</div>' : '') +
+    '<button class="btn btn-primary" id="loginBtn" type="submit"' + (st.loginBusy ? ' disabled' : '') + '>' + (st.loginBusy ? 'กำลังเข้าสู่ระบบ…' : 'เข้าสู่ระบบ') + '</button></form>';
+}
+function notAllowedHtml() {
+  return '<div class="card" id="notAllowed"><h2>หน้านี้สำหรับครู</h2><p>บัญชีนี้ยังไม่ได้ผูกกับครู — แจ้งเจ้าของร้านให้ผูกบัญชีกับชื่อครูก่อน</p>' +
+    '<div class="acts"><a class="btn" href="desk.html">เข้าคอนโซลร้าน (ทีมงาน)</a></div></div>';
+}
+const RED_WARN = '<div class="alert alert-red" id="warnBox"><div class="wk-red">⚠️ ข้อความและรูปที่บันทึกจะขึ้นเว็บสาธารณะทันที — ไม่มีคนตรวจก่อน</div>' +
+  '<ul><li class="wk-red">ห้ามใช้ภาพโลโก้หรือภาพผลิตภัณฑ์ของ Pioneer DJ · AlphaTheta · NEO by OYAIDE ที่ไม่มีสิทธิ์ใช้งาน</li>' +
+  '<li class="wk-red">ห้ามมีใบหน้านักเรียน ผู้เยาว์ หรือข้อมูลลูกค้า (ชื่อ เบอร์ โปรไฟล์) ในรูปหรือในข้อความ</li>' +
+  '<li class="wk-red">ใส่ลิงก์ได้เฉพาะช่องโซเชียล (Instagram · Facebook · YouTube · TikTok) ไม่ใส่ลิงก์ในข้อความ</li></ul>' +
+  '<div class="hint">ร้านย้อนการแก้ไขหรือซ่อนโปรไฟล์ได้ทุกเมื่อ</div></div>';
+function publicUrl(path) { return SUPABASE_URL + '/storage/v1/object/public/' + BUCKET + '/' + String(path).split('/').map(encodeURIComponent).join('/'); }
+function mainHtml() {
+  if (st.missing) return '<div class="alert alert-warn" id="missing">ฐานข้อมูลยังไม่ได้ติดตั้งระบบโปรไฟล์ครู (migration 068) — แจ้งเจ้าของร้าน</div>';
+  if (!st.loaded) return '<div class="empty">กำลังโหลด…</div>';
+  const r = curRow(), f = st.f;
+  if (!r || !f) return '<div class="card" id="noRow"><h2>ยังไม่มีโปรไฟล์ของคุณในระบบ</h2><p>แจ้งเจ้าของร้านให้เพิ่มแถวโปรไฟล์ก่อน</p></div>' + (st.error ? '<div class="alert alert-red wk-red">' + esc(st.error) + '</div>' : '');
+  const name = st.names[r.id] || r.slug;
+  const mine = r.id === st.tid;
+  return (isMgr() ? '<div class="card"><label class="lbl" for="tsel">เลือกครู</label><select id="tsel" class="input">' +
+      st.rows.map(x => '<option value="' + esc(x.id) + '"' + (x.id === st.sel ? ' selected' : '') + '>' + esc(st.names[x.id] || x.slug) + (x.is_hidden ? ' (ซ่อนจากเว็บ)' : '') + '</option>').join('') + '</select>' +
+      (mine ? '' : '<div class="hint wk-red">คุณกำลังแก้โปรไฟล์ของ ' + esc(name) + ' (ไม่ใช่ของคุณ)</div>') +
+      '<label class="chk"><input type="checkbox" id="hideChk" data-act="hide"' + (r.is_hidden ? ' checked' : '') + (st.busy ? ' disabled' : '') + '> ซ่อนโปรไฟล์นี้จากเว็บ (มีผลทันที)</label></div>'
+    : (r.is_hidden ? '<div class="alert alert-warn" id="hiddenBanner"><span class="pill">ถูกซ่อน</span> โปรไฟล์ของคุณถูกซ่อนจากเว็บโดยร้านอยู่ — ติดต่อเจ้าของร้านหากต้องการให้แสดง</div>' : '')) +
+    RED_WARN +
+    (st.flash ? '<div class="alert alert-ok" id="flash" role="status">' + esc(st.flash) + '</div>' : '') +
+    (st.errs.length ? '<div class="alert alert-red" id="errBox" role="alert"><div class="wk-red">บันทึกไม่ได้ — แก้ข้อต่อไปนี้ก่อน</div><ul>' + st.errs.map(e => '<li class="wk-red">' + esc(e) + '</li>').join('') + '</ul></div>' : '') +
+    (st.notes.length ? '<div class="alert alert-warn" id="notesBox">' + st.notes.map(n => '<div>' + esc(n) + '</div>').join('') + '</div>' : '') +
+    '<div class="layout"><div id="formCol">' +
+      '<div class="card"><h2>ประวัติ (bio)</h2><div class="field"><textarea id="f_bio" class="input" data-k="bio" maxlength="1300" aria-label="ประวัติ">' + esc(f.bio) + '</textarea>' +
+        '<div class="cnt"><span id="cnt_bio"></span></div><div class="hint">ข้อความล้วนไม่เกิน 1,200 ตัวอักษร · ขึ้นบรรทัดใหม่ได้ · ไม่ใส่ลิงก์</div></div></div>' +
+      '<div class="card"><h2>จุดเด่น / รางวัล</h2>' +
+        f.hl.map((h, i) => '<div class="row"><input class="input" data-hl="' + i + '" maxlength="100" value="' + esc(h) + '" aria-label="จุดเด่นข้อ ' + (i + 1) + '">' +
+          '<button class="btn btn-sm" type="button" data-act="hl-up" data-i="' + i + '" aria-label="เลื่อนขึ้น"' + (i === 0 ? ' disabled' : '') + '>↑</button>' +
+          '<button class="btn btn-sm" type="button" data-act="hl-dn" data-i="' + i + '" aria-label="เลื่อนลง"' + (i === f.hl.length - 1 ? ' disabled' : '') + '>↓</button>' +
+          '<button class="btn btn-sm btn-danger" type="button" data-act="hl-del" data-i="' + i + '" aria-label="ลบข้อ ' + (i + 1) + '">ลบ</button></div>').join('') +
+        '<button class="btn btn-sm" type="button" data-act="hl-add"' + (f.hl.length >= 6 ? ' disabled' : '') + '>+ เพิ่มจุดเด่น</button>' +
+        '<div class="hint">ไม่เกิน 6 รายการ · รายการละไม่เกิน 80 ตัวอักษร · บรรทัดเดียว (<span id="cnt_hl">' + f.hl.length + '/6</span>)</div></div>' +
+      '<div class="card"><h2>ลิงก์โซเชียล</h2>' +
+        SOCIALS.map(([k, label, ph]) => '<div class="field"><label class="lbl" for="f_soc_' + k + '">' + label + '</label><input id="f_soc_' + k + '" class="input" data-soc="' + k + '" inputmode="url" autocapitalize="off" spellcheck="false" placeholder="' + esc(ph) + '" value="' + esc(f.soc[k]) + '"></div>').join('') +
+        '<div class="hint">วางลิงก์โปรไฟล์ตรง ๆ — ระบบตัดส่วน ? # ให้ และบังคับ https · รับเฉพาะ 4 เว็บนี้ (Facebook แบบ profile.php?id=… ไม่รองรับ)</div></div>' +
+      '<div class="card"><h2>วิดีโอแนะนำ (YouTube)</h2><div class="field"><input id="f_video" class="input" data-video="1" inputmode="url" autocapitalize="off" spellcheck="false" placeholder="วางลิงก์วิดีโอ หรือรหัส 11 ตัว" value="' + esc(f.video) + '"></div>' +
+        '<div class="hint" id="videoHint"></div></div>' +
+      '<div class="card"><h2>รูป Portfolio</h2>' +
+        f.pf.map((p, i) => '<div class="pf" data-pf="' + i + '"><img src="' + esc(publicUrl(p.path)) + '" alt="' + esc(p.alt) + '" loading="lazy"><div>' +
+          '<label class="lbl" for="f_alt_' + i + '">คำอธิบายรูป (alt) — บังคับ</label><input id="f_alt_' + i + '" class="input" data-alt="' + i + '" maxlength="140" value="' + esc(p.alt) + '">' +
+          '<div class="btns"><button class="btn btn-sm" type="button" data-act="pf-up" data-i="' + i + '"' + (i === 0 ? ' disabled' : '') + '>↑</button>' +
+          '<button class="btn btn-sm" type="button" data-act="pf-dn" data-i="' + i + '"' + (i === f.pf.length - 1 ? ' disabled' : '') + '>↓</button>' +
+          '<button class="btn btn-sm btn-danger" type="button" data-act="pf-del" data-i="' + i + '">เอาออกจากรายการ</button></div></div></div>').join('') +
+        '<div class="acts"><label class="btn' + (f.pf.length >= 8 || st.uploading ? '" aria-disabled="true' : '') + '" for="pfile" id="pfileLbl">' + (st.uploading ? 'กำลังอัปโหลด…' : '+ เพิ่มรูป') + '</label>' +
+        '<input id="pfile" type="file" accept="image/jpeg,image/png,image/webp" hidden' + (f.pf.length >= 8 || st.uploading ? ' disabled' : '') + '></div>' +
+        '<div class="hint">ไม่เกิน 8 รูป · ระบบย่อรูปเป็น WebP/JPEG ไม่เกิน 1 MB ให้ในเครื่อง · เอารูปออกจากรายการแล้วไฟล์ยังอยู่ในถัง (ร้านย้อนกลับให้ได้)</div></div>' +
+      '<div class="acts"><button class="btn btn-primary" id="saveBtn" type="button" data-act="save"' + (st.busy || st.uploading ? ' disabled' : '') + '>' + (st.busy ? 'กำลังบันทึก…' : 'บันทึกและขึ้นเว็บ') + '</button>' +
+        '<a class="btn" id="webLink" href="' + esc(WEB_BASE + r.slug + '/') + '" target="_blank" rel="noopener">ดูหน้าเว็บจริง ↗</a>' +
+        '<button class="btn" type="button" data-act="reload">โหลดข้อมูลล่าสุด</button></div>' +
+    '</div><div id="previewCol"><div class="card pv" id="preview"></div></div></div>';
+}
+function previewHtml() {
+  const f = st.f, r = curRow();
+  if (!f || !r) return '';
+  const name = st.names[r.id] || r.slug;
+  const hl = f.hl.map(h => h.trim()).filter(Boolean);
+  const links = SOCIALS.map(([k, label]) => { const v = normSocial(f.soc[k]); return v && TP.SOC_RE[k].test(v) ? '<a class="btn btn-sm" href="' + esc(v) + '" target="_blank" rel="noopener noreferrer">' + label + '</a>' : ''; }).join('');
+  const vid = String(f.video || '').trim() ? ytId(f.video) : null;
+  return '<h2>ตัวอย่าง (เห็นหน้าตาคร่าว ๆ ก่อนบันทึก)</h2><h3>' + esc(name) + '</h3>' +
+    (f.bio.trim() ? '<p class="bio">' + esc(f.bio) + '</p>' : '<p class="empty">ยังไม่มีประวัติ — เว็บจะใช้ข้อความเดิมของหน้า</p>') +
+    (hl.length ? '<ul>' + hl.map(h => '<li>' + esc(h) + '</li>').join('') + '</ul>' : '') +
+    (links ? '<div class="links">' + links + '</div>' : '') +
+    (vid ? '<p>วิดีโอแนะนำ: <a href="https://www.youtube.com/watch?v=' + esc(vid) + '" target="_blank" rel="noopener noreferrer">youtube.com/watch?v=' + esc(vid) + '</a></p>' : '') +
+    (f.pf.length ? '<div class="shots">' + f.pf.map(p => '<img src="' + esc(publicUrl(p.path)) + '" alt="' + esc(p.alt) + '">').join('') + '</div>' : '');
+}
+function render() {
+  const keep = window.scrollY;
+  if (st.phase === 'login') $app.innerHTML = loginHtml();
+  else if (st.phase === 'notAllowed') $app.innerHTML = notAllowedHtml();
+  else if (st.phase === 'main') $app.innerHTML = mainHtml();
+  else $app.innerHTML = '<div class="empty">กำลังตรวจสิทธิ์…</div>';
+  refreshDerived();
+  if (keep) window.scrollTo(0, keep);
+}
+// ส่วนที่เปลี่ยนตามการพิมพ์ — ไม่วาดทั้งหน้าใหม่ (กันเคอร์เซอร์/โฟกัสหลุดระหว่างพิมพ์)
+function refreshDerived() {
+  if (st.phase !== 'main' || !st.f) return;
+  const f = st.f;
+  const c = document.getElementById('cnt_bio');
+  if (c) { const n = Array.from(f.bio).length; c.textContent = n.toLocaleString('en-US') + ' / 1,200'; c.className = n > 1200 ? 'wk-red' : ''; }
+  const vh = document.getElementById('videoHint');
+  if (vh) {
+    const raw = String(f.video || '').trim(), v = raw ? ytId(raw) : null;
+    vh.className = 'hint' + (v === undefined ? ' wk-red' : '');
+    vh.textContent = !raw ? 'ไม่ใส่ก็ได้' : v === undefined ? 'อ่านรหัสวิดีโอไม่ได้ — วางลิงก์ YouTube หรือรหัส 11 ตัว' : 'รหัสวิดีโอ: ' + v;
+  }
+  const hc = document.getElementById('cnt_hl'); if (hc) hc.textContent = f.hl.length + '/6';
+  const pv = document.getElementById('preview'); if (pv) pv.innerHTML = previewHtml();
+}
+
+// ── ทำงาน ──
+async function save() {
+  if (st.busy || st.uploading || !st.f || !curRow()) return;
+  const r = curRow(), uid = st.uid;
+  const { patch, errs, notes } = collect();
+  st.errs = errs; st.notes = notes; st.flash = '';
+  if (errs.length) { render(); document.getElementById('errBox') && document.getElementById('errBox').scrollIntoView({ block: 'nearest' }); return; }
+  st.busy = true; render();
+  let data, error;
+  try {
+    ({ data, error } = await db.from('teacher_profiles').update(patch).eq('id', r.id).eq('rev', r.rev).select(COLS));
+  } catch (err) { error = err; }
+  if (uid !== st.uid) return;
+  st.busy = false;
+  if (error) {
+    console.error('[Profile save]', error.code || '');
+    showFatalError('บันทึกโปรไฟล์ไม่สำเร็จ: ' + errText(error));
+    render();
+    return;
+  }
+  if (!data || !data.length) {                                      // 0 แถว = ไม่ใช่สำเร็จ (กฎข้อ 8): มีคนแก้/ซ่อนระหว่างนี้ หรือไม่มีสิทธิ์
+    showFatalError('บันทึกไม่สำเร็จ — มีคนแก้หรือซ่อนโปรไฟล์นี้ระหว่างที่คุณแก้ หรือไม่มีสิทธิ์แก้ · ข้อความที่พิมพ์ไว้ยังอยู่ในหน้านี้ — กด "โหลดข้อมูลล่าสุด" แล้วลองใหม่');
+    render();
+    return;
+  }
+  st.rows = st.rows.map(x => x.id === r.id ? data[0] : x);
+  loadForm();
+  st.flash = 'บันทึกแล้ว — ขึ้นเว็บแล้ว ✓' + (data[0].is_hidden ? ' (แต่โปรไฟล์นี้ถูกซ่อนจากเว็บอยู่)' : '');
+  st.notes = notes;
+  render();
+}
+async function setHidden(v) {
+  const r = curRow();
+  if (!r || !isMgr() || st.busy) return;
+  const uid = st.uid;
+  st.busy = true;
+  let data, error;
+  try { ({ data, error } = await db.from('teacher_profiles').update({ is_hidden: v }).eq('id', r.id).eq('rev', r.rev).select(COLS)); } catch (err) { error = err; }
+  if (uid !== st.uid) return;
+  st.busy = false;
+  if (error || !data || !data.length) {
+    if (error) console.error('[Profile hide]', error.code || '');
+    showFatalError(error ? 'เปลี่ยนสถานะซ่อนไม่สำเร็จ: ' + errText(error) : 'เปลี่ยนสถานะซ่อนไม่สำเร็จ — โปรไฟล์ถูกแก้ระหว่างนี้หรือไม่มีสิทธิ์ · กด "โหลดข้อมูลล่าสุด" แล้วลองใหม่');
+    render();
+    return;
+  }
+  const keepF = st.f;
+  st.rows = st.rows.map(x => x.id === r.id ? Object.assign({}, x, { is_hidden: data[0].is_hidden, rev: data[0].rev, updated_at: data[0].updated_at }) : x);
+  st.f = keepF;                                                       // สลับสถานะซ่อนไม่ทิ้งข้อความที่พิมพ์ค้าง
+  st.flash = v ? 'ซ่อนโปรไฟล์จากเว็บแล้ว' : 'แสดงโปรไฟล์บนเว็บแล้ว';
+  render();
+}
+
+// ── รูป: ย่อในเครื่อง (≤1600px · WebP ถ้าเบราว์เซอร์เข้ารหัสได้ ไม่งั้น JPEG · ≤ 1 MB) แล้วอัปโหลดแบบไม่ทับไฟล์เดิม ──
+function loadImage(file) {
+  return new Promise((resolve, reject) => {
+    const src = URL.createObjectURL(file), img = new Image();
+    img.onload = () => { URL.revokeObjectURL(src); resolve(img); };
+    img.onerror = () => { URL.revokeObjectURL(src); reject(new Error('เปิดไฟล์รูปนี้ไม่ได้ — ลองไฟล์ JPG/PNG/WebP')); };
+    img.src = src;
+  });
+}
+function encodeCanvas(canvas, type, q) {
+  const url = canvas.toDataURL(type, q);
+  if (!url.startsWith('data:' + type + ';')) return null;               // เบราว์เซอร์เข้ารหัสชนิดนี้ไม่ได้ (คืน PNG มา)
+  const bin = atob(url.slice(url.indexOf(',') + 1)), bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new Blob([bytes], { type });
+}
+async function shrinkImage(file) {
+  const img = await loadImage(file);
+  let edge = Math.min(MAX_EDGE, Math.max(img.width, img.height)), q = 0.85;
+  for (let i = 0; i < 12; i++) {
+    const s = Math.min(1, edge / Math.max(img.width, img.height));
+    const w = Math.max(1, Math.round(img.width * s)), h = Math.max(1, Math.round(img.height * s));
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, w, h); ctx.drawImage(img, 0, 0, w, h);
+    const blob = encodeCanvas(canvas, 'image/webp', q) || encodeCanvas(canvas, 'image/jpeg', q);
+    if (blob && blob.size <= MAX_BYTES) return { blob, ext: blob.type === 'image/webp' ? 'webp' : 'jpg' };
+    if (q > 0.55) q -= 0.1; else edge = Math.round(edge * 0.8);
+  }
+  throw new Error('ย่อรูปให้ไม่เกิน 1 MB ไม่สำเร็จ — ลองรูปที่เล็กกว่านี้');
+}
+const rand = () => { const a = new Uint8Array(6); (window.crypto || {}).getRandomValues ? crypto.getRandomValues(a) : a.forEach((_, i) => { a[i] = Math.floor(Math.random() * 256); }); return Array.from(a, b => b.toString(16).padStart(2, '0')).join(''); };
+async function addPhoto(file) {
+  const r = curRow(), uid = st.uid;
+  if (!file || !r || !st.f || st.uploading) return;
+  if (st.f.pf.length >= 8) { showFatalError('รูป Portfolio ได้ไม่เกิน 8 รูป — เอารูปเดิมออกก่อน'); return; }
+  st.uploading = true; render();
+  try {
+    const { blob, ext } = await shrinkImage(file);
+    const path = r.slug + '/' + rand() + '.' + ext;
+    const { error } = await db.storage.from(BUCKET).upload(path, blob, { contentType: blob.type, upsert: false, cacheControl: '31536000' });
+    if (uid !== st.uid) return;
+    if (error) { console.error('[Profile upload]', error.statusCode || error.code || ''); showFatalError('อัปโหลดรูปไม่สำเร็จ: ' + errText(error)); }
+    else { st.f.pf.push({ path, alt: '' }); st.flash = 'อัปโหลดรูปแล้ว — กรอกคำอธิบายรูป (alt) แล้วกด "บันทึกและขึ้นเว็บ"'; }
+  } catch (err) {
+    if (uid === st.uid) showFatalError('เพิ่มรูปไม่สำเร็จ: ' + (err && err.message ? err.message : err));
+  }
+  if (uid !== st.uid) return;
+  st.uploading = false; render();
+}
+
+// ── เหตุการณ์ ──
+const mv = (a, i, d) => { const j = i + d; if (j < 0 || j >= a.length) return; const t = a[i]; a[i] = a[j]; a[j] = t; };
+$app.addEventListener('click', e => {
+  const b = e.target.closest('[data-act]');
+  if (!b || b.disabled) return;
+  const act = b.dataset.act, i = Number(b.dataset.i), f = st.f;
+  if (act === 'save') return void save();
+  if (act === 'reload') { if (st.dirty && !window.confirm('ข้อความที่ยังไม่ได้บันทึกจะหาย — โหลดข้อมูลล่าสุดต่อไหม?')) return; st.flash = ''; loadAll(); st.f = null; return; }
+  if (act === 'hide') return;                                          // checkbox ใช้ change
+  if (!f) return;
+  if (act === 'hl-add' && f.hl.length < 6) f.hl.push('');
+  else if (act === 'hl-del') f.hl.splice(i, 1);
+  else if (act === 'hl-up') mv(f.hl, i, -1);
+  else if (act === 'hl-dn') mv(f.hl, i, 1);
+  else if (act === 'pf-del') f.pf.splice(i, 1);
+  else if (act === 'pf-up') mv(f.pf, i, -1);
+  else if (act === 'pf-dn') mv(f.pf, i, 1);
+  else return;
+  st.dirty = true; st.flash = '';
+  render();
+});
+$app.addEventListener('input', e => {
+  const t = e.target, f = st.f;
+  if (!f) return;
+  if (t.dataset.k === 'bio') f.bio = t.value;
+  else if (t.dataset.hl !== undefined) f.hl[Number(t.dataset.hl)] = t.value;
+  else if (t.dataset.soc) f.soc[t.dataset.soc] = t.value;
+  else if (t.dataset.video) f.video = t.value;
+  else if (t.dataset.alt !== undefined) f.pf[Number(t.dataset.alt)].alt = t.value;
+  else return;
+  st.dirty = true;
+  refreshDerived();
+});
+$app.addEventListener('change', e => {
+  const t = e.target;
+  if (t.id === 'tsel') {
+    if (st.dirty && !window.confirm('ข้อความที่ยังไม่ได้บันทึกจะหาย — สลับไปครูคนอื่นต่อไหม?')) { t.value = st.sel; return; }
+    st.sel = t.value; st.flash = ''; loadForm(); render(); return;
+  }
+  if (t.id === 'hideChk') { setHidden(t.checked); return; }
+  if (t.id === 'pfile') { const file = t.files && t.files[0]; t.value = ''; addPhoto(file); }
+});
+$app.addEventListener('submit', async e => {
+  if (e.target.id !== 'loginForm') return;
+  e.preventDefault();
+  if (st.loginBusy) return;
+  const email = document.getElementById('lgEmail').value.trim(), password = document.getElementById('lgPass').value;
+  if (!email || !password) return;
+  st.loginBusy = true; st.loginErr = ''; render();
+  document.getElementById('lgEmail').value = email;
+  const { error } = await db.auth.signInWithPassword({ email, password });
+  st.loginBusy = false;
+  if (error) { st.loginErr = 'เข้าสู่ระบบไม่สำเร็จ — ตรวจอีเมลและรหัสผ่านอีกครั้ง'; render(); }
+});
+document.getElementById('logoutBtn').addEventListener('click', async () => {
+  const uid = st.uid;
+  await db.auth.signOut();
+  if (uid === st.uid) { reset(); st.phase = 'login'; render(); }
+});
+window.addEventListener('beforeunload', e => { if (st.dirty) { e.preventDefault(); e.returnValue = ''; } });
+
+db.auth.onAuthStateChange((event, session) => {
+  if (event === 'TOKEN_REFRESHED') return;
+  setTimeout(() => onSession(event === 'SIGNED_OUT' ? null : session), 0);
+});
+(async () => {
+  const { data } = await db.auth.getSession();
+  await onSession(data && data.session);
+})();
+</script>
+</body>
+</html>

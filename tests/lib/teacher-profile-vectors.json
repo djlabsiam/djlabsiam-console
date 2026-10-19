@@ -1,0 +1,161 @@
+{
+  "_doc": "เวกเตอร์ทดสอบชุดเดียวของ migration 068 (console-workspace/sql-tests/test068.mjs) และหน้าจอ teacher-profile.html (tests/teacher-profile.mjs) — ok = ต้องผ่าน · bad = ต้องถูกปฏิเสธ · {\"r\":\"ก\",\"n\":1200} = ซ้ำตัวอักษร r จำนวน n ครั้ง · portfolio ทดสอบด้วย slug = zlex",
+  "bio": {
+    "ok": [
+      "",
+      "สวัสดีครับ ผมเป็นครูสอน DJ สาย Turntablism",
+      "บรรทัดที่หนึ่ง\nบรรทัดที่สอง",
+      { "r": "ก", "n": 1200 },
+      "ราคา 100 บาท & ส่วนลด 10% (ทดลอง)",
+      "contact: name at example dot com"
+    ],
+    "bad": [
+      { "r": "ก", "n": 1201 },
+      "<b>ตัวหนา</b>",
+      "a < b",
+      "a > b",
+      "ดูที่ https://evil.com",
+      "http://x",
+      "www.evil.com",
+      "ftp://x",
+      "Visit WWW.EVIL.COM",
+      "ล่องหน\u200bหน",
+      "\u202eevil",
+      "\ufeffx",
+      "ctrl\u0001x",
+      "tab\tx",
+      "cr\rx",
+      "del\u007fx"
+    ]
+  },
+  "highlights": {
+    "ok": [
+      [],
+      ["รางวัลที่ 1 DMC Thailand"],
+      ["a", "b", "c", "d", "e", "f"],
+      [{ "r": "ก", "n": 80 }]
+    ],
+    "bad": [
+      ["a", "b", "c", "d", "e", "f", "g"],
+      [{ "r": "ก", "n": 81 }],
+      [""],
+      ["   "],
+      [1],
+      [null],
+      [{ "a": 1 }],
+      [["nested"]],
+      "ไม่ใช่ array",
+      { "a": 1 },
+      ["<b>x</b>"],
+      ["ดู https://x.com"],
+      ["ล่องหน\u200bหน"],
+      ["ขึ้นบรรทัด\nใหม่"]
+    ]
+  },
+  "socials": {
+    "ok": [
+      {},
+      { "instagram": "https://www.instagram.com/djlabsiam" },
+      { "instagram": "https://instagram.com/dj.lab_siam/" },
+      { "facebook": "https://www.facebook.com/PioneerDjLabSiam" },
+      { "facebook": "https://facebook.com/Some-Page-123456" },
+      { "tiktok": "https://www.tiktok.com/@djlabsiam4" },
+      { "youtube": "https://www.youtube.com/@djzlex" },
+      { "youtube": "https://youtube.com/channel/UC1234567890abcdefghij12" },
+      { "youtube": "https://www.youtube.com/c/DJZlex" },
+      { "instagram": "https://instagram.com/a", "facebook": "https://facebook.com/abcde", "tiktok": "https://tiktok.com/@ab", "youtube": "https://youtube.com/@abc" }
+    ],
+    "bad": [
+      { "twitter": "https://twitter.com/x" },
+      { "instagram": "http://instagram.com/x" },
+      { "instagram": "https://instagram.com.evil.com/x" },
+      { "instagram": "https://evil.com/instagram.com/x" },
+      { "instagram": "https://instagram.com@evil.com/x" },
+      { "instagram": "https://user:pw@instagram.com/x" },
+      { "instagram": "https://instagram.com:8080/x" },
+      { "instagram": "https://instagram.com/x?hl=th" },
+      { "instagram": "https://instagram.com/x#frag" },
+      { "instagram": "https://INSTAGRAM.com/x" },
+      { "instagram": "//instagram.com/x" },
+      { "instagram": "javascript:alert(1)" },
+      { "instagram": "https://instagram.com/" },
+      { "instagram": "https://instagram.com/x/y" },
+      { "instagram": "https://instagram.com/x\n" },
+      { "instagram": "https://instagram.com/x%20y" },
+      { "instagram": "https://instagram.com/x y" },
+      { "instagram": "https://instagram.com/ไทย" },
+      { "instagram": "https://wwww.instagram.com/x" },
+      { "instagram": "https://m.instagram.com/x" },
+      { "instagram": "evil https://instagram.com/x" },
+      { "instagram": "https://instagramxcom/x" },
+      { "instagram": "https://instagram.com/x@evil.com" },
+      { "youtube": "https://youtube.com/channel/short" },
+      { "youtube": "https://youtube.com/@abc?x=1" },
+      { "facebook": "https://facebook.comx/abcde" },
+      { "facebook": "https://facebook.com.evil.com/abcde" },
+      { "youtube": "https://www.youtube.com.evil.com/@abc" },
+      { "youtube": "https://youtube.com/watch?v=abcdefghijk" },
+      { "youtube": "https://youtu.be/abcdefghijk" },
+      { "youtube": "https://youtube.com/@ab" },
+      { "facebook": "https://facebook.com/abc" },
+      { "facebook": "https://facebook.com/profile.php?id=1" },
+      { "facebook": "https://m.facebook.com/abcde" },
+      { "tiktok": "https://tiktok.com/abcde" },
+      { "tiktok": "https://tiktok.com/@a" },
+      { "instagram": 1 },
+      { "instagram": null },
+      { "instagram": ["https://instagram.com/x"] },
+      ["https://instagram.com/x"],
+      "https://instagram.com/x"
+    ]
+  },
+  "video_id": {
+    "ok": [null, "dQw4w9WgXcQ", "a_b-C1234_-"],
+    "bad": ["", "short", "dQw4w9WgXcQ1", "dQw4w9WgXc", "dQw4w9WgXc!", "dQw4w9Wg Xc", "dQw4w9WgXc\n"]
+  },
+  "portfolio": {
+    "ok": [
+      [],
+      [{ "path": "zlex/a1.webp", "alt": "ผมกำลังสแครชบนเวที" }],
+      [{ "path": "zlex/Img_01-final.jpg", "alt": "โชว์เดี่ยว" }],
+      [
+        { "path": "zlex/p1.webp", "alt": "1" }, { "path": "zlex/p2.webp", "alt": "2" }, { "path": "zlex/p3.webp", "alt": "3" }, { "path": "zlex/p4.webp", "alt": "4" },
+        { "path": "zlex/p5.webp", "alt": "5" }, { "path": "zlex/p6.webp", "alt": "6" }, { "path": "zlex/p7.webp", "alt": "7" }, { "path": "zlex/p8.webp", "alt": "8" }
+      ],
+      [{ "path": "zlex/a.webp", "alt": { "r": "ก", "n": 120 } }]
+    ],
+    "bad": [
+      [
+        { "path": "zlex/p1.webp", "alt": "1" }, { "path": "zlex/p2.webp", "alt": "2" }, { "path": "zlex/p3.webp", "alt": "3" }, { "path": "zlex/p4.webp", "alt": "4" },
+        { "path": "zlex/p5.webp", "alt": "5" }, { "path": "zlex/p6.webp", "alt": "6" }, { "path": "zlex/p7.webp", "alt": "7" }, { "path": "zlex/p8.webp", "alt": "8" },
+        { "path": "zlex/p9.webp", "alt": "9" }
+      ],
+      [{ "path": "other/a.webp", "alt": "x" }],
+      [{ "path": "zlex/a.png", "alt": "x" }],
+      [{ "path": "zlex/a.webp.exe", "alt": "x" }],
+      [{ "path": "zlex/../b.webp", "alt": "x" }],
+      [{ "path": "zlex/sub/a.webp", "alt": "x" }],
+      [{ "path": "/zlex/a.webp", "alt": "x" }],
+      [{ "path": "zlex/.webp", "alt": "x" }],
+      [{ "path": "https://x.test/zlex/a.webp", "alt": "x" }],
+      [{ "path": "zlex/A.WEBP", "alt": "x" }],
+      [{ "path": "zlex/a.jpeg", "alt": "x" }],
+      [{ "path": "zlex/a.webp\n", "alt": "x" }],
+      [{ "path": "zlex/a.webp" }],
+      [{ "path": "zlex/a.webp", "alt": "" }],
+      [{ "path": "zlex/a.webp", "alt": "   " }],
+      [{ "path": "zlex/a.webp", "alt": { "r": "ก", "n": 121 } }],
+      [{ "path": "zlex/a.webp", "alt": "<b>x</b>" }],
+      [{ "path": "zlex/a.webp", "alt": "ดู https://x.com" }],
+      [{ "path": "zlex/a.webp", "alt": "ล่องหน\u200bหน" }],
+      [{ "path": "zlex/a.webp", "alt": "x", "url": "https://x" }],
+      [{ "alt": "x" }],
+      [{ "path": 1, "alt": "x" }],
+      [{ "path": "zlex/a.webp", "alt": 1 }],
+      ["zlex/a.webp"],
+      [null],
+      { "path": "zlex/a.webp", "alt": "x" },
+      "zlex/a.webp"
+    ]
+  }
+}
