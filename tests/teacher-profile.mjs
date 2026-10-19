@@ -2,7 +2,7 @@
  * เทสต์หน้า "โปรไฟล์ของฉัน" teacher-profile.html (migration 068) — ครูแก้โปรไฟล์ตัวเองในคอนโซล ขึ้นเว็บทันที
  *   รัน: node tests/teacher-profile.mjs   (TPROF_ROOT=<โฟลเดอร์> ทดสอบหน้าฉบับอื่น — ใช้ทำ mutation)
  *
- * ไฟล์จริงทุกบรรทัด สลับเฉพาะแท็ก Supabase เป็นตัวปลอม · ฐานปลอมจำลองกติกาของ 068: ครูเห็น/แก้เฉพาะแถวตัวเอง · เจ้าของ/ผู้ดูแลแก้ทุกแถว · is_hidden เฉพาะเจ้าของ/ผู้ดูแล ·
+ * ไฟล์จริงทุกบรรทัด สลับเฉพาะแท็ก Supabase เป็นตัวปลอม · ฐานปลอมจำลองกติกาของ 068: ครู/ผู้ดูแลเห็น-แก้เฉพาะแถวตัวเอง · เจ้าของแก้ทุกแถว · is_hidden เฉพาะเจ้าของ · ครูต้องติ๊กยืนยันเผยแพร่ (publish_ack_at) ก่อนแก้เนื้อหาครั้งแรก ·
  * สิทธิ์ระดับคอลัมน์ · เทียบ rev (แถวไม่ตรง = 0 แถว) · อัปโหลดถัง teacher-portfolio — ตัวจริงตรวจที่ console-workspace/sql-tests/test068.mjs
  * ที่นี่ตรวจฝั่งหน้าจอ: ใครเห็นอะไร · ตัวตรวจซ้ำ = เวกเตอร์ชุดเดียวกับฐาน (tests/lib/teacher-profile-vectors.json) · ส่งอะไรให้ฐานบ้าง (ไม่ส่ง is_hidden/slug/id/rev/updated_*) ·
  * ล้มเหลวทุกแบบแจ้งตามจริง (0 แถว/ฐานปฏิเสธ/อัปโหลดล้ม) · ย่อรูป ≤1 MB · ไม่ลบไฟล์ในถัง · ข้อมูลครูไม่ถูกตีความเป็น HTML · คำเตือนแดงตัวหนา ≥14px
@@ -23,11 +23,11 @@ const NAMES = { alldayz: 'Alldayz', leonie: 'Leonie', maniac: 'Maniac', nutty: '
 const TID = s => 't-' + s;
 // บัญชี: อีเมลขึ้นต้น = ผู้ใช้ · zlex=เจ้าของ+ครู · tibass=ผู้ดูแล+ครู · nutty=พนักงาน+ครู · maniac/alldayz=ครูล้วน (ไม่มีแถว admins) · staff=พนักงานไม่ใช่ครู · ghost=ไม่มีอะไรเลย
 const USERS = { zlex: { id: 'u-zlex', role: 'owner', t: 'zlex' }, tibass: { id: 'u-tibass', role: 'admin', t: 'tibass' }, nutty: { id: 'u-nutty', role: 'staff', t: 'nutty' },
-                maniac: { id: 'u-maniac', role: null, t: 'maniac' }, alldayz: { id: 'u-alldayz', role: null, t: 'alldayz' }, staff: { id: 'u-staff', role: 'staff', t: null }, ghost: { id: 'u-ghost', role: null, t: null } };
+                maniac: { id: 'u-maniac', role: null, t: 'maniac' }, alldayz: { id: 'u-alldayz', role: null, t: 'alldayz' }, staff: { id: 'u-staff', role: 'staff', t: null }, adminOnly: { id: 'u-adminonly', role: 'admin', t: null }, ghost: { id: 'u-ghost', role: null, t: null } };
 const userById = id => Object.values(USERS).find(u => u.id === id);
 const FAKE = { rows: [], noTable: false, hidePageRowFor: null };
 const FAIL = { update: null, upload: null, throwUpdate: false };
-const mkRow = s => ({ id: TID(s), slug: s, bio: '', highlights: [], socials: {}, video_id: null, portfolio: [], is_hidden: false, rev: 1, updated_at: '2026-10-19T10:00:00.123456+00:00' });
+const mkRow = s => ({ id: TID(s), slug: s, bio: '', highlights: [], socials: {}, video_id: null, portfolio: [], is_hidden: false, publish_ack_at: '2026-10-18T09:00:00+00:00', rev: 1, updated_at: '2026-10-19T10:00:00.123456+00:00' });
 FAKE.reset = () => {
   FAKE.rows = SLUGS.map(mkRow);
   FAKE.rows.find(r => r.slug === 'maniac').bio = 'ประวัติเดิมของ Maniac';
@@ -35,6 +35,7 @@ FAKE.reset = () => {
   FAKE.rows.find(r => r.slug === 'maniac').socials = { instagram: 'https://www.instagram.com/maniac' };
   FAKE.rows.find(r => r.slug === 'zlex').bio = 'ประวัติของ Zlex';
   FAKE.rows.find(r => r.slug === 'nutty').is_hidden = true;
+  FAKE.rows.find(r => r.slug === 'alldayz').publish_ack_at = null;      // ครูที่ยังไม่เคยติ๊กยืนยันเผยแพร่ (ที่เหลือติ๊กแล้ว)
   FAKE.noTable = false; FAKE.noRowFor = null;
   FAIL.update = null; FAIL.upload = null; FAIL.throwUpdate = false;
   CALLS.length = 0;
@@ -42,10 +43,12 @@ FAKE.reset = () => {
 FAKE.reset();
 let SESSION = null, authCb = null;
 const visible = u => !u ? [] : (u.role ? FAKE.rows : FAKE.rows.filter(r => r.id === TID(u.t)));       // is_active_admin() หรือ id = my_teacher_id()
-const ALLOWED_COLS = ['bio', 'highlights', 'socials', 'video_id', 'portfolio', 'is_hidden'];
+const ALLOWED_COLS = ['bio', 'highlights', 'socials', 'video_id', 'portfolio', 'is_hidden', 'publish_ack_at'];
+const CONTENT_COLS = ['bio', 'highlights', 'socials', 'video_id', 'portfolio'];
 function builder(table) {
-  const q = { _f: [], _upd: null, _sel: false,
-    select() { q._sel = true; return q; },
+  const proj = rows => q._cols ? rows.map(r => Object.fromEntries(q._cols.map(c => [c, r[c]]))) : rows;       // ฐานจริงคืนเฉพาะคอลัมน์ที่ขอ
+  const q = { _f: [], _upd: null, _sel: false, _cols: null,
+    select(c) { q._sel = true; q._cols = typeof c === 'string' ? c.split(',').map(x => x.trim()) : null; return q; },
     eq(c, v) { q._f.push([c, v]); return q; },
     order() { return q; }, limit() { return q; },
     update(p) { q._upd = p; CALLS.push({ op: 'update', table, payload: JSON.parse(JSON.stringify(p)), filters: q._f }); return q; },
@@ -63,16 +66,19 @@ function builder(table) {
         if (table === 'teachers') return { data: SLUGS.map(s => ({ id: TID(s), display_name: NAMES[s] })), error: null };
         if (table === 'teacher_profiles') {
           if (FAKE.noTable) return { data: null, error: { code: '42P01', message: 'relation "public.teacher_profiles" does not exist' } };
-          if (!q._upd) { CALLS.push({ op: 'select', table }); return { data: JSON.parse(JSON.stringify(visible(u))).filter(r => FAKE.noRowFor !== r.id), error: null }; }
+          if (!q._upd) { CALLS.push({ op: 'select', table }); return { data: proj(JSON.parse(JSON.stringify(visible(u))).filter(r => FAKE.noRowFor !== r.id)), error: null }; }
           if (FAIL.throwUpdate) throw new Error('Failed to fetch');
           if (FAIL.update) return { data: null, error: FAIL.update };
           const bad = Object.keys(q._upd).find(k => !ALLOWED_COLS.includes(k));
           if (bad) return { data: null, error: { code: '42501', message: 'permission denied for table teacher_profiles' } };
-          const mgr = u && (u.role === 'owner' || u.role === 'admin');
-          const hit = visible(u).filter(r => q._f.every(([c, v]) => r[c] === v) && (mgr || r.id === TID(u && u.t)));
-          if ('is_hidden' in q._upd && hit.some(r => r.is_hidden !== q._upd.is_hidden) && !mgr) return { data: null, error: { code: '42501', message: 'เฉพาะเจ้าของร้าน/ผู้ดูแลซ่อนหรือแสดงโปรไฟล์บนเว็บได้' } };
-          hit.forEach(r => { Object.assign(r, JSON.parse(JSON.stringify(q._upd))); r.rev += 1; r.updated_at = '2026-10-19T11:00:00.' + String(100000 + r.rev) + '+00:00'; });
-          return { data: JSON.parse(JSON.stringify(hit)), error: null };
+          const owner = !!u && u.role === 'owner';
+          const mine = r => r.id === TID(u && u.t);
+          const hit = visible(u).filter(r => q._f.every(([c, v]) => r[c] === v) && (owner || mine(r)));       // ผู้ดูแล = เหมือนครู: แก้ได้เฉพาะแถวตัวเอง
+          if ('is_hidden' in q._upd && hit.some(r => r.is_hidden !== q._upd.is_hidden) && !owner) return { data: null, error: { code: '42501', message: 'เฉพาะเจ้าของร้านซ่อนหรือแสดงโปรไฟล์บนเว็บได้' } };
+          if ('publish_ack_at' in q._upd && hit.some(r => r.publish_ack_at || !mine(r))) return { data: null, error: { code: '42501', message: 'ยืนยันเผยแพร่ได้เฉพาะครูเจ้าของโปรไฟล์เอง และตั้งได้ครั้งเดียว' } };
+          if (!('publish_ack_at' in q._upd) && hit.some(r => mine(r) && !r.publish_ack_at && CONTENT_COLS.some(k => k in q._upd && JSON.stringify(q._upd[k]) !== JSON.stringify(r[k])))) return { data: null, error: { code: '42501', message: 'ต้องติ๊กยืนยันการเผยแพร่ก่อนบันทึกครั้งแรก' } };
+          hit.forEach(r => { Object.assign(r, JSON.parse(JSON.stringify(q._upd))); if ('publish_ack_at' in q._upd) r.publish_ack_at = '2026-10-19T11:00:00+00:00'; r.rev += 1; r.updated_at = '2026-10-19T11:00:00.' + String(100000 + r.rev) + '+00:00'; });
+          return { data: proj(JSON.parse(JSON.stringify(hit))), error: null };
         }
         return { data: [], error: null };
       }).then(res, rej);
@@ -306,7 +312,7 @@ async function runTests() {
   ok('bio/จุดเด่น/alt ที่มีแท็ก: แสดงเป็นข้อความ ไม่รันสคริปต์', !window.__xss && !document.querySelector('#preview img[onerror]') && !document.querySelector('#app img[onerror]') && $('f_bio').value.indexOf('</textarea>') === 0 && document.querySelectorAll('[data-hl]').length === 2 && document.querySelector('[data-hl="0"]').value.indexOf('"><img') === 0 && $('preview').textContent.indexOf('<img') !== -1, String(window.__xss));
   row('maniac').bio = 'ประวัติเดิมของ Maniac'; row('maniac').highlights = ['รางวัล A']; row('maniac').portfolio = [];
 
-  // ── 10. ผู้ดูแลฝั่งเจ้าของ: เลือกครูได้ · ซ่อนได้ ─────────────────────────
+  // ── 10. เจ้าของ: เลือกครูได้ · ซ่อนได้ ───────────────────────────────
   await signOut();
   await signIn('zlex');
   ok('เจ้าของ: เห็นตัวเลือกครู 6 คน · ตั้งต้นที่แถวตัวเอง (Zlex) · ลิงก์กลับ desk.html', !!$('tsel') && $('tsel').options.length === 6 && $('tsel').value === 't-zlex' && $('f_bio').value === 'ประวัติของ Zlex' && $('backLink').getAttribute('href') === 'desk.html', $('tsel') && $('tsel').value);
@@ -332,7 +338,16 @@ async function runTests() {
   // ── 11. ผู้ดูแล + พนักงานที่เป็นครู ───────────────────────────────────
   await signOut();
   await signIn('tibass');
-  ok('ผู้ดูแล (Tibass เป็นครูด้วย): เห็นตัวเลือกครู + สวิตช์ซ่อน', !!$('tsel') && !!$('hideChk') && $('tsel').value === 't-tibass');
+  ok('ผู้ดูแล (Tibass เป็นครูด้วย): เหมือนครูทั่วไป — เห็นฟอร์มของตัวเองอย่างเดียว ไม่มีตัวเลือกครู/สวิตช์ซ่อน', !$('tsel') && !$('hideChk') && !!$('f_bio') && $('who').textContent === 'ครู Tibass' && document.querySelectorAll('#preview h3').length === 1 && $('preview').querySelector('h3').textContent === 'Tibass', $('who').textContent);
+  CALLS.length = 0;
+  await setHidden(true);
+  ok('ผู้ดูแลเรียก setHidden ตรง ๆ: ไม่ยิงฐาน (ซ่อนได้เฉพาะเจ้าของ)', updates().length === 0);
+  fill($('f_bio'), 'ผู้ดูแลแก้ของตัวเอง');
+  await doSave();
+  ok('ผู้ดูแลบันทึกโปรไฟล์ตัวเองได้ · กรอง id ของตัวเอง · ไม่มี is_hidden / publish_ack_at (ติ๊กไว้แล้ว)', updates().length === 1 && updates()[0].filters[0][1] === 't-tibass' && Object.keys(updates()[0].payload).sort().join() === 'bio,highlights,portfolio,socials,video_id' && row('tibass').bio === 'ผู้ดูแลแก้ของตัวเอง', JSON.stringify(updates()[0]));
+  await signOut();
+  await signIn('adminOnly');
+  ok('ผู้ดูแลที่ไม่ใช่ครู: "หน้านี้สำหรับครู" ไม่ดึงโปรไฟล์ ไม่โชว์ฟอร์ม/ตัวเลือกครู (แก้แทนคนอื่นเฉพาะเจ้าของ)', !!$('notAllowed') && !$('f_bio') && !$('tsel'), $('app').textContent.slice(0, 80));
   await signOut();
   await signIn('nutty');
   ok('พนักงานที่เป็นครู (Nutty): เห็นเฉพาะแถวตัวเอง · ไม่มีตัวเลือกครู/สวิตช์ซ่อน · เห็นป้าย "ถูกซ่อน" (แถวของเขาถูกซ่อน)', !$('tsel') && !$('hideChk') && !!$('hiddenBanner') && /ถูกซ่อน/.test(T('hiddenBanner')) && $('who').textContent === 'ครู Nutty' && $('backLink').getAttribute('href') === 'desk.html', $('who').textContent);
@@ -364,6 +379,44 @@ async function runTests() {
   FAKE.noRowFor = null;
   await signOut();
   ok('ออกจากระบบ: ล้างทุกอย่าง กลับหน้าล็อกอิน', !!$('loginForm') && !$('f_bio') && $('who').textContent === '' && $('logoutBtn').hidden);
+
+  // ── 13. ยืนยันเผยแพร่ (publish_ack_at) ───────────────────────────────
+  await signOut();
+  await signIn('alldayz');
+  ok('ครูที่ยังไม่ติ๊ก: เห็นกล่องยืนยันเผยแพร่ (แดงตัวหนา) · ช่องติ๊กยังไม่ติ๊ก · เป้ากด ≥ 44px', !!$('ackBox') && !$('ackChk').checked && isRed($('ackBox').querySelector('.wk-red')) && /ยืนยันให้เผยแพร่/.test(T('ackBox')) && $('ackChk').closest('label').getBoundingClientRect().height >= 44, $('ackBox') && T('ackBox'));
+  CALLS.length = 0;
+  fill($('f_bio'), 'ประวัติของ Alldayz');
+  await doSave();
+  ok('ยังไม่ติ๊ก: บันทึกไม่ได้ · ไม่ยิงฐาน · แถบแดงบอกให้ติ๊ก', writes().length === 0 && /ต้องติ๊กยืนยันการเผยแพร่ก่อนบันทึกครั้งแรก/.test(T('errBox')) && [...$('errBox').querySelectorAll('li')].every(isRed), $('errBox') && T('errBox'));
+  $('ackChk').checked = true; $('ackChk').dispatchEvent(new Event('change', { bubbles: true }));
+  await doSave();
+  const ua = updates();
+  ok('ติ๊กแล้วบันทึก: ส่ง publish_ack_at (เวลา ISO) มาพร้อมเนื้อหา ครั้งเดียว · แถวในฐานมีเวลายืนยัน', ua.length === 1 && typeof ua[0].payload.publish_ack_at === 'string' && !isNaN(Date.parse(ua[0].payload.publish_ack_at)) && Object.keys(ua[0].payload).sort().join() === 'bio,highlights,portfolio,publish_ack_at,socials,video_id' && !!row('alldayz').publish_ack_at && row('alldayz').bio === 'ประวัติของ Alldayz', JSON.stringify(ua[0] && ua[0].payload));
+  ok('หลังบันทึก: กล่องยืนยันหาย · ขึ้นบรรทัด "ยืนยันให้เผยแพร่แล้ว" · ขึ้นเว็บแล้ว', !$('ackBox') && !!$('ackDone') && /ยืนยันให้เผยแพร่แล้ว/.test(T('ackDone')) && /ขึ้นเว็บแล้ว/.test(T('flash')), $('ackDone') && T('ackDone'));
+  CALLS.length = 0;
+  fill($('f_bio'), 'แก้รอบสอง');
+  await doSave();
+  ok('บันทึกครั้งต่อไปไม่ส่ง publish_ack_at ซ้ำ (ติ๊กครั้งเดียว)', updates().length === 1 && !('publish_ack_at' in updates()[0].payload), JSON.stringify(updates()[0] && updates()[0].payload));
+  row('alldayz').publish_ack_at = null; clickAct('reload'); await sleep(100);
+  ok('ฐานบอกว่ายังไม่ยืนยัน (เช่นโหลดใหม่): กล่องยืนยันกลับมา ช่องติ๊กรีเซ็ต', !!$('ackBox') && !$('ackChk').checked);
+  // ครูที่ติ๊กแล้ว (Maniac) ไม่เห็นกล่อง
+  await signOut();
+  await signIn('maniac');
+  ok('ครูที่ติ๊กแล้ว: ไม่มีกล่องยืนยัน · เห็นบรรทัดยืนยันแล้ว', !$('ackBox') && !!$('ackDone'));
+  // เจ้าของดูโปรไฟล์ครูที่ยังไม่ติ๊ก: ไม่มีช่องติ๊ก มีคำเตือน · บันทึกแทนได้ ไม่ส่ง publish_ack_at
+  await signOut();
+  await signIn('zlex');
+  $('tsel').value = 't-alldayz'; $('tsel').dispatchEvent(new Event('change', { bubbles: true }));
+  ok('เจ้าของดูครูที่ยังไม่ติ๊ก: ไม่มีช่องติ๊ก · มีคำเตือนว่าครูต้องติ๊กเอง', !$('ackChk') && !$('ackBox') && !!$('ackNone') && /ครูต้องติ๊กเอง/.test(T('ackNone')), $('app').textContent.slice(0, 60));
+  fill($('f_bio'), 'เจ้าของแก้แทน Alldayz');
+  CALLS.length = 0;
+  await doSave();
+  ok('เจ้าของบันทึกแทนครูที่ยังไม่ติ๊กได้ · ไม่ส่ง publish_ack_at · ครูยังไม่ถูกถือว่ายืนยัน', updates().length === 1 && !('publish_ack_at' in updates()[0].payload) && row('alldayz').bio === 'เจ้าของแก้แทน Alldayz' && row('alldayz').publish_ack_at === null, JSON.stringify(updates()[0] && updates()[0].payload));
+  // เจ้าของที่เป็นครูเอง ยังไม่ติ๊ก → ต้องติ๊กเหมือนครูทั่วไป
+  row('zlex').publish_ack_at = null; clickAct('reload'); await sleep(100);
+  $('tsel').value = 't-zlex'; $('tsel').dispatchEvent(new Event('change', { bubbles: true }));
+  ok('เจ้าของดูแถวตัวเองที่ยังไม่ติ๊ก: เห็นกล่องยืนยันเหมือนครู', !!$('ackBox') && !!$('ackChk'));
+  await signOut();
 
   L('=== สรุป: ' + pass + ' PASS / ' + fail + ' FAIL ===');
   L(fail ? 'RESULT:FAIL' : 'RESULT:PASS');

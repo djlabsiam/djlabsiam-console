@@ -13571,7 +13571,7 @@ function renderTeach() {
   al.innerHTML = te.missing ? '<div class="alert alert-warn">ยังไม่ได้ติดตั้งระบบคอร์สเรียนในฐานข้อมูล — ต้องรัน migration 047 ก่อน (วางใน Supabase SQL Editor ของโปรเจกต์ร้าน)</div>'
     : te.error ? '<div class="alert alert-red">' + escapeHtml(te.error) + '</div>' : '';
   document.getElementById('teTabPrices').hidden = !isManager();          // แท็บ "ราคาคอร์ส" = เจ้าของ/ผู้ดูแลเท่านั้น (ฐานบังคับซ้ำด้วย RLS ของ 060)
-  document.getElementById('teProfileLink').hidden = !(te.tid || isManager());      // โปรไฟล์ครูบนเว็บ (068): ครูแก้ของตัวเอง · เจ้าของ/ผู้ดูแลแก้แทนครูทุกคน
+  document.getElementById('teProfileLink').hidden = !(te.tid || isOwner());      // โปรไฟล์ครูบนเว็บ (068): ครู/ผู้ดูแลที่เป็นครูแก้ของตัวเอง · เจ้าของแก้แทนครูทุกคน
   if (te.tab === 'prices' && !isManager()) te.tab = 'summary';
   teTabMark();
   const enr = te.tab === 'enroll';             // แท็บ "ลงเรียน / ย้อนหลัง" ไม่ใช้ตัวกรอง/รายการ — แผงของมันเอง

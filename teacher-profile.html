@@ -87,9 +87,10 @@
 <script>
 // ===========================================================================
 // โปรไฟล์ของฉัน (migration 068 · เจ้าของสั่ง 18 ต.ค. 69) — ครูแก้โปรไฟล์ตัวเองในคอนโซล แล้ว "ขึ้นเว็บทันที" (djlabsiam.com/teachers/<ชื่อ>/) ไม่มีขั้นอนุมัติ
-//   ใครเห็นอะไร: ครู (ล้วน/พนักงาน) = ฟอร์มของตัวเองอย่างเดียว · เจ้าของ/ผู้ดูแล = เลือกครูได้ทั้ง 6 + สวิตช์ซ่อนโปรไฟล์ (ครูเห็นแค่ป้ายถ้าถูกซ่อน) · คนอื่น = ข้อความ "หน้านี้สำหรับครู"
+//   ใครเห็นอะไร: ครู/ผู้ดูแล/พนักงานที่เป็นครู = ฟอร์มของตัวเองอย่างเดียว · เจ้าของ (owner) = เลือกครูได้ทั้ง 6 + สวิตช์ซ่อนโปรไฟล์ (คนอื่นเห็นแค่ป้ายถ้าถูกซ่อน) · คนอื่น = ข้อความ "หน้านี้สำหรับครู"
+//   ผู้ดูแล (admin) = เหมือนครูทั่วไป แก้ได้เฉพาะแถวตัวเอง (เจ้าของตอบ 19 ต.ค. 69) · ครูต้องติ๊กยืนยันเผยแพร่ (publish_ack_at) ก่อนบันทึกเนื้อหาครั้งแรก
 //   สิทธิ์ตัวจริงอยู่ที่ฐาน (RLS + CHECK + trigger + นโยบายถังรูป) — หน้านี้ตรวจซ้ำอีกชั้นด้วยกติกาเดียวกัน (เวกเตอร์ชุดเดียวกับเทสต์ฐาน: tests/lib/teacher-profile-vectors.json)
-//   อ่านผ่าน: rpc my_teacher_id · admins (บทบาทตัวเอง) · teacher_profiles · teachers (ชื่อ) · เขียนผ่าน: update teacher_profiles (เฉพาะคอลัมน์โปรไฟล์ + is_hidden ของเจ้าของ/ผู้ดูแล) · อัปโหลดรูปเข้าถัง teacher-portfolio
+//   อ่านผ่าน: rpc my_teacher_id · admins (บทบาทตัวเอง) · teacher_profiles · teachers (ชื่อ) · เขียนผ่าน: update teacher_profiles (เฉพาะคอลัมน์โปรไฟล์ + publish_ack_at ของครูเจ้าของแถว + is_hidden ของเจ้าของ) · อัปโหลดรูปเข้าถัง teacher-portfolio
 //   ไม่มี insert/delete ตารางโปรไฟล์ (แถวสร้างด้วย migration) · ไม่ลบไฟล์ในถัง (เอารูปออกจากรายการเท่านั้น — ให้เจ้าของ undo ย้อนรูปได้)
 // ⚠️ ข้อความทุกช่อง = esc เสมอ · ห้ามใส่ลิงก์จากข้อมูลครูโดยไม่ผ่านตัวตรวจโฮสต์ · ห้าม console.log เนื้อหาโปรไฟล์
 // ⚠️ บันทึกเทียบเลข rev (จำนวนเต็มที่ trigger นับ) — ไม่เทียบ updated_at (ไมโครวินาทีหายเมื่อผ่าน Date) · 0 แถว = แถบแดง ไม่ขึ้นสำเร็จหลอก
@@ -222,13 +223,15 @@ function ytId(v) {
 // ── สถานะ ──
 function blank() {
   return { uid: null, tid: null, role: null, phase: 'boot', rows: [], names: {}, sel: null, f: null, notes: [], errs: [], flash: '', busy: false, missing: false, error: '',
-           loaded: false, tok: 0, loginErr: '', loginBusy: false, dirty: false, uploading: false };
+           loaded: false, tok: 0, loginErr: '', loginBusy: false, dirty: false, uploading: false, ack: false };
 }
 let st = blank();
 const $app = document.getElementById('app');
-const isMgr = () => st.role === 'owner' || st.role === 'admin';
+const isOwner = () => st.role === 'owner';                                // แก้แทน/ซ่อนโปรไฟล์ของครูคนอื่น = เจ้าของเท่านั้น (ผู้ดูแลเหมือนครูทั่วไป)
 const rowOf = id => st.rows.find(r => r.id === id) || null;
 const curRow = () => rowOf(st.sel);
+// ครูต้องติ๊กยืนยันเผยแพร่ก่อนบันทึกเนื้อหาครั้งแรก — เฉพาะแถวของตัวเอง (เจ้าของแก้แทนครูคนอื่นไม่ต้อง · ฐานบังคับซ้ำ)
+const needAck = () => { const r = curRow(); return !!r && r.id === st.tid && !r.publish_ack_at; };
 
 function errText(e) {
   const m = String((e && e.message) || '');
@@ -253,7 +256,7 @@ async function onSession(session) {
   if (me.error && !NO_TABLE.test(me.error.message || '')) { showFatalError('ตรวจสิทธิ์ครูไม่สำเร็จ: ' + errText(me.error)); }
   st.tid = me.error ? null : (me.data || null);
   st.role = !ad.error && ad.data ? ad.data.role : null;
-  if (!st.tid && !isMgr()) { st.phase = 'notAllowed'; render(); return; }
+  if (!st.tid && !isOwner()) { st.phase = 'notAllowed'; render(); return; }
   st.phase = 'main';
   document.getElementById('backLink').setAttribute('href', st.role ? 'desk.html' : 'teacher.html');
   render();
@@ -267,7 +270,7 @@ function reset() {
 }
 
 // ── โหลด ──
-const COLS = 'id, slug, bio, highlights, socials, video_id, portfolio, is_hidden, rev, updated_at';
+const COLS = 'id, slug, bio, highlights, socials, video_id, portfolio, is_hidden, publish_ack_at, rev, updated_at';
 async function loadAll(keepForm) {
   if (!st.uid) return;
   const uid = st.uid, tok = ++st.tok;
@@ -295,7 +298,7 @@ async function loadAll(keepForm) {
 }
 function loadForm() {
   const r = curRow();
-  st.notes = []; st.errs = []; st.dirty = false;
+  st.notes = []; st.errs = []; st.dirty = false; st.ack = false;
   if (!r) { st.f = null; return; }
   const soc = {};
   SOCIALS.forEach(([k]) => { soc[k] = (r.socials && typeof r.socials[k] === 'string') ? r.socials[k] : ''; });
@@ -342,6 +345,12 @@ const RED_WARN = '<div class="alert alert-red" id="warnBox"><div class="wk-red">
   '<li class="wk-red">ห้ามมีใบหน้านักเรียน ผู้เยาว์ หรือข้อมูลลูกค้า (ชื่อ เบอร์ โปรไฟล์) ในรูปหรือในข้อความ</li>' +
   '<li class="wk-red">ใส่ลิงก์ได้เฉพาะช่องโซเชียล (Instagram · Facebook · YouTube · TikTok) ไม่ใส่ลิงก์ในข้อความ</li></ul>' +
   '<div class="hint">ร้านย้อนการแก้ไขหรือซ่อนโปรไฟล์ได้ทุกเมื่อ</div></div>';
+function ackHtml(r) {
+  if (needAck()) return '<div class="alert alert-red" id="ackBox"><label class="chk"><input type="checkbox" id="ackChk"' + (st.ack ? ' checked' : '') + (st.busy ? ' disabled' : '') + '> <span class="wk-red">ฉันยืนยันให้เผยแพร่ข้อความและรูปที่ฉันบันทึกในหน้านี้บนเว็บไซต์ djlabsiam.com และฉันมีสิทธิ์ใช้เนื้อหาเหล่านั้น</span></label>' +
+    '<div class="hint">ติ๊กครั้งเดียวก่อนบันทึกครั้งแรก — ระบบจดเวลาที่ยืนยันไว้ · ยังไม่ติ๊กจะบันทึกไม่ได้</div></div>';
+  if (r.id === st.tid) return '<div class="hint" id="ackDone">ยืนยันให้เผยแพร่แล้ว ' + esc(new Date(r.publish_ack_at).toLocaleString('th-TH', { timeZone: 'Asia/Bangkok', dateStyle: 'medium', timeStyle: 'short' })) + '</div>';
+  return r.publish_ack_at ? '' : '<div class="alert alert-warn" id="ackNone">ครูคนนี้ยังไม่ได้ติ๊กยืนยันเผยแพร่ — เจ้าของแก้แทนได้ แต่ครูต้องติ๊กเองตอนแก้ครั้งแรก</div>';
+}
 function publicUrl(path) { return SUPABASE_URL + '/storage/v1/object/public/' + BUCKET + '/' + String(path).split('/').map(encodeURIComponent).join('/'); }
 function mainHtml() {
   if (st.missing) return '<div class="alert alert-warn" id="missing">ฐานข้อมูลยังไม่ได้ติดตั้งระบบโปรไฟล์ครู (migration 068) — แจ้งเจ้าของร้าน</div>';
@@ -350,12 +359,12 @@ function mainHtml() {
   if (!r || !f) return '<div class="card" id="noRow"><h2>ยังไม่มีโปรไฟล์ของคุณในระบบ</h2><p>แจ้งเจ้าของร้านให้เพิ่มแถวโปรไฟล์ก่อน</p></div>' + (st.error ? '<div class="alert alert-red wk-red">' + esc(st.error) + '</div>' : '');
   const name = st.names[r.id] || r.slug;
   const mine = r.id === st.tid;
-  return (isMgr() ? '<div class="card"><label class="lbl" for="tsel">เลือกครู</label><select id="tsel" class="input">' +
+  return (isOwner() ? '<div class="card"><label class="lbl" for="tsel">เลือกครู</label><select id="tsel" class="input">' +
       st.rows.map(x => '<option value="' + esc(x.id) + '"' + (x.id === st.sel ? ' selected' : '') + '>' + esc(st.names[x.id] || x.slug) + (x.is_hidden ? ' (ซ่อนจากเว็บ)' : '') + '</option>').join('') + '</select>' +
       (mine ? '' : '<div class="hint wk-red">คุณกำลังแก้โปรไฟล์ของ ' + esc(name) + ' (ไม่ใช่ของคุณ)</div>') +
       '<label class="chk"><input type="checkbox" id="hideChk" data-act="hide"' + (r.is_hidden ? ' checked' : '') + (st.busy ? ' disabled' : '') + '> ซ่อนโปรไฟล์นี้จากเว็บ (มีผลทันที)</label></div>'
     : (r.is_hidden ? '<div class="alert alert-warn" id="hiddenBanner"><span class="pill">ถูกซ่อน</span> โปรไฟล์ของคุณถูกซ่อนจากเว็บโดยร้านอยู่ — ติดต่อเจ้าของร้านหากต้องการให้แสดง</div>' : '')) +
-    RED_WARN +
+    RED_WARN + ackHtml(r) +
     (st.flash ? '<div class="alert alert-ok" id="flash" role="status">' + esc(st.flash) + '</div>' : '') +
     (st.errs.length ? '<div class="alert alert-red" id="errBox" role="alert"><div class="wk-red">บันทึกไม่ได้ — แก้ข้อต่อไปนี้ก่อน</div><ul>' + st.errs.map(e => '<li class="wk-red">' + esc(e) + '</li>').join('') + '</ul></div>' : '') +
     (st.notes.length ? '<div class="alert alert-warn" id="notesBox">' + st.notes.map(n => '<div>' + esc(n) + '</div>').join('') + '</div>' : '') +
@@ -432,6 +441,7 @@ async function save() {
   if (st.busy || st.uploading || !st.f || !curRow()) return;
   const r = curRow(), uid = st.uid;
   const { patch, errs, notes } = collect();
+  if (needAck()) { if (st.ack) patch.publish_ack_at = new Date().toISOString(); else errs.push('ต้องติ๊กยืนยันการเผยแพร่ก่อนบันทึกครั้งแรก'); }   // เวลาจริงฐานตั้งเอง
   st.errs = errs; st.notes = notes; st.flash = '';
   if (errs.length) { render(); document.getElementById('errBox') && document.getElementById('errBox').scrollIntoView({ block: 'nearest' }); return; }
   st.busy = true; render();
@@ -460,7 +470,7 @@ async function save() {
 }
 async function setHidden(v) {
   const r = curRow();
-  if (!r || !isMgr() || st.busy) return;
+  if (!r || !isOwner() || st.busy) return;
   const uid = st.uid;
   st.busy = true;
   let data, error;
@@ -572,6 +582,7 @@ $app.addEventListener('change', e => {
     st.sel = t.value; st.flash = ''; loadForm(); render(); return;
   }
   if (t.id === 'hideChk') { setHidden(t.checked); return; }
+  if (t.id === 'ackChk') { st.ack = t.checked; return; }
   if (t.id === 'pfile') { const file = t.files && t.files[0]; t.value = ''; addPhoto(file); }
 });
 $app.addEventListener('submit', async e => {
