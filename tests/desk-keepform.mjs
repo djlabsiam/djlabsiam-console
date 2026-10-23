@@ -18,6 +18,7 @@ const root = process.env.KEEP_ROOT || join(dirname(fileURLToPath(import.meta.url
 const MOCK = `<script>
 const CALLS = [];
 window.PRODUCT_READS = 0;
+window.MAIL_LISTS = 0;                                   // จำนวนครั้งที่เรียก Edge Function mail action=list
 const FAKE = {
   admins: [{ id: 'u1', full_name: 'เจ้าของร้าน', role: 'owner', is_active: true }, { id: 'u2', full_name: 'พนักงาน', role: 'staff', is_active: true }],
   products: [{ id: 'p1', sku: 'PIO-DDJ-FLX4', name: 'DDJ-FLX4', brand: 'Pioneer DJ', category: 'controller', barcode_ean13: '8850001112223', sell_price: 12900, cost_price: 9000, reorder_point: 1, is_active: true, image_path: null }],
@@ -58,6 +59,7 @@ window.supabase = {
       return { data: null, error: null };
     },
     channel: () => ({ on() { return this; }, subscribe() { return this; } }),
+    functions: { async invoke(name, opts) { if (name === 'mail' && opts && opts.body && opts.body.action === 'list') window.MAIL_LISTS++; return { data: name === 'mail' ? { messages: [], total: 0, unseen: 0, counts: {} } : {}, error: null }; } },
     storage: { from: bucket => ({ getPublicUrl(path) { return { data: { publicUrl: 'https://img.test/' + bucket + '/' + path } }; }, async createSignedUrl() { return { data: { signedUrl: 'data:,' }, error: null }; } }) },
     auth: {
       async getSession() { return { data: { session: SESSION } }; },
@@ -152,11 +154,44 @@ async function runTests() {
 }
 </script>`;
 
+// หมวดกล่องจดหมาย: เดิมรีโหลดรายการเมลตอนกลับมาที่แท็บโดยผลข้างเคียงของ SIGNED_IN ซ้ำ → ตอนนี้ resyncAll ต้องเรียกเอง
+const MAILPAGE = `<script>
+window.addEventListener('load', () => setTimeout(runTests, 300));
+${COMMON}
+async function runTests() {
+  L('=== กลับมาที่แท็บหมวดกล่องจดหมาย: รายการเมลต้องรีโหลดเอง (' + window.innerWidth + 'px) ===');
+  try { localStorage.clear(); } catch (e) {}
+  await login('owner@djlabsiam.com');
+  showSection('mail'); await sleep(400);
+  ok('เปิดหมวดกล่องจดหมาย: ดึงรายการเมลอย่างน้อย 1 ครั้ง', window.MAIL_LISTS >= 1, String(window.MAIL_LISTS));
+  const n0 = window.MAIL_LISTS;
+  await awayFor(60000);
+  ok('ซ่อนแท็บ 60 วินาทีแล้วกลับมา ขณะอยู่หมวดกล่องจดหมาย: รีโหลดรายการเมลอีกครั้ง', window.MAIL_LISTS > n0, n0 + ' → ' + window.MAIL_LISTS);
+  const n1 = window.MAIL_LISTS;
+  await awayFor(2000);
+  ok('ซ่อนไม่ถึง 5 วินาที: ไม่รีโหลด (เหมือน resync ปกติ)', window.MAIL_LISTS === n1, n1 + ' → ' + window.MAIL_LISTS);
+  window.fireAuth('SIGNED_IN'); await sleep(600);
+  ok('auth ส่ง SIGNED_IN ซ้ำ ขณะอยู่หมวดกล่องจดหมาย: ไม่มีข้อผิดพลาดแดงบนจอ', !$('fatalError'), $('fatalError') && $('fatalError').textContent);
+
+  // อยู่หมวดอื่น: กลับมาที่แท็บแล้วต้องไม่ไปเรียกเมลเปล่า ๆ · แผงที่เปิดค้างไม่ปิด
+  await openAndFill();
+  const n2 = window.MAIL_LISTS;
+  await awayFor(60000);
+  ok('อยู่หมวดจัดการข้อมูล (ฟอร์มเพิ่มสินค้าเปิดค้าง): กลับมาที่แท็บ ไม่เรียกรายการเมล', window.MAIL_LISTS === n2, n2 + ' → ' + window.MAIL_LISTS);
+  ok('...และฟอร์มเพิ่มสินค้ายังเปิด ค่ายังอยู่', stillOpen(), why());
+  L('=== สรุป: ' + pass + ' PASS / ' + fail + ' FAIL ===');
+  L(fail ? 'RESULT:FAIL' : 'RESULT:PASS');
+}
+</script>`;
+
 let bad = 0;
-for (const [name, flags] of [['คอม 1400px', ['--window-size=1400,900']], ['จอแคบแบบมือถือ 500px', ['--window-size=500,900']]]) {
-  if (process.env.KEEP_ONLY && !new RegExp(process.env.KEEP_ONLY).test(name)) continue;
-  console.log('\n--- ' + name + ' ---');
-  const r = runPage({ root, file: 'desk.html', mock: MOCK, tests: PAGE, flags });
-  if (!r.ok) bad++;
+for (const [pname, tests] of [['แถบเพิ่มสินค้า', PAGE], ['กล่องจดหมาย', MAILPAGE]]) {
+  for (const [name, flags] of [['คอม 1400px', ['--window-size=1400,900']], ['จอแคบแบบมือถือ 500px', ['--window-size=500,900']]]) {
+    const label = pname + ' · ' + name;
+    if (process.env.KEEP_ONLY && !new RegExp(process.env.KEEP_ONLY).test(label)) continue;
+    console.log('\n--- ' + label + ' ---');
+    const r = runPage({ root, file: 'desk.html', mock: MOCK, tests, flags });
+    if (!r.ok) bad++;
+  }
 }
 process.exit(bad ? 1 : 0);

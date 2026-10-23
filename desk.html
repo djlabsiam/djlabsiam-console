@@ -3836,6 +3836,7 @@ async function resyncAll() {
   if (current === 'transfer') loadTransfer(); else trLoadUnseen();
   if (current === 'teach') loadTeach();
   if (current === 'ops') loadOps();
+  if (current === 'mail') loadMailList();      // เดิมรีโหลดโดยผลข้างเคียงของ SIGNED_IN ซ้ำตอนกลับมาที่แท็บ (ที่ปิดแผงค้างด้วย) — ตอนนี้ต้องเรียกตรงนี้เอง
   loadWork();
 }
 document.addEventListener('visibilitychange', () => {
