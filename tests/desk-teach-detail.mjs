@@ -746,6 +746,78 @@ async function runTests() {
 }
 </script>`;
 
+const T9 = `<script>
+window.addEventListener('load', () => setTimeout(runTests, 300));
+${COMMON}
+const BILL = { enrollment_id: 'e-active', payment_id: 'p1', sales: { sale_no: 'S261023-0042', status: 'completed' } };
+const billCalls = () => CALLS.filter(c => c.table === 'course_sales' || c.table === 'course_sales_settings');
+async function runTests() {
+  L('=== คอร์สเรียน (9/9): บิลค่าคอร์สในแผงรายละเอียด — เลขบิลที่แถวชำระ · ข้อความเตือน · ยังไม่รัน 069 (migration 069) ===');
+  // ── 1. สวิตช์ปิด ไม่มีบิล: หน้าเหมือนเดิมทุกอย่าง ──
+  TEACH.seed();
+  await login('TiBass'); await open();
+  await openEnroll('active', 'e-active');
+  ok('สวิตช์ปิด/ไม่มีบิล: แถวชำระไม่มีเลขบิล', D().querySelectorAll('.te-prow[data-pid]').length === 1 && !D().querySelector('.te-bill'));
+  ok('เจ้าของดึงเลขบิล/สวิตช์ของการลงเรียนนี้ (eq enrollment_id) เท่านั้น', billCalls().some(c => c.table === 'course_sales' && c.eq.some(([k, v]) => k === 'enrollment_id' && v === 'e-active')) && billCalls().some(c => c.table === 'course_sales_settings'), J(billCalls()));
+  openForm('pay'); await settle(100);
+  ok('สวิตช์ปิด: ฟอร์มชำระไม่มีข้อความเรื่องบิล', !E('teBillHint'));
+  dact('close-form'); await settle(100);
+
+  // ── 2. สวิตช์เปิด + มีบิลของรายการชำระ ──
+  TEACH.csOn = true; TEACH.bills = [BILL];
+  row('e-active') ? null : tab('active');
+  await openEnroll('active', 'e-soon'); await openEnroll('active', 'e-active');
+  const prow = D().querySelector('.te-prow[data-pid="p1"]');
+  ok('สวิตช์เปิด: แถวชำระมีเลขบิล "บิล S261023-0042"', !!prow && /บิล S261023-0042/.test(prow.textContent) && !!prow.querySelector('.te-bill'), prow && prow.textContent);
+  openForm('pay'); await settle(100);
+  ok('ฟอร์มชำระ: ข้อความแดงตัวหนา "ลงบิลที่ วันที่ชำระ … ยอดสรุปรายวันของวันนั้นจะเปลี่ยน"', isRed(E('teBillHint')) && /วันที่ชำระ/.test(E('teBillHint').textContent) && /ยอดสรุปรายวัน/.test(E('teBillHint').textContent), E('teBillHint') && E('teBillHint').textContent);
+  dact('close-form'); await settle(100);
+  openForm('refund'); await settle(100);
+  ok('ฟอร์มคืนเงิน: มีข้อความเรื่องบิลแดงตัวหนาด้วย', isRed(E('teBillHint')));
+  dact('close-form'); await settle(100);
+  dact('open', '[data-k="payfix"][data-sid="p1"]'); await settle(100);
+  ok('ฟอร์มแก้รายการที่มีบิล: บอกว่าแก้แล้วระบบแก้บิลให้', isRed(E('teBillHint')) && /แก้ยอด\\\/วันที่\\\/วิธีชำระแล้ว/.test(E('teBillHint').textContent), E('teBillHint') && E('teBillHint').textContent);
+  dact('delpay', '[data-sid="p1"]'); await settle(200);
+  ok('ลบรายการที่มีบิล: หน้าต่างยืนยันบอกเลขบิลที่จะถูกยกเลิกตาม (แดงตัวหนา)', confirmOpen() && isRed($('confirmBody').querySelector('#teDelBillNote')) && /S261023-0042 จะถูกยกเลิกตามไปด้วย/.test($('confirmBody').textContent), $('confirmBody').textContent);
+  closeConfirm(); await settle(100);
+  ok('ยังไม่ได้ยืนยัน: ไม่ส่งลบ', !lastArgs('teach_payment_fix'));
+
+  // ── 3. ปิดสวิตช์หลังเคยใช้: ยังเห็นเลขบิล แต่ไม่มีข้อความเตือนในฟอร์ม ──
+  TEACH.csOn = false;
+  await openEnroll('active', 'e-soon'); await openEnroll('active', 'e-active');
+  ok('สวิตช์ปิดแต่บิลเดิมยังอยู่: ยังเห็นเลขบิลที่แถวชำระ', /บิล S261023-0042/.test(D().textContent));
+  openForm('pay'); await settle(100);
+  ok('สวิตช์ปิด: ฟอร์มชำระไม่มีข้อความเตือนเรื่องบิล', !E('teBillHint'));
+  dact('close-form'); await settle(100);
+
+  // ── 3.5 เลขบิลมาจากฐาน แสดงเป็นข้อความเสมอ (XSS) ──
+  TEACH.bills = [{ enrollment_id: 'e-active', payment_id: 'p1', sales: { sale_no: '<img src=x onerror="window.__xss=1">', status: 'completed' } }];
+  await openEnroll('active', 'e-soon'); await openEnroll('active', 'e-active'); await sleep(200);
+  ok('เลขบิลที่มีแท็ก HTML แสดงเป็นข้อความ ไม่ถูกตีความ (ไม่มี <img> ในแถว · สคริปต์ไม่รัน)', !window.__xss && !D().querySelector('.te-bill img') && /<img/.test(D().querySelector('.te-bill').textContent));
+  TEACH.bills = [BILL];
+
+  // ── 4. ยังไม่รัน 069: ไม่ขึ้นแถบแดง หน้าใช้ได้ตามเดิม ──
+  TEACH.billsMissing = true; TEACH.csOn = true;
+  await openEnroll('active', 'e-soon'); await openEnroll('active', 'e-active');
+  ok('ยังไม่รัน 069: แผงเปิดได้ ไม่มีข้อความ "โหลดรายละเอียดไม่สำเร็จ"', !!D() && !/โหลดรายละเอียดไม่สำเร็จ/.test(dt()) && D().querySelectorAll('.te-prow[data-pid]').length === 1);
+  ok('ยังไม่รัน 069: ไม่มีเลขบิล ไม่มีข้อความเตือน', !D().querySelector('.te-bill'));
+  openForm('pay'); await settle(100);
+  ok('ยังไม่รัน 069: ฟอร์มชำระไม่มีข้อความเรื่องบิล · ยังกรอก/ส่งได้ตามเดิม', !E('teBillHint') && !!$('teD_amount'));
+  dact('close-form'); await settle(100);
+  TEACH.billsMissing = false;
+
+  // ── 5. พนักงานทั่วไป: ไม่ดึง ไม่วาด เรื่องบิลค่าคอร์สในแผง ──
+  await logout();
+  TEACH.csOn = true; TEACH.bills = [BILL];
+  CALLS.length = 0;
+  await login('Zen'); await open();
+  await openEnroll('active', 'e-active');
+  ok('พนักงานทั่วไป: แผงนี้ไม่ดึงเลขบิลรายการชำระ (ไม่มี course_sales ตาม enrollment_id) และไม่อ่านสวิตช์ (มีแต่รายชื่อบิลคอร์สของหน้าประวัติบิล)', !billCalls().some(c => c.table === 'course_sales_settings' || (c.eq || []).some(([k]) => k === 'enrollment_id')), J(billCalls()));
+  ok('พนักงานทั่วไป: ไม่เห็นเลขบิลและไม่มีข้อความเตือนเรื่องบิล', !D().querySelector('.te-bill') && !/S261023-0042/.test(D().textContent) && !E('teBillHint'));
+  L('RESULT:' + (fail ? 'FAIL' : 'PASS') + ' pass=' + pass + ' fail=' + fail);
+}
+</script>`;
+
 const mock = MOCK3 + '\n' + TEACH_MOCK;
 let allOk = true;
 for (const [label, tests, opts] of [
@@ -757,6 +829,7 @@ for (const [label, tests, opts] of [
   ['6 แท็บรอบเรียน · realtime · ความปลอดภัย', T6, { width: 1366, height: 900, coarse: false }],
   ['7 iPhone 390×844', T7, { width: 390, height: 844, coarse: true }],
   ['8 นัดสอนที่เดียว: ลงฐาน + Google Calendar (063)', T8, { width: 1366, height: 900, coarse: false }],
+  ['9 บิลค่าคอร์สในแผง (069)', T9, { width: 1366, height: 900, coarse: false }],
 ]) {
   if (ONLY && !ONLY.test(label)) continue;
   console.log('\n--- ' + label + ' ---');

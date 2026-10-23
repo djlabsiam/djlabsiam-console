@@ -41,6 +41,7 @@ const TEACH = { rows: [], profiles: [], sessions: [], ext: [], subs: [], status:
     sessions_done: 0, sessions_used: 0, hours_done: '0', sessions_remaining: 6, last_session_on: null, next_session_at: null,
     paid_in_full: true, payment_count: 1, state: 'queued', prior_sessions_used: 0, session_rows: 0 }, o);
   TEACH.seed = () => {
+    TEACH.bills = []; TEACH.csOn = false; TEACH.billsMissing = false;   // บิลค่าคอร์ส (069): [{ enrollment_id, payment_id, sales: { sale_no, status } }] · csOn = สวิตช์ · billsMissing = ยังไม่รัน 069
     TEACH.fail = {}; TEACH.missing = false; TEACH.noSource = false; TEACH.noCourseWrite = false; TEACH.priceWrites = []; TEACH.cal = { mode: 'ok', busy: [], failUpsert: null, failRemove: null, raceConflict: false, events: [] }; TEACH.gate = null; TEACH.loads = 0;
     TEACH.rows = [
       // กำลังเรียน: เหลือ 50 วัน · 3/6
@@ -638,10 +639,29 @@ const TEACH = { rows: [], profiles: [], sessions: [], ext: [], subs: [], status:
     }
     return calErr('bad_request', 'ไม่รู้จักคำสั่งนี้');
   };
+  // บิลค่าคอร์ส (069): อ่านได้เฉพาะทีมงาน · ยังไม่รัน 069 = error (หน้าต้องไม่ขึ้นแถบแดง)
+  const billTable = c => {
+    const st = { eq: [] };
+    const q = { select() { return q; }, eq(col, v) { st.eq.push([col, v]); return q; },
+      then(res, rej) {
+        CALLS.push({ op: 'select', table: 'course_sales', who: who(c), eq: st.eq });
+        if (TEACH.billsMissing) return Promise.resolve(E('relation "public.course_sales" does not exist')).then(res, rej);
+        const rows = isTeam(who(c)) ? (TEACH.bills || []).filter(b => st.eq.every(([col, v]) => b[col] === v)) : [];
+        return Promise.resolve(OK(clone(rows))).then(res, rej);
+      } };
+    return q;
+  };
+  const switchTable = c => ({
+    select() { return this; },
+    maybeSingle: async () => {
+      CALLS.push({ op: 'select', table: 'course_sales_settings', who: who(c) });
+      return TEACH.billsMissing ? E('relation "public.course_sales_settings" does not exist') : OK({ enabled: !!TEACH.csOn });
+    },
+  });
   const create = window.supabase.createClient;
   window.supabase.createClient = (u, k, o) => {
     const c = create(u, k, o), from = c.from, rpc = c.rpc, ch0 = c.channel, signIn = c.auth.signInWithPassword;
-    c.from = t => TEACH_TABLES.indexOf(t) >= 0 ? builder(c, t) : (B_TABLES[t] ? B_TABLES[t](c) : from(t));
+    c.from = t => t === 'course_sales' ? billTable(c) : t === 'course_sales_settings' ? switchTable(c) : TEACH_TABLES.indexOf(t) >= 0 ? builder(c, t) : (B_TABLES[t] ? B_TABLES[t](c) : from(t));
     c.rpc = async (fn, args) => {
       if (RPC[fn]) {
         const caller = who(c);                         // ตัวตนของผู้เรียก ณ ตอนส่งคำขอ (ไม่ใช่ตอนตอบ — สลับบัญชีกลางทางไม่เปลี่ยนผลที่ฐานตอบ)

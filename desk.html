@@ -3868,7 +3868,7 @@ bkPollSchedule();
 // โหลดข้อมูล — query ชุดเดียวกับ stock.html / sales.html
 // ---------------------------------------------------------------------------
 async function loadAll() {
-  await Promise.all([loadProducts(), loadBrands(), loadStockLevels(), loadMovements(), loadDemoUnits(), loadCustomers(), loadSalesHistory(), loadStats(),
+  await Promise.all([loadProducts(), loadBrands(), loadStockLevels(), loadMovements(), loadDemoUnits(), loadCustomers(), loadSalesHistory(), loadCourseSales(), loadStats(),
                      loadBookings(), loadBookingSettings()]);
   renderAll();
   bkOpenDeepLink();               // ลิงก์ #booking:<id> (เช่น จากแจ้งเตือนการจอง) เปิดใบนั้นเมื่อข้อมูลพร้อม
@@ -3921,6 +3921,14 @@ async function loadCustomers() {
     .order('full_name');
   if (error) { console.error('[Load customers]', error); showFatalError('โหลดรายชื่อลูกค้าไม่สำเร็จ: ' + error.message); return; }
   customers = data || [];
+}
+
+// บิลค่าคอร์สเรียน (ตาราง course_sales — migration 069) · ยังไม่มีตาราง/อ่านไม่ได้ = ไม่มีบิลคอร์ส หน้านี้ใช้ได้ตามเดิม (ไม่ขึ้นแถบแดง)
+let courseSaleMap = new Map();
+async function loadCourseSales() {
+  const { data, error } = await db.from('course_sales').select('sale_id, kind, enrollment_id');
+  if (error) console.error('[Load course sales]', error);
+  courseSaleMap = new Map((error ? [] : data || []).map(r => [r.sale_id, r]));
 }
 
 async function loadSalesHistory() {
@@ -5918,11 +5926,12 @@ function renderBills() {
       .some(x => (x || '').toLowerCase().includes(q))));
   fillTable('bills', sortRows('bills', rows), s =>
     '<td class="nowrap dt">' + formatDateTime(s.created_at) + '</td>' +
-    '<td><strong' + (s.status === 'void' ? ' style="text-decoration:line-through;"' : '') + '>' + escapeHtml(s.sale_no) + '</strong></td>' +
+    '<td><strong' + (s.status === 'void' ? ' style="text-decoration:line-through;"' : '') + '>' + escapeHtml(s.sale_no) + '</strong>' +
+      (courseSaleMap.has(s.id) ? ' <span class="sub">ค่าคอร์สเรียน</span>' : '') + '</td>' +
     '<td class="col-ph">' + escapeHtml(customerName(s)) + '</td>' +
     '<td class="col-opt">' + escapeHtml(s.payment_method || '—') + '</td>' +
     '<td class="col-opt">' + escapeHtml(sellerNames(s)) + '</td>' +
-    '<td class="num"><strong>' + formatMoney(s.total) + '</strong></td>' +
+    '<td class="num"><strong' + (Number(s.total) < 0 ? ' class="wk-red"' : '') + '>' + formatMoney(s.total) + '</strong></td>' +
     '<td>' + billStatusHtml(s) + '</td>',
     'ไม่พบบิลที่ตรงกับเงื่อนไข');
 }
@@ -5947,6 +5956,7 @@ async function openBill(saleId) {
 
   currentSaleDetailId = saleId;
   const isVoid = sale.status === 'void';
+  const isCourse = courseSaleMap.has(saleId);
   const itemsHtml = (data || []).map(it =>
     '<div class="list-row"><div><div style="font-weight:600;">' + escapeHtml(it.products ? it.products.name : '(ไม่พบสินค้า)') + '</div>' +
     '<div class="sub">' + (it.products && it.products.sku ? escapeHtml(it.products.sku) + ' · ' : '') +
@@ -5957,6 +5967,8 @@ async function openBill(saleId) {
   openDetail('บิล ' + sale.sale_no,
     '<div style="margin-bottom:14px;">' + billStatusHtml(sale) + '</div>' +
     (isVoid ? '<div class="alert alert-red">บิลนี้ถูกยกเลิกแล้ว' + (sale.voided_reason ? ' — เหตุผล: ' + escapeHtml(sale.voided_reason) : '') + '</div>' : '') +
+    (isCourse ? '<div class="wk-red" id="billCourseNote">บิลค่าคอร์สเรียน (ระบบออกให้จากรายการชำระ) — ยกเลิกหรือแก้จากหน้านี้ไม่ได้ ให้แก้หรือลบรายการชำระที่หน้า "คอร์สเรียน"</div>' : '') +
+    (Number(sale.total) < 0 ? '<div class="wk-red" id="billNegNote">บิลคืนเงิน — ยอดติดลบ หักออกจากยอดของวันที่ลงบิล</div>' : '') +
     '<dl class="kv">' +
       '<dt>วันเวลา</dt><dd>' + formatDateTime(sale.created_at) + '</dd>' +
       '<dt>ลูกค้า</dt><dd>' + escapeHtml(customerName(sale)) + '</dd>' +
@@ -5971,7 +5983,8 @@ async function openBill(saleId) {
       '<div class="sum-row"><span>ส่วนลด</span><span>' + formatMoney(sale.discount) + ' บาท</span></div>' +
       '<div class="sum-row sum-net"><span>ยอดสุทธิ</span><span>' + formatMoney(sale.total) + ' บาท</span></div>' +
     '</div>' +
-    (isManager() && !isVoid
+    (isCourse ? ''
+    : isManager() && !isVoid
       ? '<button class="btn btn-danger" id="voidSaleBtn" type="button" onclick="openVoidDialog()" style="margin-top:20px;">✕ ยกเลิกบิล</button>'
       : (!isVoid ? '<p class="hint" style="margin-top:16px;">ยกเลิกบิลได้เฉพาะเจ้าของร้านหรือผู้ดูแลระบบ</p>' : '')));
 }
@@ -5979,6 +5992,7 @@ async function openBill(saleId) {
 function openVoidDialog() {
   const sale = sales.find(s => s.id === currentSaleDetailId);
   if (!sale) { showToast('⚠️ ไม่พบบิลที่ต้องการยกเลิก'); return; }
+  if (courseSaleMap.has(sale.id)) { showToast('⚠️ บิลค่าคอร์สยกเลิกจากหน้านี้ไม่ได้ — แก้หรือลบรายการชำระที่หน้าคอร์สเรียน'); return; }
   document.getElementById('voidSaleInfo').textContent = 'บิล ' + sale.sale_no + ' · ' + formatMoney(sale.total) + ' บาท';
   document.getElementById('voidReason').value = '';
   document.getElementById('voidDialog').showModal();
@@ -9211,7 +9225,7 @@ function renderDaily() {
         '<td class="col-ph">' + escapeHtml(r.source) + ' <span class="sub">(' + (KIND[r.kind] || r.kind) + ')</span></td>' +
         '<td>' + escapeHtml(r.detail) + '</td>' +
         '<td class="col-ph">' + escapeHtml(r.payment_method || '-') + '</td>' +
-        '<td class="num">' + formatMoney(r.amount) + '</td>' +
+        '<td class="num">' + (Number(r.amount) < 0 ? '<span class="wk-red">' + formatMoney(r.amount) + '</span>' : formatMoney(r.amount)) + '</td>' +
         '<td class="no-print nowrap">' + (r.kind === 'manual'
           ? '<button class="btn btn-sm" type="button" onclick="openIncomeModal(\'' + r.ref_id + '\')">แก้ไข</button> ' +
             '<button class="btn btn-sm btn-danger" type="button" onclick="dailyDelete(\'income\', \'' + r.ref_id + '\')">ลบ</button>'
@@ -14307,11 +14321,15 @@ async function teDetLoad(id, silent) {
   const uid = currentUserId, cur = te, tok = ++d.tok, cap = r ? teCaps(r) : { money: false, extSee: isOwner() || !!te.tid };
   if (!silent) { d.loaded = false; d.error = ''; teDetRender(); }
   const skip = Promise.resolve({ data: null, error: null });
-  const [s, m, p, x] = await Promise.all([
+  // เลขบิลค่าคอร์สของแต่ละรายการชำระ + สวิตช์ (migration 069) — เฉพาะเจ้าของ/ผู้ดูแล · ยังไม่รัน 069/อ่านไม่ได้ = ไม่แสดง ไม่ขึ้นแถบแดง
+  const billQ = cap.mgr ? db.from('course_sales').select('payment_id, sales:sale_id(sale_no, status)').eq('enrollment_id', id).then(r => r, e => ({ data: null, error: e })) : skip;
+  const swQ = cap.mgr ? db.from('course_sales_settings').select('enabled').maybeSingle().then(r => r, e => ({ data: null, error: e })) : skip;
+  const [s, m, p, x, bq, sq] = await Promise.all([
     db.from('class_sessions').select('id, enrollment_id, teacher_id, status, starts_at, ends_at, held_on, hours, room, cancel_by, notified_at, late_cancel, cancel_reason, gcal_uid, created_at').eq('enrollment_id', id),
     cap.money ? db.from('enrollment_money').select('price_agreed').eq('enrollment_id', id) : skip,
     cap.money ? db.from('enrollment_payments').select('id, paid_on, amount, kind, method, note, created_at').eq('enrollment_id', id).order('paid_on', { ascending: true }) : skip,
     cap.extSee ? db.from('enrollment_extension_requests').select('id, requested_by, requested_until, reason, status, decision_note, approved_until, decided_at, created_at').eq('enrollment_id', id).order('created_at', { ascending: false }) : skip,
+    billQ, swQ,
   ]);
   if (uid !== currentUserId || te !== cur || te.det !== d || tok !== d.tok) return;
   const bad = s.error || m.error || p.error || x.error;
@@ -14327,6 +14345,9 @@ async function teDetLoad(id, silent) {
   d.hasMoney = !!cap.money;
   d.price = cap.money && m.data && m.data.length ? Number(m.data[0].price_agreed) : null;
   d.pays = cap.money ? (p.data || []) : [];
+  if (bq && bq.error) console.error('[Teach detail bills]', bq.error.code || '');
+  d.bills = new Map(((bq && !bq.error && bq.data) || []).filter(r => r.payment_id && r.sales).map(r => [r.payment_id, r.sales.sale_no]));
+  d.csOn = !!(sq && !sq.error && sq.data && sq.data.enabled);
   d.reqs = cap.extSee ? (x.data || []) : [];
   // บันทึกการสอน: ดึงเฉพาะรอบที่ผู้ใช้นี้มีสิทธิ์ (เจ้าของ + ครูของรอบ/ของนักเรียน) — ที่เหลือไม่ดึง ไม่วาด
   const nids = r ? d.sess.filter(z => teCanNote(r, z)).map(z => z.id) : [];
@@ -14409,7 +14430,8 @@ function teDetPayHtml(r, d, cap) {
         const m = (TE_METHODS.find(x => x[0] === p.method) || [0, p.method])[1], refund = p.kind === 'refund';
         const fixing = d.open === 'payfix' && d.fv.id === p.id;
         return '<div class="te-prow" data-pid="' + escapeHtml(p.id) + '"><span>' + fmtDate(p.paid_on) + '</span><strong' + (refund ? ' class="wk-red"' : '') + '>' + (refund ? 'คืนเงิน −' : '') + teFmt(Math.abs(Number(p.amount))) + ' ฿</strong>' +
-          (refund ? '' : '<span>' + escapeHtml(m) + '</span>') + (p.note ? '<span class="te-sub">' + escapeHtml(p.note) + '</span>' : '') +
+          (refund ? '' : '<span>' + escapeHtml(m) + '</span>') +
+          (cap.mgr && d.bills && d.bills.get(p.id) ? '<span class="te-sub te-bill">บิล ' + escapeHtml(d.bills.get(p.id)) + '</span>' : '') + (p.note ? '<span class="te-sub">' + escapeHtml(p.note) + '</span>' : '') +
           (cap.mgr && !fixing ? teBtn('open', 'แก้', { k: 'payfix', sid: p.id, sm: true }) : '') + '</div>' + (fixing ? teFormPayFix(p, d) : '');
       }).join('') + '</div>' : '<div class="hint">' + (r.paid_unknown ? 'ชำระครบ (ไม่ทราบวันที่/ยอด)' : 'ยังไม่มีรายการชำระ') + (r.source === 'backfill' ? ' · ไม่มีสลิป (เก่า)' : '') + '</div>';
     }
@@ -14427,20 +14449,24 @@ function teDetPayHtml(r, d, cap) {
   else h += '<div class="hint" id="teDetPayOnlyMgr">บันทึกชำระได้เฉพาะเจ้าของหรือผู้ดูแล</div>';
   return h + '</section>';
 }
+// ระบบบิลค่าคอร์สเปิดอยู่ (069) — บอกก่อนบันทึก/แก้/ลบ ว่าบิลลงวันที่เงินเข้า และยอดวันเก่าอาจเปลี่ยน
+function teBillHint(d, what) {
+  return d && d.csOn ? '<div class="wk-red" id="teBillHint">' + what + 'ระบบออก/แก้บิลค่าคอร์สให้อัตโนมัติ โดยลงบิลที่ "วันที่ชำระ" ที่กรอก — ถ้าเป็นวันที่ผ่านมาแล้ว ยอดสรุปรายวันของวันนั้นจะเปลี่ยนตาม</div>' : '';
+}
 function teFormPay(cap, d) {
-  return '<div class="te-form" id="teFormPay"><h4>บันทึกชำระ</h4>' +
+  return '<div class="te-form" id="teFormPay"><h4>บันทึกชำระ</h4>' + teBillHint(d, 'บันทึกแล้ว') +
     teIn('date', 'วันที่ชำระ', { type: 'date', max: todayBangkok() }) + teIn('amount', 'ยอด (บาท)', { inputmode: 'decimal' }) +
     teSel('method', 'วิธีชำระ', TE_METHODS) + teIn('note', 'หมายเหตุ (ไม่เกิน 200 ตัวอักษร · ห้ามใส่เลขบัญชี/เบอร์โทร)', { maxlength: 200 }) +
     '<div class="wk-red" id="teDetPayWarn">' + TE_PAY_WARN_SEEN + '</div>' + teFormBar('pay', 'บันทึกชำระ') + '</div>';
 }
 function teFormRefund(d) {
-  return '<div class="te-form" id="teFormRefund"><h4>คืนเงิน</h4>' +
+  return '<div class="te-form" id="teFormRefund"><h4>คืนเงิน</h4>' + teBillHint(d, 'บันทึกแล้ว') +
     teIn('date', 'วันที่คืนเงิน', { type: 'date', max: todayBangkok() }) + teIn('amount', 'ยอดที่คืน (บาท · ใส่เป็นบวก)', { inputmode: 'decimal' }) +
     teIn('note', 'หมายเหตุ (ไม่เกิน 200 ตัวอักษร)', { maxlength: 200 }) +
     '<div class="wk-red">คืนเงินแล้วย้อนกลับไม่ได้ — ยอดคืนต้องไม่เกินยอดที่ชำระสะสม</div>' + teFormBar('refund', 'บันทึกคืนเงิน', true) + '</div>';
 }
 function teFormPayFix(p, d) {
-  return '<div class="te-form" id="teFormPayFix"><h4>แก้รายการชำระ</h4>' +
+  return '<div class="te-form" id="teFormPayFix"><h4>แก้รายการชำระ</h4>' + (d && d.bills && d.bills.get(p.id) ? teBillHint(d, 'แก้ยอด/วันที่/วิธีชำระแล้ว') : '') +
     teIn('date', 'วันที่', { type: 'date', max: todayBangkok() }) + teIn('amount', 'ยอด (บาท · ใส่เป็นบวก)', { inputmode: 'decimal' }) +
     (p.kind === 'refund' ? '' : teSel('method', 'วิธีชำระ', TE_METHODS)) + teIn('note', 'หมายเหตุ (ไม่เกิน 200 ตัวอักษร · เว้นว่าง = ลบหมายเหตุ)', { maxlength: 200 }) +
     '<div class="wk-red">ค่าเดิมเก็บไว้ในบันทึกการเปลี่ยนแปลง (activity log) — แก้ผิดจะกระทบยอดคงเหลือทันที</div>' +
@@ -14935,7 +14961,8 @@ function teDetDelPay(pid) {
   const d = te.det, p = d.pays.find(x => x.id === pid);
   if (!p) return;
   askConfirm('ลบรายการชำระ', '<div class="alert alert-red wk-red">ลบรายการ' + (p.kind === 'refund' ? 'คืนเงิน' : 'ชำระ') + 'วันที่ ' + fmtDate(p.paid_on) + ' — ยอดคงเหลือเปลี่ยนทันที</div>' +
-    '<p>ค่าเดิมเก็บไว้ในบันทึกการเปลี่ยนแปลง (activity log) แต่ลบแล้วกู้คืนที่หน้านี้ไม่ได้</p>', 'ยืนยันลบ', async () => {
+    '<p>ค่าเดิมเก็บไว้ในบันทึกการเปลี่ยนแปลง (activity log) แต่ลบแล้วกู้คืนที่หน้านี้ไม่ได้</p>' +
+    (d.bills && d.bills.get(pid) ? '<div class="wk-red" id="teDelBillNote">บิล ' + escapeHtml(d.bills.get(pid)) + ' จะถูกยกเลิกตามไปด้วย</div>' : ''), 'ยืนยันลบ', async () => {
     closeConfirm();
     if (te.det !== d) return;
     await teDetRun('delpay', async () => {
