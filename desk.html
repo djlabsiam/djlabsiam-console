@@ -3738,7 +3738,9 @@ async function handleAuthState(session) {
     pendingRoute = null;
     if (!showSection(r, 'replace')) showSection(HOME, 'replace');
   } else if (sec && !sectionAllowed(sec)) showSection(HOME, 'replace');
-  else if (['daily', 'activity', 'admin', 'mail', 'calendar'].includes(current)) showSection(current, 'none');
+  // เข้าหมวดซ้ำเฉพาะตอนเข้า/สลับบัญชีจริง — supabase-js ส่ง SIGNED_IN ซ้ำด้วย session เดิมทุกครั้งที่กลับมาที่แท็บ (และตอนต่ออายุ token)
+  // ถ้าเข้าหมวดซ้ำตอนนั้น closeDetail() จะปิดแผง/ฟอร์มที่เปิดค้าง (เช่นแถบเพิ่มสินค้า) ทุกครั้งที่สลับหน้าต่าง · ข้อมูลเก็บตกโดย resyncAll อยู่แล้ว
+  else if (prevUser !== currentUserId && ['daily', 'activity', 'admin', 'mail', 'calendar'].includes(current)) showSection(current, 'none');
 
   loadAll();
   loadStaffHome();
