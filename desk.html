@@ -13376,11 +13376,11 @@ function toggleCalc(fromButton) {
 // สถานะ (te.rows[].state) คำนวณที่ฐาน: waiting_payment · queued · active · expired · completed · closed — หน้าจอไม่คำนวณซ้ำ
 // ⚠️ ชื่อ/ชื่อเล่น/คอร์ส/ครู/ห้อง มาจากผู้ใช้ — escapeHtml เสมอ · ห้ามพิมพ์ข้อมูลนักเรียน (เบอร์/สลิป) ลง console.log
 // ⚠️ ออกจากระบบ/สลับบัญชี → teReset() · ผลโหลดที่มาช้าตอนสลับบัญชีถูกทิ้ง (uid + te.tok) · Realtime → teScheduleReload (รวบ 400ms)
-// ⚠️ สลิป: ปิดไว้หลัง TE_SLIPS_ENABLED (ค่าตั้งต้น false) — นโยบายความเป็นส่วนตัวของเว็บยังไม่แก้ ห้ามเก็บสลิปจริง · ก้อนนี้ไม่เรียกถัง course-slips
+// ⚠️ สลิป: เปิดเป็นค่าตั้งต้นสำหรับทุกคน (25 ต.ค. 69 — เจ้าของทดสอบ 070 ผ่านแล้ว · privacy.html ขึ้นเว็บแล้ว) · ปิดฉุกเฉินได้ด้วย window.DJLAB_SLIPS_ENABLED = false → กลับเป็นไม่เรียกถัง course-slips ไม่โชว์ช่องแนบ
 // ===========================================================================
-// สวิตช์สลิป: เปิดให้ทุกคนด้วย window.DJLAB_SLIPS_ENABLED === true (ยังไม่ตั้ง — รอเจ้าของทดสอบ + ยืนยันถ้อยคำ privacy.html) ·
-//   ผู้ทดสอบเปิดเฉพาะเบราว์เซอร์ตัวเองได้ด้วย localStorage 'djlab.slips.test.v1' = '1' (ขั้นทดสอบ B-4 ก่อนเปิดจริง · ไม่กระทบคนอื่น) — เป็นแค่ความสะดวกของหน้าจอ ตัวกันจริงคือ policy/ฟังก์ชันที่ฐาน (070)
-const TE_SLIPS_ENABLED = window.DJLAB_SLIPS_ENABLED === true || (() => { try { return localStorage.getItem('djlab.slips.test.v1') === '1'; } catch (e) { return false; } })();
+// สวิตช์สลิป: เปิดเมื่อ window.DJLAB_SLIPS_ENABLED !== false (ปิดได้ด้วย === false เท่านั้น — "false"/0/ว่าง ไม่ปิด) ·
+//   เป็นแค่ความสะดวกของหน้าจอ ตัวกันจริงคือ policy/ฟังก์ชันที่ฐาน (070) · ไม่มีทางเปิดเฉพาะเครื่องด้วย localStorage แล้ว (ตัดออก 25 ต.ค. 69)
+const TE_SLIPS_ENABLED = window.DJLAB_SLIPS_ENABLED !== false;
 const TE_SOON_DAYS = 14;          // ใกล้หมดอายุ (แดงตัวหนา) — §7
 const TE_SUMMARY_DAYS = 30;       // การ์ดสรุป "หมดอายุใน 30 วัน"
 const TE_WEEK_DAYS = 7;           // รอบเรียนที่จะถึง (สรุป)
@@ -14787,7 +14787,7 @@ async function teDetRun(label, fn) {
 const teRpc = async (fn, args) => { const { data, error } = await db.rpc(fn, args); if (error) throw error; return data; };
 const teTs = (ymd, hm) => ymd + 'T' + hm + ':00+07:00';
 
-// ── สลิปการชำระ (migration 070 · ปิดไว้หลัง TE_SLIPS_ENABLED) ──────────────────────────────────────────────────
+// ── สลิปการชำระ (migration 070 · ปิดฉุกเฉินได้ที่ TE_SLIPS_ENABLED) ──────────────────────────────────────────────────
 // ⚠️ สลิปมีข้อมูลส่วนตัวของลูกค้า: เปิดดูได้เฉพาะเจ้าของ ผู้ดูแล และครูของนักเรียนคนนั้น (policy ของถัง course-slips) ·
 //   พนักงานทั่วไป "แนบได้แต่เปิดดูไม่ได้" (เจ้าของยืนยัน B-3 · 24 ต.ค. 69) — ตัวที่กันจริงคือ policy/ฟังก์ชันที่ฐาน ปุ่มที่ซ่อนและสวิตช์เป็นแค่ความสะดวก
 // ⚠️ ลำดับ: อัปไฟล์ลงถังก่อน (พาธ <enrollment_id>/<request_id>.<นามสกุล> · upsert:false) → ค่อยเรียกฟังก์ชันฐาน · อัปล้ม = ไม่บันทึกชำระ ·

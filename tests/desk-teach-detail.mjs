@@ -86,9 +86,9 @@ async function runTests() {
   ok('เจ้าของเห็นราคาที่ตกลง 20,000 · ชำระสะสม 20,000 · คงเหลือ 0 + รายการชำระ 1 แถว', /ราคาที่ตกลง20,000฿/.test(E("teMoney").textContent.replace(/\\s/g, '')) && /ชำระสะสม/.test(dt()) && /คงเหลือ 0/.test(dt())
     && D().querySelectorAll('.te-prow[data-pid]').length === 1, E('teMoney') && E('teMoney').textContent);
   const selects = CALLS.filter(c => c.op === 'select');
-  ok('ดึงเฉพาะตารางของการลงเรียนนี้ (eq enrollment_id) · ไม่ดึงคอลัมน์ slip_path', selects.some(c => c.table === 'enrollment_payments' && c.eq.some(e => e[0] === 'enrollment_id' && e[1] === 'e-active'))
-    && !selects.some(c => /slip_path/.test(c.cols || '')) && !CALLS.some(c => /course-slips|storage/.test(J(c))));
-  ok('ข้อความ "แนบสลิป: ยังไม่เปิดใช้" ขึ้นเสมอ · ไม่มีช่องเลือกไฟล์', /แนบสลิป: ยังไม่เปิดใช้/.test(dt()) && !D().querySelector('input[type="file"]'));
+  ok('ดึงเฉพาะตารางของการลงเรียนนี้ (eq enrollment_id) · เลือกคอลัมน์สลิป (เปิดเป็นค่าตั้งต้น) แต่ยังไม่แตะถัง', selects.some(c => c.table === 'enrollment_payments' && c.eq.some(e => e[0] === 'enrollment_id' && e[1] === 'e-active'))
+    && selects.some(c => c.table === 'enrollment_payments' && /slip_path/.test(c.cols || '')) && !CALLS.some(c => /course-slips|storage/.test(J(c))));
+  ok('ข้อความความเป็นส่วนตัวของสลิปแสดง (ไม่มี "แนบสลิป: ยังไม่เปิดใช้") · ฟอร์มปิดอยู่ = ไม่มีช่องเลือกไฟล์', !!E('teDetSlipNote') && /ข้อมูลส่วนตัว/.test(E('teDetSlipNote').textContent) && !/ยังไม่เปิดใช้/.test(dt()) && !D().querySelector('input[type="file"]'));
   await shot('c1-detail-owner');
   ok('ส่วนการชำระ (เจ้าของ): มีปุ่ม "ปรับราคาที่ตกลง (ส่วนลด)" + คำอธิบายให้ปรับก่อนบันทึกชำระ', !!D().querySelector('#teDetPay [data-act="open"][data-k="fix"]') && !!E('tePriceAdjustHint') && /ก่อนบันทึกชำระ/.test(E('tePriceAdjustHint').textContent));
   D().querySelector('#teDetPay [data-act="open"][data-k="fix"]').click(); await settle(150);
@@ -409,7 +409,7 @@ async function runTests() {
   await open();
   await openEnroll('active', 'e-active');
   ok('พนักงานเปิดแผงได้ · เห็นสรุป + ✓ชำระครบ + "บันทึก 1 งวด"', !!D() && /Basic DJ Class/.test(dt()) && /✓ ชำระครบ/.test(dt()) && /บันทึก 1 งวด/.test(dt()));
-  ok('ไม่วาดส่วนเงิน: ไม่มีราคา/ยอดสะสม/คงเหลือ/รายการชำระ/ปุ่มคืนเงิน/ปุ่มแก้', !E('teMoney') && !D().querySelector('.te-prow[data-pid]') && !/20,000|คงเหลือ|ชำระสะสม|ราคาที่ตกลง/.test(dt()) && !has('open', '[data-k="refund"]') && !has('open', '[data-k="payfix"]'));
+  ok('ไม่วาดส่วนเงิน: ไม่มีราคา/ยอดสะสม/คงเหลือ/รายการชำระ/ปุ่มคืนเงิน/ปุ่มแก้ (แถวงวดใน #teSlipTodo ของสลิปมีแค่เลขงวด+สถานะสลิป ไม่มียอด)', !E('teMoney') && ![...D().querySelectorAll('.te-prow[data-pid]')].some(r => !r.closest('#teSlipTodo')) && !/20,000|คงเหลือ|ชำระสะสม|ราคาที่ตกลง/.test(dt()) && !has('open', '[data-k="refund"]') && !has('open', '[data-k="payfix"]'));
   ok('ไม่วาดบันทึกการสอน: ไม่มีเนื้อบันทึก · ไม่มีปุ่ม · ไม่มีช่องข้อความ', !D().querySelector('.te-note') && !/ฝึกสแครช/.test(dt()) && !has('open', '[data-k="note"]') && !D().querySelector('textarea'));
   ok('ไม่วาดขยายอายุ/จัดการ: ไม่มีส่วนขยายอายุ · ไม่มีปุ่มแก้/ปิด/เปิดกลับ', !E('teDetExt') && !has('open', '[data-k="fix"]') && !has('open', '[data-k="close"]') && !has('reopen') && !/ขอขยายอายุ|ขยายอายุเอง/.test(dt()));
   const sel = CALLS.filter(c => c.op === 'select' && c.who === 'u2');

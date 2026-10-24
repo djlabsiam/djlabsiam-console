@@ -2,7 +2,7 @@
  * เทสต์หน้าจอ "สลิปการชำระ" ของหมวดคอร์สเรียน (desk.html · migration 070 · แผน console-workspace/PLAN-course-sales-slips.md ส่วน B)
  *   รัน: node tests/desk-slips.mjs        ทีละหน้า: SLIPS_ONLY=<regex ชื่อหน้า>        ทำ mutation: SLIPS_ROOT=<โฟลเดอร์ที่มี desk.html ฉบับอื่น>
  *
- * สลิปอยู่หลังสวิตช์ window.DJLAB_SLIPS_ENABLED (หน้า 1–7 เปิดสวิตช์ · หน้า 8 ปิด = ต้องเหมือนเดิมทุกอย่าง ไม่แตะถังเลย)
+ * สลิป "เปิดเป็นค่าตั้งต้น" (25 ต.ค. 69) — ปิดฉุกเฉินได้ด้วย window.DJLAB_SLIPS_ENABLED = false เท่านั้น (หน้า 1–7, 9 ไม่ตั้งอะไร = เปิด · หน้า 8 ตั้ง false = ต้องเหมือนก่อนมีสลิปทุกอย่าง ไม่แตะถังเลย)
  * ฐานปลอม tests/lib/teach-mock.mjs จำลอง RLS ของถัง course-slips + ฟังก์ชัน teach_payment_slip_set/clear/todo ตามกติกา 070 ·
  * ตัวจริงของ SQL/RLS ตรวจที่ console-workspace/sql-tests/test070.mjs (PGlite) — PGlite/ตัวปลอมไม่ใช่ Supabase Storage จริง
  *
@@ -13,8 +13,9 @@
  *  5. พนักงานทั่วไป: แนบได้ ดูไม่ได้ ไม่เห็นยอด · อัปนอกกติกาถูกปฏิเสธ · ยังไม่รัน 070
  *  6. พนักงานที่เป็นครู (Nutty): ดูสลิปของนักเรียนตัวเองได้ ของคนอื่นไม่ได้
  *  7. ความปลอดภัย: XSS ชื่อไฟล์ · ออกจากระบบ/สลับบัญชีล้างสถานะ · ไม่ฝัง URL ในหน้า · ยังไม่รัน 070 (เจ้าของ)
- *  8. สวิตช์ปิด: ไม่มีช่องแนบ ไม่เลือกคอลัมน์สลิป ไม่แตะถัง
+ *  8. ปิดฉุกเฉิน (= false): ไม่มีช่องแนบ ไม่เลือกคอลัมน์สลิป ไม่แตะถัง ไม่เรียก teach_payment_slip_todo
  *  9. iPhone 390px
+ * 10–14. ตัวสวิตช์: ปิดได้ด้วย === false เท่านั้น ("false"/0 ไม่ปิด) · ค่าตั้งต้นเปิด · localStorage djlab.slips.test.v1 ไม่มีผลทั้งสองทาง
  */
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -103,6 +104,8 @@ async function runTests() {
   await openTeach();
   await openEnroll('active', 'e-active');
   const sel = CALLS.filter(c => c.op === 'select' && c.table === 'enrollment_payments');
+  ok('ค่าตั้งต้น = เปิด: ไม่ได้ตั้ง DJLAB_SLIPS_ENABLED เลย แต่ TE_SLIPS_ENABLED เป็น true', window.DJLAB_SLIPS_ENABLED === undefined && TE_SLIPS_ENABLED === true, String(window.DJLAB_SLIPS_ENABLED) + ' ' + TE_SLIPS_ENABLED);
+  ok('ไม่มีทางเปิดด้วย localStorage แล้ว: หน้าไม่อ่านคีย์ djlab.slips.test.v1', !localStorageReads.includes('djlab.slips.test.v1'), localStorageReads.join());
   ok('สวิตช์เปิด: เลือกคอลัมน์ slip_path + request_id ของรายการชำระ', sel.some(c => /slip_path/.test(c.cols) && /request_id/.test(c.cols)), sel.map(c => c.cols).join('|'));
   ok('ข้อความความเป็นส่วนตัวแดงตัวหนา: เจ้าของ ผู้ดูแล ครูของนักเรียนเปิดดูได้ · พนักงานแนบได้แต่เปิดดูไม่ได้', isRed(E('teDetSlipNote')) && /เฉพาะเจ้าของ ผู้ดูแล และครูของนักเรียนคนนั้น/.test(txt('teDetSlipNote')) && /แนบได้แต่เปิดดูไม่ได้/.test(txt('teDetSlipNote')));
   ok('ไม่มีข้อความ "ยังไม่เปิดใช้" เมื่อสวิตช์เปิด', !/ยังไม่เปิดใช้/.test(dt()));
@@ -541,8 +544,8 @@ const T8 = `<script>
 window.addEventListener('load', () => setTimeout(runTests, 300));
 ${COMMON}
 async function runTests() {
-  L('=== สลิป (8/9): สวิตช์ปิด — พฤติกรรมเดิมทุกอย่าง ไม่แตะถัง ===');
-  ok('สวิตช์ปิด (ค่าตั้งต้น)', TE_SLIPS_ENABLED === false);
+  L('=== สลิป (8/9): ปิดฉุกเฉิน (DJLAB_SLIPS_ENABLED = false) — พฤติกรรมเดิมทุกอย่าง ไม่แตะถัง ===');
+  ok('สวิตช์ปิดฉุกเฉิน (DJLAB_SLIPS_ENABLED = false)', window.DJLAB_SLIPS_ENABLED === false && TE_SLIPS_ENABLED === false);
   TEACH.seed();
   TEACH.pay.find(x => x.id === 'p1').slip_path = 'e-active/rq-p1.webp';        // มีสลิปในฐานก็ไม่โชว์ปุ่ม (ปิดอยู่)
   await login('TiBass');
@@ -595,16 +598,25 @@ ${COMMON}
 async function runTests() {
   L('=== สลิป (สวิตช์): ' + window.__LABEL + ' ===');
   ok('TE_SLIPS_ENABLED = ' + window.__EXPECT, TE_SLIPS_ENABLED === window.__EXPECT, String(TE_SLIPS_ENABLED));
+  ok('ไม่อ่านคีย์ localStorage djlab.slips.test.v1 (ตัดทางเปิดเดิมออกแล้ว)', !localStorageReads.includes('djlab.slips.test.v1'), localStorageReads.join());
   TEACH.seed();
   await login('TiBass'); await openTeach(); await openEnroll('active', 'e-active');
+  ok('ข้อความความเป็นส่วนตัวของสลิป (แดงตัวหนา) ' + (window.__EXPECT ? 'แสดงเหมือนเดิม' : 'ไม่แสดง'), (!!E('teDetSlipNote') && isRed(E('teDetSlipNote')) && /ข้อมูลส่วนตัว/.test(E('teDetSlipNote').textContent)) === window.__EXPECT);
   openForm('pay'); await settle(100);
   ok('ฟอร์มชำระ' + (window.__EXPECT ? 'มี' : 'ไม่มี') + 'ช่องไฟล์สลิป · ข้อความ "ยังไม่เปิดใช้" ' + (window.__EXPECT ? 'หาย' : 'ยังอยู่'), !!D().querySelector('input[type="file"]') === window.__EXPECT && /ยังไม่เปิดใช้/.test(dt()) === !window.__EXPECT);
+  tab('enroll'); await sleep(300);
+  teSetStudent({ customer_id: 'c4', member_id: null, name: 'ปิติ', phone: '0800000000' });
+  te.f.pay = 'paid'; teEnrollRender(); await sleep(80);
+  ok('ฟอร์มลงเรียน (ติ๊กชำระ): ' + (window.__EXPECT ? 'มีช่องไฟล์ · ไม่มีข้อความ "ยังไม่เปิดใช้"' : 'ไม่มีช่องไฟล์ · มีข้อความ "ยังไม่เปิดใช้"'), !!$('teEnrollBody').querySelector('input[type="file"]') === window.__EXPECT && /ยังไม่เปิดใช้/.test($('teSlipNote').textContent) === !window.__EXPECT);
+  await logout(); await login('Zen'); await openTeach(); await openEnroll('active', 'e-soon');
+  ok('พนักงานทั่วไป: ' + (window.__EXPECT ? 'เรียก teach_payment_slip_todo' : 'ไม่เรียก teach_payment_slip_todo เลย · ไม่มีบล็อกสลิป'), (rpcCalls('teach_payment_slip_todo').length > 0) === window.__EXPECT && (!!E('teSlipTodo') === window.__EXPECT));
   L('RESULT:' + (fail ? 'FAIL' : 'PASS') + ' pass=' + pass + ' fail=' + fail);
 }
 </script>`;
-const flagMock = (set, expect, label) => mockOff + '\n<script>' + set + ';window.__EXPECT = ' + expect + ';window.__LABEL = ' + JSON.stringify(label) + ';</script>';
-const ON = '<script>window.DJLAB_SLIPS_ENABLED = true;</script>';
-const mockOn = MOCK3 + '\n' + TEACH_MOCK + '\n' + ON, mockOff = MOCK3 + '\n' + TEACH_MOCK;
+const flagMock = (set, expect, label) => mockOn + '\n<script>' + set + ';window.__EXPECT = ' + expect + ';window.__LABEL = ' + JSON.stringify(label) + ';</script>';
+// ค่าตั้งต้น = ไม่ตั้ง DJLAB_SLIPS_ENABLED เลย (= เปิด) · ปิดฉุกเฉิน = ตั้ง false · ตัวดักนับการอ่าน localStorage ใส่ก่อนสคริปต์หน้าเว็บ
+const SPY = '<script>window.localStorageReads = []; (() => { const g = Storage.prototype.getItem; Storage.prototype.getItem = function (k) { localStorageReads.push(String(k)); return g.apply(this, arguments); }; })();</script>';
+const mockOn = MOCK3 + '\n' + TEACH_MOCK + '\n' + SPY, mockOff = mockOn + '\n<script>window.DJLAB_SLIPS_ENABLED = false;</script>';
 let allOk = true;
 for (const [label, tests, mock, opts] of [
   ['1 เจ้าของ: ช่องแนบ · ย่อรูป · อัป→บันทึก', T1, mockOn, { width: 1366, height: 900, coarse: false }],
@@ -614,14 +626,13 @@ for (const [label, tests, mock, opts] of [
   ['5 พนักงานทั่วไป', T5, mockOn, { width: 1366, height: 900, coarse: false }],
   ['6 พนักงานที่เป็นครู', T6, mockOn, { width: 1366, height: 900, coarse: false }],
   ['7 ความปลอดภัย · ยังไม่รัน 070', T7, mockOn, { width: 1366, height: 900, coarse: false }],
-  ['8 สวิตช์ปิด', T8, mockOff, { width: 1366, height: 900, coarse: false }],
+  ['8 ปิดฉุกเฉิน (= false)', T8, mockOff, { width: 1366, height: 900, coarse: false }],
   ['9 iPhone 390×844', T9, mockOn, { width: 390, height: 844, coarse: true }],
-  ['10 สวิตช์: ค่า "false"/เลข ไม่เปิด', TFLAG, flagMock('window.DJLAB_SLIPS_ENABLED = "false"', 'false', 'ค่าตั้งเป็นข้อความ "false"'), { width: 1366, height: 900, coarse: false }],
-  ['11 สวิตช์: ค่าเลข 1 ไม่เปิด', TFLAG, flagMock('window.DJLAB_SLIPS_ENABLED = 1', 'false', 'ค่าตั้งเป็นเลข 1'), { width: 1366, height: 900, coarse: false }],
-  ['12 สวิตช์ทดสอบ localStorage = 1 เปิดเฉพาะเครื่อง', TFLAG, flagMock('localStorage.setItem("djlab.slips.test.v1", "1")', 'true', 'localStorage djlab.slips.test.v1 = 1'), { width: 1366, height: 900, coarse: false }],
-  ['14 สวิตช์ทดสอบ localStorage = 0 ไม่เปิด', TFLAG, flagMock('localStorage.setItem("djlab.slips.test.v1", "0")', 'false', 'localStorage = "0"'), { width: 1366, height: 900, coarse: false }],
-  ['15 สวิตช์ทดสอบ: อ่าน localStorage ไม่ได้ (โหมดส่วนตัว) = ปิด หน้าไม่พัง', TFLAG, flagMock('const g = Storage.prototype.getItem; Storage.prototype.getItem = function (k) { if (k === "djlab.slips.test.v1") throw new Error("denied"); return g.apply(this, arguments); }', 'false', 'localStorage อ่านแล้ว throw'), { width: 1366, height: 900, coarse: false }],
-  ['13 สวิตช์ทดสอบ localStorage = true ไม่เปิด', TFLAG, flagMock('localStorage.setItem("djlab.slips.test.v1", "true")', 'false', 'localStorage = "true" (ต้องเป็น 1 เท่านั้น)'), { width: 1366, height: 900, coarse: false }],
+  ['10 สวิตช์: ค่าข้อความ "false" ไม่ปิด (ปิดได้ด้วย === false เท่านั้น)', TFLAG, flagMock('window.DJLAB_SLIPS_ENABLED = "false"', 'true', 'ค่าตั้งเป็นข้อความ "false"'), { width: 1366, height: 900, coarse: false }],
+  ['11 สวิตช์: ค่าเลข 0 ไม่ปิด', TFLAG, flagMock('window.DJLAB_SLIPS_ENABLED = 0', 'true', 'ค่าตั้งเป็นเลข 0'), { width: 1366, height: 900, coarse: false }],
+  ['12 สวิตช์: ไม่ตั้งอะไรเลย = เปิด (ค่าตั้งต้น)', TFLAG, flagMock('void 0', 'true', 'ไม่ตั้งค่า'), { width: 1366, height: 900, coarse: false }],
+  ['13 สวิตช์: localStorage = 1 ไม่ช่วยเปิดตอนปิดฉุกเฉิน (ทางเปิดเดิมถูกตัดแล้ว)', TFLAG, flagMock('window.DJLAB_SLIPS_ENABLED = false; localStorage.setItem("djlab.slips.test.v1", "1")', 'false', 'ปิดฉุกเฉิน + localStorage = 1'), { width: 1366, height: 900, coarse: false }],
+  ['14 สวิตช์: localStorage = 0 ไม่ปิดค่าตั้งต้น', TFLAG, flagMock('localStorage.setItem("djlab.slips.test.v1", "0")', 'true', 'localStorage = "0" ไม่มีผล'), { width: 1366, height: 900, coarse: false }],
 ]) {
   if (ONLY && !ONLY.test(label)) continue;
   console.log('\n--- ' + label + ' ---');

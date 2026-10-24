@@ -79,7 +79,7 @@ async function runTests() {
   ok('Alt+L เปิดหมวดคอร์สเรียน (hash #teach · หัวหน้าจอ)', current === 'teach' && location.hash === '#teach' && $('pageTitle').textContent === 'คอร์สเรียน', current + ' ' + location.hash);
   ok('โหลดจาก view enrollment_overview (select *) ไม่ใช่ตารางเงิน', CALLS.some(c => c.table === 'enrollment_overview' && c.op === 'select')
     && !CALLS.some(c => /^enrollment_(money|payments)$/.test(c.table || '')), CALLS.map(c => c.table).join());
-  ok('ไม่เรียกฟังก์ชัน/ตารางสลิป (ปิดไว้หลัง feature flag)', !CALLS.some(c => /course-slips|teach_slip/.test(JSON.stringify(c))) && TE_SLIPS_ENABLED === false);
+  ok('สลิปเปิดเป็นค่าตั้งต้น แต่โหลดรายการไม่แตะถังสลิป/ฟังก์ชันสลิป (แตะเมื่อเปิดแผงรายละเอียดหรือกดแนบ)', !CALLS.some(c => /course-slips|teach_payment_slip/.test(JSON.stringify(c))) && TE_SLIPS_ENABLED === true);
   ok('พนักงานที่ไม่ใช่ครู: ไม่มีตัวกรอง "ทุกคน/ของฉัน"', $('teWho').hidden === true);
   ok('แท็บเริ่มที่ "สรุป" · แท็บมี 6 อัน: สรุป รอคิว กำลังเรียน รอบเรียน หมดอายุ/จบ ลงเรียน/ย้อนหลัง', document.querySelector('#teTabs .mail-tab[aria-selected="true"]').dataset.tab === 'summary'
     && [...document.querySelectorAll('#teTabs .mail-tab')].filter(b => !b.hidden).map(b => b.dataset.tab).join() === 'summary,queue,active,sessions,ended,enroll');
@@ -461,7 +461,7 @@ async function runTests() {
   fill('teSessN', '9'); await settle(100);
   ok('จำนวนครั้งเกินของคอร์ส (6): ถูกบีบเหลือ 6', E('teSessN').value === '6' && pane().querySelectorAll('[data-sd]').length === 6);
   fill('teSessN', '2'); await settle(100);
-  ok('ไม่มีสลิปในฟอร์ม: ขึ้นข้อความ "ยังไม่เปิดใช้" แทนช่องอัปโหลด', /ยังไม่เปิดใช้/.test(pane().textContent) && !pane().querySelector('input[type="file"]'));
+  ok('สลิปเปิดอยู่: ยังไม่ติ๊กชำระ = ยังไม่มีช่องอัปโหลด · ไม่มีข้อความ "ยังไม่เปิดใช้"', !/ยังไม่เปิดใช้/.test(pane().textContent) && !pane().querySelector('input[type="file"]'));
   act('pay', '[data-v="unknown"]'); await settle(100);
   ok('เลือก "ชำระครบแล้ว (ไม่ทราบวันที่)": ไม่มีช่องวัน/ยอด', !E('tePayDate') && !E('tePayAmount') && /ไม่เก็บวัน\\/ยอด/.test(pane().textContent));
   fill('tePrice', ''); await settle(50);
