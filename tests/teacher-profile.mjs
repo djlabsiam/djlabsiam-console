@@ -132,6 +132,10 @@ const fatal = () => ($('fatalError') ? $('fatalError').textContent : '');
 function clearFatal() { const f = $('fatalError'); if (f) f.remove(); }
 async function signIn(name) { $('lgEmail').value = name + '@x'; $('lgPass').value = 'x'; $('loginForm').requestSubmit(); await sleep(200); }
 async function signOut() { $('logoutBtn').click(); await sleep(120); }
+// ดักการเด้งไป desk.html หลังออกจากระบบ (ของจริง = location.replace ซึ่งพาหน้านี้ออกจากไฟล์ที่ทดสอบ) · เก็บโค้ดจริงไว้ตรวจว่าไม่อ่านพาธจาก URL
+const GO_SRC = goConsoleLogin.toString();
+let GOLOGIN = 0;
+goConsoleLogin = () => { GOLOGIN++; };
 const fill = (el, v) => { el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })); };
 const clickAct = (a, i) => { const b = $('app').querySelector('[data-act="' + a + '"]' + (i !== undefined ? '[data-i="' + i + '"]' : '')); if (!b) throw new Error('ไม่พบปุ่ม ' + a); b.click(); };
 const row = s => FAKE.rows.find(r => r.slug === s);
@@ -417,6 +421,36 @@ async function runTests() {
   $('tsel').value = 't-zlex'; $('tsel').dispatchEvent(new Event('change', { bubbles: true }));
   ok('เจ้าของดูแถวตัวเองที่ยังไม่ติ๊ก: เห็นกล่องยืนยันเหมือนครู', !!$('ackBox') && !!$('ackChk'));
   await signOut();
+
+  // ── 14. ออกจากระบบ → หน้าเข้าสู่ระบบของคอนโซล (ลำดับเปิดหน้าต่อกันจริงอยู่ที่ tests/teacher-logout.mjs) ──
+  const src = GO_SRC.replace(/\\s+/g, ' ');
+  ok('ปลายทางเป็นพาธคงที่ desk.html: ไม่อ่าน query · hash · referrer · URL · โดเมนใด ๆ (กัน open redirect)', src === "function goConsoleLogin() { location.replace('desk.html'); }", src);
+  const g0 = GOLOGIN;                           // ท้ายหัวข้อ 13 ออกจากระบบไว้แล้ว → ตอนนี้อยู่หน้าเข้าสู่ระบบ
+  history.replaceState(null, '', location.pathname + '?next=https://evil.example/x&redirect=//evil.example/y#https://evil.example/z');
+  authCb('SIGNED_OUT', null); await sleep(150);
+  ok('ยังไม่เคยล็อกอินในหน้านี้: ได้ SIGNED_OUT ก็ไม่เด้ง · ค้างที่ฟอร์มเข้าสู่ระบบ', GOLOGIN === g0 && !!$('loginForm'), String(GOLOGIN));
+  $('lgEmail').value = 'unknown@x'; $('lgPass').value = 'bad'; $('loginForm').requestSubmit(); await sleep(200);
+  ok('รหัสผิด: ไม่เด้ง', GOLOGIN === g0 && !!$('loginErr'), String(GOLOGIN));
+  await signIn('maniac');
+  ok('เข้าสำเร็จ: ไม่เด้ง · เห็นฟอร์มโปรไฟล์', GOLOGIN === g0 && !!$('f_bio'), GOLOGIN + ' ' + !!$('f_bio'));
+  authCb('TOKEN_REFRESHED', SESSION); await sleep(150);
+  ok('ต่ออายุ token (TOKEN_REFRESHED): ไม่เด้ง ไม่ล้างหน้า', GOLOGIN === g0 && !!$('f_bio'));
+  const realSignOut = db.auth.signOut;
+  db.auth.signOut = async () => ({ error: { message: 'Failed to fetch', code: 'x' } });
+  clearFatal();
+  $('logoutBtn').click(); await sleep(200);
+  ok('signOut ล้ม: ไม่เด้ง · ยังอยู่หน้าโปรไฟล์พร้อมฟอร์ม · session ยังอยู่ · แถบแดงบอกว่าออกไม่สำเร็จ', GOLOGIN === g0 && !!$('f_bio') && !!SESSION && /ออกจากระบบไม่สำเร็จ/.test(fatal()), GOLOGIN + ' ' + fatal());
+  clearFatal();
+  db.auth.signOut = realSignOut;
+  await signOut();
+  ok('ลองใหม่สำเร็จ: เด้งไปหน้าเข้าสู่ระบบของคอนโซล 1 ครั้ง · session หาย · หน้าไม่เหลือฟอร์ม/ชื่อ', GOLOGIN === g0 + 1 && !SESSION && !$('f_bio') && $('who').textContent === '' && $('logoutBtn').hidden, GOLOGIN + ' ' + !!SESSION);
+  await signIn('maniac');
+  ok('เข้าอีกรอบ: ไม่เด้งเพิ่ม', GOLOGIN === g0 + 1 && !!$('f_bio'));
+  SESSION = null; authCb('SIGNED_OUT', null); await sleep(200);
+  ok('session หายเอง (SIGNED_OUT จากที่อื่น): เด้งไปหน้าเข้าสู่ระบบของคอนโซล 1 ครั้ง · ล้างฟอร์มออกจากหน้า', GOLOGIN === g0 + 2 && !$('f_bio') && $('who').textContent === '', String(GOLOGIN));
+  await signIn('maniac');
+  SESSION = { user: { id: USERS.nutty.id } }; authCb('SIGNED_IN', SESSION); await sleep(250);
+  ok('สลับบัญชีกลางหน้า (SIGNED_IN คนใหม่): ไม่เด้ง · เปลี่ยนเป็นของ Nutty', GOLOGIN === g0 + 2 && /Nutty/.test($('who').textContent), GOLOGIN + ' ' + $('who').textContent);
 
   L('=== สรุป: ' + pass + ' PASS / ' + fail + ' FAIL ===');
   L(fail ? 'RESULT:FAIL' : 'RESULT:PASS');

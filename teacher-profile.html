@@ -243,11 +243,17 @@ function errText(e) {
 }
 
 // ── เข้าสู่ระบบ ──
+// ออกจากระบบแล้วกลับหน้าเข้าสู่ระบบของคอนโซล (desk.html มี loginOverlay) — พาธคงที่ในโดเมนเดียวกัน ไม่รับจาก query/hash (เหมือน teacher.html)
+// ฟังก์ชันแยกไว้ให้เทสต์ดักการเด้ง (ของจริงพาหน้าออกจากไฟล์ที่ทดสอบ)
+function goConsoleLogin() { location.replace('desk.html'); }
+
 async function onSession(session) {
   const uid = session && session.user ? session.user.id : null;
   if (uid && uid === st.uid && st.phase !== 'login') return;
+  const wasSignedIn = !!st.uid;
   reset();
-  if (!uid) { st.phase = 'login'; render(); return; }
+  // session หายเอง (ออกจากระบบจากแท็บอื่น · refresh token หมดอายุ) ขณะอยู่หน้านี้ = ออกจากระบบเหมือนกัน · ยังไม่เคยล็อกอินในหน้านี้ = ค้างที่ฟอร์ม
+  if (!uid) { st.phase = 'login'; render(); if (wasSignedIn) goConsoleLogin(); return; }
   st.uid = uid;
   st.phase = 'check';
   render();
@@ -599,8 +605,11 @@ $app.addEventListener('submit', async e => {
 });
 document.getElementById('logoutBtn').addEventListener('click', async () => {
   const uid = st.uid;
-  await db.auth.signOut();
+  const { error } = await db.auth.signOut();
+  // ออกไม่สำเร็จ (เน็ตสะดุด) = session ยังอยู่ — ห้ามเด้งไป desk.html เพราะ desk จะเจอ session ครูล้วนแล้วพากลับหน้าครู (วน)
+  if (error) { console.error('[Teacher profile signOut]', error.code || ''); showFatalError('ออกจากระบบไม่สำเร็จ — ตรวจอินเทอร์เน็ตแล้วลองกดอีกครั้ง'); return; }
   if (uid === st.uid) { reset(); st.phase = 'login'; render(); }
+  goConsoleLogin();
 });
 window.addEventListener('beforeunload', e => { if (st.dirty) { e.preventDefault(); e.returnValue = ''; } });
 
