@@ -4777,21 +4777,22 @@ let photoTarget = null;
 // toDataURL แทน toBlob: บอกได้ทันทีว่าเข้ารหัสเป็นชนิดที่ขอได้จริงไหม (ไม่ได้ = คืน PNG มา)
 // และไม่ค้างใน Chrome headless ที่ใช้รันเทสต์ (toBlob แบบ WebP ไม่เคยเรียก callback ที่นั่น)
 // รูปแค่ 800px เข้ารหัสบนเธรดหลักไม่ถึงเสี้ยววินาที · กดโดยเจ้าของร้านทีละรูป
-function canvasBlob(canvas, type) {
-  const url = canvas.toDataURL(type, PHOTO_QUALITY);
+function canvasBlob(canvas, type, quality) {
+  const url = canvas.toDataURL(type, quality || PHOTO_QUALITY);
   if (!url.startsWith('data:' + type + ';')) return null;
   const bin = atob(url.slice(url.indexOf(',') + 1));
   const bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
   return new Blob([bytes], { type });
 }
-function shrinkPhoto(file) {
+// maxEdge / quality ไม่ส่ง = ค่ารูปสินค้าเดิม (800px) · สลิปการชำระส่ง 1600px เพื่อให้ยังอ่านตัวเลขได้ (teSlipPrepare)
+function shrinkPhoto(file, maxEdge, quality) {
   return new Promise((resolve, reject) => {
     const src = URL.createObjectURL(file);
     const img = new Image();
     img.onload = () => {
       URL.revokeObjectURL(src);
-      const scale = Math.min(1, PHOTO_MAX_EDGE / Math.max(img.width, img.height));
+      const scale = Math.min(1, (maxEdge || PHOTO_MAX_EDGE) / Math.max(img.width, img.height));
       const w = Math.max(1, Math.round(img.width * scale)), h = Math.max(1, Math.round(img.height * scale));
       const canvas = document.createElement('canvas');
       canvas.width = w; canvas.height = h;
@@ -4799,7 +4800,7 @@ function shrinkPhoto(file) {
       ctx.fillStyle = '#FFFFFF';               // PNG พื้นโปร่ง → พื้นขาวเหมือนรูปอื่นบนผนัง
       ctx.fillRect(0, 0, w, h);
       ctx.drawImage(img, 0, 0, w, h);
-      const blob = canvasBlob(canvas, 'image/webp') || canvasBlob(canvas, 'image/jpeg');
+      const blob = canvasBlob(canvas, 'image/webp', quality) || canvasBlob(canvas, 'image/jpeg', quality);
       if (blob) resolve(blob); else reject(new Error('ย่อรูปไม่สำเร็จ'));
     };
     img.onerror = () => { URL.revokeObjectURL(src); reject(new Error('เปิดไฟล์รูปนี้ไม่ได้ ลองเลือกไฟล์ JPG/PNG/WebP')); };
@@ -13377,7 +13378,9 @@ function toggleCalc(fromButton) {
 // ⚠️ ออกจากระบบ/สลับบัญชี → teReset() · ผลโหลดที่มาช้าตอนสลับบัญชีถูกทิ้ง (uid + te.tok) · Realtime → teScheduleReload (รวบ 400ms)
 // ⚠️ สลิป: ปิดไว้หลัง TE_SLIPS_ENABLED (ค่าตั้งต้น false) — นโยบายความเป็นส่วนตัวของเว็บยังไม่แก้ ห้ามเก็บสลิปจริง · ก้อนนี้ไม่เรียกถัง course-slips
 // ===========================================================================
-const TE_SLIPS_ENABLED = window.DJLAB_SLIPS_ENABLED === true;
+// สวิตช์สลิป: เปิดให้ทุกคนด้วย window.DJLAB_SLIPS_ENABLED === true (ยังไม่ตั้ง — รอเจ้าของทดสอบ + ยืนยันถ้อยคำ privacy.html) ·
+//   ผู้ทดสอบเปิดเฉพาะเบราว์เซอร์ตัวเองได้ด้วย localStorage 'djlab.slips.test.v1' = '1' (ขั้นทดสอบ B-4 ก่อนเปิดจริง · ไม่กระทบคนอื่น) — เป็นแค่ความสะดวกของหน้าจอ ตัวกันจริงคือ policy/ฟังก์ชันที่ฐาน (070)
+const TE_SLIPS_ENABLED = window.DJLAB_SLIPS_ENABLED === true || (() => { try { return localStorage.getItem('djlab.slips.test.v1') === '1'; } catch (e) { return false; } })();
 const TE_SOON_DAYS = 14;          // ใกล้หมดอายุ (แดงตัวหนา) — §7
 const TE_SUMMARY_DAYS = 30;       // การ์ดสรุป "หมดอายุใน 30 วัน"
 const TE_WEEK_DAYS = 7;           // รอบเรียนที่จะถึง (สรุป)
@@ -13637,7 +13640,7 @@ function teFormBlank() {
   return { student: null, found: null, q: '', newOpen: false, newName: '', newPhone: '', mode: 'console', courseId: '', teacherId: '', lang: 'th',
     price: '', priceTouched: false, listPrice: '', track: '', equip: '', note: '', started: '', sessN: 0, sessDates: [], priorN: 0,
     pay: 'none', payDate: '', payAmount: '', payMethod: 'transfer', busy: false, err: '', ok: '', candQ: '', candOpen: false,
-    createdId: null, sessDone: false, payDone: false, payReq: null };
+    createdId: null, sessDone: false, payDone: false, payReq: null, slip: null, slipErr: '', slipBusy: false };
 }
 const teMoney = v => { const s = String(v == null ? '' : v).replace(/[,\s฿]/g, ''); if (s === '') return null; const n = Number(s); return Number.isFinite(n) ? n : NaN; };
 const teFmt = n => Number(n).toLocaleString('th-TH', { maximumFractionDigits: 2 });
@@ -13837,12 +13840,14 @@ function teDetailHtml() {
   if (mgr && f.pay === 'paid') {
     h += '<div class="wk-form-grid" style="margin-top:12px;"><div class="field"><label class="lbl" for="tePayDate">วันที่ชำระ</label><input id="tePayDate" class="input" type="date" data-f="payDate" max="' + todayBangkok() + '" value="' + escapeHtml(f.payDate) + '"></div>' +
       '<div class="field"><label class="lbl" for="tePayAmount">ยอด (บาท)</label><input id="tePayAmount" class="input" inputmode="decimal" data-f="payAmount" value="' + escapeHtml(f.payAmount) + '"></div>' +
-      '<div class="field"><label class="lbl" for="tePayMethod">วิธีชำระ</label><select id="tePayMethod" class="input" data-f="payMethod">' + TE_METHODS.map(([v, t]) => teOpt(v, t, v === f.payMethod)).join('') + '</select></div></div>';
+      '<div class="field"><label class="lbl" for="tePayMethod">วิธีชำระ</label><select id="tePayMethod" class="input" data-f="payMethod">' + TE_METHODS.map(([v, t]) => teOpt(v, t, v === f.payMethod)).join('') + '</select></div></div>' +
+      (TE_SLIPS_ENABLED ? teSlipField(f, 'enr') : '');
   } else if (mgr && f.pay === 'unknown') {
     h += '<div class="hint" style="margin-top:10px;">ระบบถือว่าชำระครบแล้วโดยไม่เก็บวัน/ยอด — แสดง "✓ ชำระครบ (ไม่ทราบวันที่)"</div>';
   }
   h += '</div>';
-  if (mgr) h += '<div class="hint" id="teSlipNote">แนบสลิป: ยังไม่เปิดใช้ (รอเจ้าของแก้นโยบายความเป็นส่วนตัวของเว็บก่อน) — ' + (backfill ? 'นักเรียนเก่าไม่มีสลิปได้ ไม่ใช่ข้อผิดพลาด (แสดงเป็น "ไม่มีสลิป (เก่า)")' : 'บันทึกชำระแล้วแนบสลิปทีหลังได้เมื่อเปิดใช้') + '</div>';
+  if (mgr && TE_SLIPS_ENABLED) h += '<div class="hint" id="teSlipNote">' + (backfill ? 'นักเรียนเก่าไม่มีสลิปได้ ไม่ใช่ข้อผิดพลาด (แสดงเป็น "ไม่มีสลิป") · ' : '') + 'แนบสลิปทีหลังได้ที่แผงรายละเอียดของการลงเรียน</div>';
+  else if (mgr) h += '<div class="hint" id="teSlipNote">แนบสลิป: ยังไม่เปิดใช้ (รอเจ้าของแก้นโยบายความเป็นส่วนตัวของเว็บก่อน) — ' + (backfill ? 'นักเรียนเก่าไม่มีสลิปได้ ไม่ใช่ข้อผิดพลาด (แสดงเป็น "ไม่มีสลิป (เก่า)")' : 'บันทึกชำระแล้วแนบสลิปทีหลังได้เมื่อเปิดใช้') + '</div>';
   h += (f.err ? '<div class="alert alert-red wk-red" id="teFormErr" role="alert">' + escapeHtml(f.err) + '</div>' : '') +
     '<div class="toolbar"><button class="btn btn-primary" type="button" id="teSave" data-act="save"' + (f.busy ? ' disabled' : '') + '>' + (f.busy ? 'กำลังบันทึก…' : 'บันทึกการลงเรียน') + '</button>' +
     '<button class="btn" type="button" data-act="clear"' + (f.busy ? ' disabled' : '') + '>ล้างฟอร์ม</button></div>';
@@ -13992,8 +13997,11 @@ async function teEnrollSubmit() {
     if (mgr && f.pay === 'paid' && !f.payDone) {
       step = 'บันทึกการชำระ';
       if (!f.payReq) f.payReq = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 3 | 8)).toString(16); });
+      // สลิป (070): อัปไฟล์ก่อน (พาธใช้รหัสคำขอเดียวกับการชำระ) → ล้ม = ไม่บันทึกชำระ · อัปแล้วชำระล้ม = กดบันทึกซ้ำใช้ไฟล์เดิม
+      const slipPath = TE_SLIPS_ENABLED && f.slip ? await teSlipUpload(f.createdId, f.payReq, f.slip) : null;
+      if (uid !== currentUserId || te !== cur) return;
       const { error } = await db.rpc('teach_payment_record', {
-        p_enrollment: f.createdId, p_paid_on: f.payDate, p_amount: teMoney(f.payAmount), p_method: f.payMethod, p_request_id: f.payReq, p_slip_path: null, p_note: null,
+        p_enrollment: f.createdId, p_paid_on: f.payDate, p_amount: teMoney(f.payAmount), p_method: f.payMethod, p_request_id: f.payReq, p_slip_path: slipPath, p_note: null,
       });
       if (uid !== currentUserId || te !== cur) return;
       if (error) throw error;
@@ -14068,7 +14076,8 @@ function teFormClick(e) {
     const r = (f.found || [])[Number(b.dataset.i)];
     if (r) teSetStudent({ customer_id: r.customer_id || null, member_id: r.member_id || null, name: r.full_name, phone: r.phone || '' });
     teEnrollRender();
-  } else if (act === 'unpick') { f.student = null; f.createdId = null; f.sessDone = false; f.payDone = false; f.payReq = null; f.err = ''; teEnrollRender(); }
+  } else if (act === 'unpick') { f.student = null; f.createdId = null; f.sessDone = false; f.payDone = false; f.payReq = null; f.slip = null; f.slipErr = ''; f.err = ''; teEnrollRender(); }
+  else if (act === 'slip-rm') { f.slip = null; f.slipErr = ''; teEnrollRender(); }
   else if (act === 'newToggle') { f.newOpen = !f.newOpen; teEnrollRender(); }
   else if (act === 'newCreate') teNewCustomer();
   else if (act === 'cand') {
@@ -14093,7 +14102,7 @@ function teFormClick(e) {
   const box = document.getElementById('teEnrollBody');
   box.addEventListener('click', teFormClick);
   box.addEventListener('input', e => { if (e.target.matches('[data-f], [data-sd]')) teFormInput(e.target); });
-  box.addEventListener('change', e => { if (e.target.matches('[data-f], [data-act="paychk"]')) teFormChange(e.target); else if (e.target.matches('[data-sd]')) teFormInput(e.target); });
+  box.addEventListener('change', e => { if (e.target.matches('[data-f], [data-act="paychk"]')) teFormChange(e.target); else if (e.target.matches('[data-sd]')) teFormInput(e.target); else if (e.target.matches('[data-slipin="enr"]')) teSlipPick(e.target); });
   box.addEventListener('toggle', e => { if (e.target.id === 'teCands') te.f.candOpen = e.target.open; }, true);
   box.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.id === 'teFindQ') { e.preventDefault(); teFind(); } });
 }
@@ -14301,7 +14310,8 @@ function teCaps(r) {
 }
 function teDetBlank(id) {
   return { id, tok: 0, loaded: false, error: '', sess: [], hasMoney: false, price: null, pays: [], notes: new Map(), reqs: [],
-           open: null, fv: {}, busy: '', err: '', ok: '', warn: [], link: null };
+           open: null, fv: {}, busy: '', err: '', ok: '', warn: [], link: null,
+           slip: null, slipErr: '', slipBusy: false, todo: null, todoErr: '', todoMissing: false };
 }
 
 // ── เปิด/โหลด ──
@@ -14324,12 +14334,14 @@ async function teDetLoad(id, silent) {
   // เลขบิลค่าคอร์สของแต่ละรายการชำระ + สวิตช์ (migration 069) — เฉพาะเจ้าของ/ผู้ดูแล · ยังไม่รัน 069/อ่านไม่ได้ = ไม่แสดง ไม่ขึ้นแถบแดง
   const billQ = cap.mgr ? db.from('course_sales').select('payment_id, sales:sale_id(sale_no, status)').eq('enrollment_id', id).then(r => r, e => ({ data: null, error: e })) : skip;
   const swQ = cap.mgr ? db.from('course_sales_settings').select('enabled').maybeSingle().then(r => r, e => ({ data: null, error: e })) : skip;
-  const [s, m, p, x, bq, sq] = await Promise.all([
+  // งวดที่แนบสลิปได้ (070) — เฉพาะคนที่ไม่เห็นรายการชำระ (พนักงานทั่วไป): ได้แค่ลำดับงวด + รหัสคำขอ ไม่มียอด/วันที่ · ยังไม่รัน 070 = บอกเป็นคำ ไม่ขึ้นแถบแดง
+  const todoQ = TE_SLIPS_ENABLED && !cap.money ? db.rpc('teach_payment_slip_todo', { p_enrollment: id }).then(r => r, e => ({ data: null, error: e })) : skip;
+  const [s, m, p, x, bq, sq, tq] = await Promise.all([
     db.from('class_sessions').select('id, enrollment_id, teacher_id, status, starts_at, ends_at, held_on, hours, room, cancel_by, notified_at, late_cancel, cancel_reason, gcal_uid, created_at').eq('enrollment_id', id),
     cap.money ? db.from('enrollment_money').select('price_agreed').eq('enrollment_id', id) : skip,
-    cap.money ? db.from('enrollment_payments').select('id, paid_on, amount, kind, method, note, created_at').eq('enrollment_id', id).order('paid_on', { ascending: true }) : skip,
+    cap.money ? db.from('enrollment_payments').select('id, paid_on, amount, kind, method, note, created_at' + (TE_SLIPS_ENABLED ? ', slip_path, request_id' : '')).eq('enrollment_id', id).order('paid_on', { ascending: true }) : skip,
     cap.extSee ? db.from('enrollment_extension_requests').select('id, requested_by, requested_until, reason, status, decision_note, approved_until, decided_at, created_at').eq('enrollment_id', id).order('created_at', { ascending: false }) : skip,
-    billQ, swQ,
+    billQ, swQ, todoQ,
   ]);
   if (uid !== currentUserId || te !== cur || te.det !== d || tok !== d.tok) return;
   const bad = s.error || m.error || p.error || x.error;
@@ -14348,6 +14360,11 @@ async function teDetLoad(id, silent) {
   if (bq && bq.error) console.error('[Teach detail bills]', bq.error.code || '');
   d.bills = new Map(((bq && !bq.error && bq.data) || []).filter(r => r.payment_id && r.sales).map(r => [r.payment_id, r.sales.sale_no]));
   d.csOn = !!(sq && !sq.error && sq.data && sq.data.enabled);
+  d.todo = null; d.todoErr = ''; d.todoMissing = false;
+  if (tq && tq.error) {
+    console.error('[Teach slip todo]', tq.error.code || '');
+    if (teSlipMissing(tq.error)) d.todoMissing = true; else d.todoErr = 'โหลดรายการแนบสลิปไม่สำเร็จ: ' + teErrText(tq.error);
+  } else if (tq && tq.data) d.todo = Array.isArray(tq.data) ? tq.data : [];
   d.reqs = cap.extSee ? (x.data || []) : [];
   // บันทึกการสอน: ดึงเฉพาะรอบที่ผู้ใช้นี้มีสิทธิ์ (เจ้าของ + ครูของรอบ/ของนักเรียน) — ที่เหลือไม่ดึง ไม่วาด
   const nids = r ? d.sess.filter(z => teCanNote(r, z)).map(z => z.id) : [];
@@ -14428,15 +14445,17 @@ function teDetPayHtml(r, d, cap) {
         '<dt>ชำระสะสม (สุทธิ)</dt><dd><strong>' + teFmt(net) + ' ฿</strong>' + (d.price != null ? ' <span class="te-sub">คงเหลือ ' + teFmt(Math.max(d.price - net, 0)) + ' ฿</span>' : '') + '</dd></dl>';
       h += d.pays.length ? '<div class="te-plist">' + d.pays.map(p => {
         const m = (TE_METHODS.find(x => x[0] === p.method) || [0, p.method])[1], refund = p.kind === 'refund';
-        const fixing = d.open === 'payfix' && d.fv.id === p.id;
+        const fixing = d.open === 'payfix' && d.fv.id === p.id, attaching = d.open === 'slipatt' && d.fv.sid === p.id;
         return '<div class="te-prow" data-pid="' + escapeHtml(p.id) + '"><span>' + fmtDate(p.paid_on) + '</span><strong' + (refund ? ' class="wk-red"' : '') + '>' + (refund ? 'คืนเงิน −' : '') + teFmt(Math.abs(Number(p.amount))) + ' ฿</strong>' +
           (refund ? '' : '<span>' + escapeHtml(m) + '</span>') +
           (cap.mgr && d.bills && d.bills.get(p.id) ? '<span class="te-sub te-bill">บิล ' + escapeHtml(d.bills.get(p.id)) + '</span>' : '') + (p.note ? '<span class="te-sub">' + escapeHtml(p.note) + '</span>' : '') +
-          (cap.mgr && !fixing ? teBtn('open', 'แก้', { k: 'payfix', sid: p.id, sm: true }) : '') + '</div>' + (fixing ? teFormPayFix(p, d) : '');
+          teSlipRowHtml(p, cap, attaching) +
+          (cap.mgr && !fixing ? teBtn('open', 'แก้', { k: 'payfix', sid: p.id, sm: true }) : '') + '</div>' + (fixing ? teFormPayFix(p, d) : '') + (attaching ? teFormSlipAtt('วันที่ ' + fmtDate(p.paid_on), d) : '');
       }).join('') + '</div>' : '<div class="hint">' + (r.paid_unknown ? 'ชำระครบ (ไม่ทราบวันที่/ยอด)' : 'ยังไม่มีรายการชำระ') + (r.source === 'backfill' ? ' · ไม่มีสลิป (เก่า)' : '') + '</div>';
     }
-  }
-  h += '<div class="hint" id="teDetSlipNote">แนบสลิป: ยังไม่เปิดใช้ (รอเจ้าของแก้นโยบายความเป็นส่วนตัวของเว็บก่อน)</div>';
+  } else if (TE_SLIPS_ENABLED && d.loaded) h += teSlipTodoHtml(d);
+  h += TE_SLIPS_ENABLED ? '<div class="wk-red" id="teDetSlipNote">' + TE_SLIP_PRIVACY + '</div>'
+    : '<div class="hint" id="teDetSlipNote">แนบสลิป: ยังไม่เปิดใช้ (รอเจ้าของแก้นโยบายความเป็นส่วนตัวของเว็บก่อน)</div>';
   if (r.closed_on) return h + '<div class="hint">การลงเรียนนี้ปิดแล้ว — บันทึกชำระเพิ่มไม่ได้</div></section>';
   if (d.open === 'pay') h += teFormPay(cap, d);
   else if (d.open === 'refund') h += teFormRefund(d);
@@ -14457,6 +14476,7 @@ function teFormPay(cap, d) {
   return '<div class="te-form" id="teFormPay"><h4>บันทึกชำระ</h4>' + teBillHint(d, 'บันทึกแล้ว') +
     teIn('date', 'วันที่ชำระ', { type: 'date', max: todayBangkok() }) + teIn('amount', 'ยอด (บาท)', { inputmode: 'decimal' }) +
     teSel('method', 'วิธีชำระ', TE_METHODS) + teIn('note', 'หมายเหตุ (ไม่เกิน 200 ตัวอักษร · ห้ามใส่เลขบัญชี/เบอร์โทร)', { maxlength: 200 }) +
+    (TE_SLIPS_ENABLED && cap.mgr ? teSlipField(d, 'det') : '') +
     '<div class="wk-red" id="teDetPayWarn">' + TE_PAY_WARN_SEEN + '</div>' + teFormBar('pay', 'บันทึกชำระ') + '</div>';
 }
 function teFormRefund(d) {
@@ -14718,6 +14738,7 @@ function teDetOpenForm(k, sid) {
   if (!r) return;
   const today = todayBangkok();
   d.open = k; d.err = ''; d.ok = ''; d.warn = []; d.link = null;
+  d.slip = null; d.slipErr = ''; d.slipBusy = false;
   const s = sid ? d.sess.find(x => x.id === sid) : null;
   d.fv = { sid: sid || '' };
   if (k === 'pay') Object.assign(d.fv, { date: today, amount: '', method: 'transfer', note: '', req: teUuid() });
@@ -14753,7 +14774,7 @@ async function teDetRun(label, fn) {
     const res = await fn();
     if (uid !== currentUserId || te !== cur || te.det !== d) return;
     d.busy = ''; d.ok = (res && res.ok) || ''; d.warn = (res && res.warn) || [];
-    d.open = null; d.fv = {}; d.link = null;
+    d.open = null; d.fv = {}; d.link = null; d.slip = null; d.slipErr = '';
     teDetRender();
     loadTeach();                                  // รายการ + แผงนี้ (loadTeach โหลดแผงซ้ำเอง)
   } catch (e) {
@@ -14766,6 +14787,149 @@ async function teDetRun(label, fn) {
 const teRpc = async (fn, args) => { const { data, error } = await db.rpc(fn, args); if (error) throw error; return data; };
 const teTs = (ymd, hm) => ymd + 'T' + hm + ':00+07:00';
 
+// ── สลิปการชำระ (migration 070 · ปิดไว้หลัง TE_SLIPS_ENABLED) ──────────────────────────────────────────────────
+// ⚠️ สลิปมีข้อมูลส่วนตัวของลูกค้า: เปิดดูได้เฉพาะเจ้าของ ผู้ดูแล และครูของนักเรียนคนนั้น (policy ของถัง course-slips) ·
+//   พนักงานทั่วไป "แนบได้แต่เปิดดูไม่ได้" (เจ้าของยืนยัน B-3 · 24 ต.ค. 69) — ตัวที่กันจริงคือ policy/ฟังก์ชันที่ฐาน ปุ่มที่ซ่อนและสวิตช์เป็นแค่ความสะดวก
+// ⚠️ ลำดับ: อัปไฟล์ลงถังก่อน (พาธ <enrollment_id>/<request_id>.<นามสกุล> · upsert:false) → ค่อยเรียกฟังก์ชันฐาน · อัปล้ม = ไม่บันทึกชำระ ·
+//   อัปแล้วบันทึกล้ม = ไฟล์ค้างในถัง กดซ้ำใช้ไฟล์เดิม (ฟอร์มล็อกไฟล์หลังอัปแล้ว — ชื่อไฟล์ผูกกับรหัสคำขอ ทับของเดิมไม่ได้ ต้องปิดฟอร์มเปิดใหม่)
+// ⚠️ ไม่เก็บ URL ของสลิปในหน้า (ขอลิงก์อายุ 60 วินาทีตอนกดดู) · ไม่ console.log ชื่อไฟล์/พาธ · ชื่อไฟล์จากผู้ใช้ผ่าน escapeHtml เสมอ
+const TE_SLIP_BUCKET = 'course-slips';
+const TE_SLIP_MAX = 5 * 1024 * 1024;               // เพดานของถัง (047)
+const TE_SLIP_RAW_MAX = 30 * 1024 * 1024;          // รูปดิบที่ยอมให้ย่อ (กันกินหน่วยความจำ)
+const TE_SLIP_EDGE = 1600, TE_SLIP_QUALITY = 0.85;  // ด้านยาว 1600px — สลิปต้องยังอ่านตัวเลขออก (รูปสินค้าใช้ 800px)
+const TE_SLIP_ACCEPT = 'image/jpeg,image/png,image/webp,application/pdf';
+const TE_SLIP_PRIVACY = 'สลิปมีข้อมูลส่วนตัวของลูกค้า — เปิดดูได้เฉพาะเจ้าของ ผู้ดูแล และครูของนักเรียนคนนั้น · พนักงานทั่วไปแนบได้แต่เปิดดูไม่ได้';
+const TE_SLIP_NO070 = 'ยังไม่ได้รัน migration 070 ในฐานข้อมูล — แนบสลิปไม่ได้';
+const teSlipMissing = e => !!e && (e.code === 'PGRST202' || e.code === '42883' || /Could not find the function|teach_payment_slip_/i.test(String(e.message || '')) && /does not exist|schema cache|Could not find/i.test(String(e.message || '')));
+function teSlipSniff(b) {                           // ชนิดไฟล์จากหัวไฟล์ (ไม่เชื่อนามสกุล/ชนิดที่เบราว์เซอร์บอก)
+  const at = (i, s) => s.every((v, k) => b[i + k] === v);
+  const str = (i, s) => at(i, [...s].map(c => c.charCodeAt(0)));
+  if (b.length >= 3 && at(0, [0xFF, 0xD8, 0xFF])) return 'jpg';
+  if (b.length >= 8 && at(0, [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])) return 'png';
+  if (b.length >= 12 && str(0, 'RIFF') && str(8, 'WEBP')) return 'webp';
+  if (b.length >= 5 && str(0, '%PDF-')) return 'pdf';
+  return null;
+}
+async function teSlipPrepare(file) {
+  const kind = teSlipSniff(new Uint8Array(await file.slice(0, 16).arrayBuffer()));
+  if (!kind) throw new Error('ไฟล์นี้ไม่ใช่รูปหรือ PDF ที่รองรับ — ใช้ JPG / PNG / WebP / PDF (รูป HEIC จาก iPhone ให้แชร์เป็น JPG หรือถ่ายใหม่)');
+  if (kind === 'pdf') {
+    if (file.size > TE_SLIP_MAX) throw new Error('ไฟล์ PDF ใหญ่เกิน 5 MB');
+    return { blob: file, ext: 'pdf', type: 'application/pdf', name: file.name, bytes: file.size, pdf: true };
+  }
+  if (file.size > TE_SLIP_RAW_MAX) throw new Error('รูปใหญ่เกินไป (เกิน 30 MB) — ลดขนาดรูปก่อน');
+  const blob = await shrinkPhoto(file, TE_SLIP_EDGE, TE_SLIP_QUALITY);
+  if (blob.size > TE_SLIP_MAX) throw new Error('รูปหลังย่อยังใหญ่เกิน 5 MB');
+  return { blob, ext: blob.type === 'image/webp' ? 'webp' : 'jpg', type: blob.type, name: file.name, bytes: blob.size, pdf: false };
+}
+const teSlipSize = n => n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB';
+// อัปไฟล์ลงถัง — คืนพาธ · ชื่อเดียวกันที่อัปไปแล้วในฟอร์มนี้ = ใช้ไฟล์เดิม (กดบันทึกซ้ำหลังบันทึกล้ม)
+async function teSlipUpload(eid, req, s) {
+  const path = eid + '/' + req + '.' + s.ext;
+  if (s.uploadedPath === path) return path;
+  const { error } = await db.storage.from(TE_SLIP_BUCKET).upload(path, s.blob, { contentType: s.type, upsert: false });
+  if (error) {
+    const m = String(error.message || ''), sc = String(error.statusCode || error.status || '');
+    console.error('[Teach slip upload]', sc || error.code || '');
+    const why = sc === '413' || /too large|exceed/i.test(m) ? 'ไฟล์ใหญ่เกินที่ที่เก็บรับ (5 MB)'
+      : sc === '409' || /already exists|duplicate/i.test(m) ? 'มีไฟล์ชื่อนี้ในที่เก็บอยู่แล้ว (ระบบไม่ทับของเดิม) — ปิดฟอร์มแล้วเปิดใหม่'
+      : sc === '403' || /row-level security|unauthori[sz]ed|permission/i.test(m) ? 'ไม่มีสิทธิ์อัปสลิปให้รายการนี้ (พนักงานแนบได้เฉพาะรายการชำระที่ยังไม่มีสลิป)'
+      : /fetch|network|failed to/i.test(m) ? 'ส่งไฟล์ไม่สำเร็จ — ตรวจอินเทอร์เน็ตแล้วลองใหม่'
+      : 'ที่เก็บไฟล์ไม่ยอมรับ';
+    throw new Error('อัปโหลดสลิปไม่สำเร็จ (ยังไม่ได้บันทึกอะไร): ' + why);
+  }
+  s.uploadedPath = path;
+  return path;
+}
+// ช่องแนบสลิป — h = d (แผงรายละเอียด) หรือ f (ฟอร์มลงเรียน) · kind 'det' | 'enr' (id ไม่ชนกันเมื่อเปิดทั้งสองที่)
+function teSlipField(h, kind) {
+  const s = h.slip;
+  return '<div class="field" id="teSlipField_' + kind + '"><label class="lbl" for="teSlipFile_' + kind + '">แนบสลิป (ไม่บังคับ)</label>' +
+    (s && s.uploadedPath ? '' : '<input id="teSlipFile_' + kind + '" class="input" type="file" accept="' + TE_SLIP_ACCEPT + '" data-slipin="' + kind + '"' + (h.slipBusy ? ' disabled' : '') + '>') +
+    '<div class="hint">JPG / PNG / WebP / PDF ไม่เกิน 5 MB · รูปถูกย่อที่เครื่องก่อนส่ง</div>' +
+    (h.slipBusy ? '<div class="hint" id="teSlipBusy_' + kind + '">กำลังเตรียมไฟล์…</div>' : '') +
+    (s ? '<div class="te-slipsel" id="teSlipSel_' + kind + '"><strong>' + escapeHtml(s.name) + '</strong> · ' + teSlipSize(s.bytes) + (s.pdf ? '' : ' (ย่อแล้ว)') +
+      (s.uploadedPath ? ' · <span class="wk-red">อัปโหลดแล้ว — กดบันทึกอีกครั้งจะใช้ไฟล์นี้</span>' : ' <button class="btn btn-sm" type="button" data-act="slip-rm">เอาออก</button>') + '</div>' : '') +
+    (h.slipErr ? '<div class="wk-red" id="teSlipErr_' + kind + '" role="alert">' + escapeHtml(h.slipErr) + '</div>' : '') +
+    '<div class="wk-red" id="teSlipPrivacy_' + kind + '">' + TE_SLIP_PRIVACY + '</div></div>';
+}
+const teSlipRender = kind => { if (kind === 'enr') teEnrollRender(); else teDetRender(); };
+async function teSlipPick(el) {
+  const kind = el.dataset.slipin, h = kind === 'enr' ? te.f : te.det, file = el.files && el.files[0];
+  if (!h || !file || h.slipBusy || (h.slip && h.slip.uploadedPath)) return;
+  const uid = currentUserId, cur = te;
+  h.slipBusy = true; h.slipErr = ''; teSlipRender(kind);
+  let res = null, err = '';
+  try { res = await teSlipPrepare(file); }
+  catch (e) { err = /[ก-๙]/.test(String(e && e.message)) ? e.message : 'เตรียมไฟล์สลิปไม่สำเร็จ'; }
+  if (uid !== currentUserId || te !== cur || (kind === 'enr' ? te.f : te.det) !== h) return;
+  h.slipBusy = false;
+  if (res) { h.slip = res; h.slipErr = ''; } else h.slipErr = err;
+  teSlipRender(kind);
+}
+// ปุ่มต่อแถวชำระ (เฉพาะคนที่เห็นรายการชำระ): มีสลิป → ดู (+ลบ: เจ้าของ) · ไม่มี → แนบ · แถวคืนเงินไม่มีสลิป
+function teSlipRowHtml(p, cap, attaching) {
+  if (!TE_SLIPS_ENABLED || p.kind === 'refund') return '';
+  if (p.slip_path) return '<span class="te-sub te-slip">มีสลิป</span>' + teBtn('slip-view', 'ดูสลิป', { sid: p.id, sm: true }) + (cap.owner ? teBtn('slip-clear', 'ลบสลิป', { sid: p.id, sm: true, danger: true }) : '');
+  return '<span class="te-sub te-slip">ไม่มีสลิป</span>' + (attaching ? '' : teBtn('open', 'แนบสลิป', { k: 'slipatt', sid: p.id, sm: true }));
+}
+function teFormSlipAtt(label, d) {
+  return '<div class="te-form" id="teFormSlipAtt"><h4>แนบสลิป — ' + escapeHtml(label) + '</h4>' + teSlipField(d, 'det') +
+    '<div class="toolbar">' + teBtn('submit', d.busy === 'slipatt' ? 'กำลังอัปโหลด…' : 'อัปโหลดสลิป', { primary: true, k: 'slipatt' }) + teBtn('close-form', 'ยกเลิก') + '</div></div>';
+}
+// พนักงานทั่วไป (ไม่เห็นรายการชำระ): ลำดับงวด + มี/ไม่มีสลิป เท่านั้น — ไม่มียอด ไม่มีวันที่ ไม่มีปุ่มดู
+function teSlipTodoHtml(d) {
+  if (d.todoMissing) return '<div class="hint" id="teSlipTodoMissing">' + TE_SLIP_NO070 + '</div>';
+  if (d.todoErr) return '<div class="alert alert-red wk-red" id="teSlipTodoErr" role="alert">' + escapeHtml(d.todoErr) + '</div>';
+  const list = d.todo || [];
+  return '<div id="teSlipTodo"><h4>สลิปการชำระ</h4><div class="wk-red" id="teSlipStaffNote">พนักงานแนบสลิปได้แต่เปิดดูไม่ได้ — ไม่เห็นยอดและไม่เห็นรูปที่แนบ</div>' +
+    (list.length ? '<div class="te-plist">' + list.map(x => {
+      const att = d.open === 'slipatt' && d.fv.sid === x.id;
+      return '<div class="te-prow" data-pid="' + escapeHtml(x.id) + '"><span>งวดที่ ' + Number(x.n) + '</span><span class="te-sub te-slip">' + (x.has_slip ? 'มีสลิปแล้ว' : 'ยังไม่มีสลิป') + '</span>' +
+        (x.has_slip || att ? '' : teBtn('open', 'แนบสลิป', { k: 'slipatt', sid: x.id, sm: true })) + '</div>' + (att ? teFormSlipAtt('งวดที่ ' + Number(x.n), d) : '');
+    }).join('') + '</div>' : '<div class="hint">ยังไม่มีรายการชำระให้แนบสลิป</div>') + '</div>';
+}
+// เปิดดูสลิป: เปิดแท็บเปล่าก่อนในจังหวะที่กด (กัน popup blocker) แล้วค่อยขอลิงก์อายุ 60 วินาที · ไม่เก็บ URL
+async function teSlipView(pid) {
+  const d = te.det, p = d && d.pays.find(x => x.id === pid);
+  if (!TE_SLIPS_ENABLED || !p || !p.slip_path) return;
+  const uid = currentUserId, cur = te;
+  const w = window.open('', '_blank');
+  const { data, error } = await db.storage.from(TE_SLIP_BUCKET).createSignedUrl(p.slip_path, 60);
+  if (uid !== currentUserId || te !== cur || te.det !== d) { if (w) w.close(); return; }
+  if (error || !data || !data.signedUrl) {
+    if (w) w.close();
+    console.error('[Teach slip view]', (error && (error.statusCode || error.code)) || '');
+    teDetFail('เปิดสลิปไม่สำเร็จ — ไม่มีสิทธิ์ หรือไฟล์ถูกลบออกจากที่เก็บแล้ว');
+    return;
+  }
+  if (w) { w.opener = null; w.location.href = data.signedUrl; } else showToast('⚠️ เบราว์เซอร์บล็อกหน้าต่างใหม่ — อนุญาตป๊อปอัปของเว็บนี้แล้วกดอีกครั้ง');
+}
+// ลบไฟล์สลิปในถังหลังฐานปล่อยแถวแล้ว — คืนคำเตือน (แดงตัวหนา) ถ้าไฟล์ยังค้าง · remove ที่ RLS ไม่อนุญาตตอบ 0 รายการ ไม่ใช่ error
+async function teSlipRemoveFile(path) {
+  const { data, error } = await db.storage.from(TE_SLIP_BUCKET).remove([path]);
+  if (error || !data || !data.length) { console.error('[Teach slip remove]', (error && (error.statusCode || error.code)) || 'none'); return false; }
+  return true;
+}
+function teSlipClearAsk(pid) {
+  const d = te.det, p = d && d.pays.find(x => x.id === pid);
+  if (!p || !p.slip_path || !isOwner()) return;
+  askConfirm('ลบสลิป', '<div class="alert alert-red wk-red">ลบสลิปของรายการชำระวันที่ ' + fmtDate(p.paid_on) + ' — ไฟล์รูปจะถูกลบออกจากที่เก็บ กู้คืนไม่ได้</div>' +
+    '<p>รายการชำระและยอดยังอยู่ครบ (ลบเฉพาะสลิป) · พนักงานแนบสลิปใหม่ให้รายการนี้ได้หลังลบ</p>', 'ยืนยันลบสลิป', async () => {
+    closeConfirm();
+    if (te.det !== d) return;
+    await teDetRun('slipclear', async () => {
+      let res;
+      try { res = await teRpc('teach_payment_slip_clear', { p_payment: pid }); }
+      catch (e) { throw new Error(teSlipMissing(e) ? TE_SLIP_NO070 : teErrText(e)); }
+      if (res && res.slip_path && !(await teSlipRemoveFile(res.slip_path))) {
+        return { ok: 'ลบสลิปออกจากรายการแล้ว', warn: ['แต่ไฟล์สลิปยังค้างในที่เก็บ — ลบเองที่หน้า Storage ของ Supabase (ถัง course-slips) · ชื่อไฟล์ ' + res.slip_path] };
+      }
+      return { ok: 'ลบสลิปแล้ว ✓' };
+    });
+  });
+}
+
 function teDetSubmit(k) {
   const d = te.det, r = te.rows.find(x => x.id === d.id), fv = d.fv, today = todayBangkok();
   if (!r) return;
@@ -14776,8 +14940,25 @@ function teDetSubmit(k) {
     if (fv.date > today) return teDetFail('วันที่ชำระต้องไม่เกินวันนี้');
     if (String(fv.note).length > 200) return teDetFail('หมายเหตุยาวเกิน 200 ตัวอักษร');
     return teDetRun('pay', async () => {
-      const res = await teRpc('teach_payment_record', { p_enrollment: d.id, p_paid_on: fv.date, p_amount: amt, p_method: fv.method, p_request_id: fv.req, p_slip_path: null, p_note: String(fv.note).trim() || null });
+      // สลิป (070): อัปไฟล์ก่อน → ล้ม = ไม่บันทึกชำระ · อัปแล้วชำระล้ม = กดบันทึกซ้ำใช้ไฟล์เดิม (รหัสคำขอเดิม พาธเดิม)
+      const slipPath = TE_SLIPS_ENABLED && isManager() && d.slip ? await teSlipUpload(d.id, fv.req, d.slip) : null;
+      let res;
+      try { res = await teRpc('teach_payment_record', { p_enrollment: d.id, p_paid_on: fv.date, p_amount: amt, p_method: fv.method, p_request_id: fv.req, p_slip_path: slipPath, p_note: String(fv.note).trim() || null }); }
+      catch (e) { if (slipPath) throw new Error('บันทึกการชำระไม่สำเร็จ: ' + teErrText(e) + ' · ไฟล์สลิปอัปโหลดแล้ว กดบันทึกอีกครั้งจะใช้ไฟล์เดิม'); throw e; }
       return { ok: res && res.duplicate ? 'รายการชำระนี้บันทึกไว้แล้วก่อนหน้านี้ (ระบบไม่บันทึกซ้ำ)' : 'บันทึกการชำระแล้ว ✓' };
+    });
+  }
+  if (k === 'slipatt') {
+    if (!TE_SLIPS_ENABLED) return;
+    if (!d.slip) return teDetFail('เลือกไฟล์สลิปก่อนกดอัปโหลด');
+    const t = d.pays.find(x => x.id === fv.sid) || (d.todo || []).find(x => x.id === fv.sid);
+    if (!t || !t.request_id) return teDetFail('ไม่พบรายการชำระนี้ (ลองรีเฟรชหน้า)');
+    return teDetRun('slipatt', async () => {
+      const path = await teSlipUpload(d.id, t.request_id, d.slip);
+      let res;
+      try { res = await teRpc('teach_payment_slip_set', { p_payment: t.id, p_slip_path: path }); }
+      catch (e) { throw new Error(teSlipMissing(e) ? TE_SLIP_NO070 : 'อัปโหลดไฟล์แล้ว แต่ผูกสลิปกับรายการชำระไม่สำเร็จ: ' + teErrText(e) + ' · กดอีกครั้งจะใช้ไฟล์เดิม'); }
+      return { ok: res && res.duplicate ? 'รายการนี้มีสลิปนี้อยู่แล้ว' : 'แนบสลิปแล้ว ✓' };
     });
   }
   if (k === 'refund') {
@@ -14962,11 +15143,17 @@ function teDetDelPay(pid) {
   if (!p) return;
   askConfirm('ลบรายการชำระ', '<div class="alert alert-red wk-red">ลบรายการ' + (p.kind === 'refund' ? 'คืนเงิน' : 'ชำระ') + 'วันที่ ' + fmtDate(p.paid_on) + ' — ยอดคงเหลือเปลี่ยนทันที</div>' +
     '<p>ค่าเดิมเก็บไว้ในบันทึกการเปลี่ยนแปลง (activity log) แต่ลบแล้วกู้คืนที่หน้านี้ไม่ได้</p>' +
-    (d.bills && d.bills.get(pid) ? '<div class="wk-red" id="teDelBillNote">บิล ' + escapeHtml(d.bills.get(pid)) + ' จะถูกยกเลิกตามไปด้วย</div>' : ''), 'ยืนยันลบ', async () => {
+    (d.bills && d.bills.get(pid) ? '<div class="wk-red" id="teDelBillNote">บิล ' + escapeHtml(d.bills.get(pid)) + ' จะถูกยกเลิกตามไปด้วย</div>' : '') +
+    (p.slip_path ? '<div class="wk-red" id="teDelSlipNote">' + (isOwner() ? 'รายการนี้มีสลิป — ระบบลบไฟล์สลิปให้พร้อมกัน' : 'รายการนี้มีสลิป — ผู้ดูแลลบแถวได้ แต่ไฟล์สลิปจะค้างในที่เก็บ ต้องแจ้งเจ้าของให้ลบไฟล์') + '</div>' : ''), 'ยืนยันลบ', async () => {
     closeConfirm();
     if (te.det !== d) return;
     await teDetRun('delpay', async () => {
-      await teRpc('teach_payment_fix', { p_payment: pid, p_delete: true });
+      const res = await teRpc('teach_payment_fix', { p_payment: pid, p_delete: true });
+      // แถวที่มีสลิป: ฐานคืนพาธให้ลบไฟล์ — เจ้าของลบได้ (policy) · ผู้ดูแลลบไม่ได้ → ไฟล์ค้าง ต้องบอกให้แจ้งเจ้าของ (B5)
+      if (res && res.slip_path) {
+        if (!isOwner()) return { ok: 'ลบรายการชำระแล้ว', warn: ['ไฟล์สลิปของรายการนี้ยังค้างในที่เก็บ — แจ้งเจ้าของให้ลบไฟล์ (ผู้ดูแลลบไฟล์สลิปไม่ได้) · ชื่อไฟล์ ' + res.slip_path] };
+        if (!(await teSlipRemoveFile(res.slip_path))) return { ok: 'ลบรายการชำระแล้ว', warn: ['แต่ไฟล์สลิปยังค้างในที่เก็บ — ลบเองที่หน้า Storage ของ Supabase (ถัง course-slips) · ชื่อไฟล์ ' + res.slip_path] };
+      }
       return { ok: 'ลบรายการชำระแล้ว' };
     });
   });
@@ -15007,8 +15194,11 @@ function teDetClick(e) {
   if (!b || !d || d.busy) return;
   const act = b.dataset.act;
   if (act === 'open') teDetOpenForm(b.dataset.k, b.dataset.sid || '');
-  else if (act === 'close-form') { d.open = null; d.fv = {}; d.link = null; d.err = ''; teDetRender(); }
+  else if (act === 'close-form') { d.open = null; d.fv = {}; d.link = null; d.err = ''; d.slip = null; d.slipErr = ''; d.slipBusy = false; teDetRender(); }
   else if (act === 'submit') teDetSubmit(b.dataset.k);
+  else if (act === 'slip-view') teSlipView(b.dataset.sid);
+  else if (act === 'slip-clear') teSlipClearAsk(b.dataset.sid);
+  else if (act === 'slip-rm') { d.slip = null; d.slipErr = ''; teDetRender(); }
   else if (act === 'decide-yes') teDetDecide(true, b.dataset.sid);
   else if (act === 'decide-no') teDetDecide(false, b.dataset.sid);
   else if (act === 'delpay') teDetDelPay(b.dataset.sid);
@@ -15048,6 +15238,7 @@ function teDetInput(el) {
   body.addEventListener('click', e => { if (e.target.closest('#teDet')) teDetClick(e); });
   body.addEventListener('input', e => { if (e.target.closest('#teDet') && e.target.matches('[data-df]')) teDetInput(e.target); });
   body.addEventListener('change', e => {
+    if (e.target.closest('#teDet') && e.target.matches('[data-slipin="det"]')) { teSlipPick(e.target); return; }
     if (!e.target.closest('#teDet') || !e.target.matches('[data-df]')) return;
     teDetInput(e.target);
     if (e.target.matches('[data-struct]')) teDetRender();            // เปลี่ยนตัวเลือกที่ทำให้ฟอร์มเปลี่ยนรูป (ยกเลิก/ไม่มา · ใครยกเลิก)

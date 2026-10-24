@@ -42,6 +42,7 @@ const TEACH = { rows: [], profiles: [], sessions: [], ext: [], subs: [], status:
     paid_in_full: true, payment_count: 1, state: 'queued', prior_sessions_used: 0, session_rows: 0 }, o);
   TEACH.seed = () => {
     TEACH.bills = []; TEACH.csOn = false; TEACH.billsMissing = false;   // บิลค่าคอร์ส (069): [{ enrollment_id, payment_id, sales: { sale_no, status } }] · csOn = สวิตช์ · billsMissing = ยังไม่รัน 069
+    TEACH.slipFiles = {}; TEACH.no070 = false; TEACH.slipFail = {};   // สลิป (070): ไฟล์ในถัง course-slips { พาธ: { size, type, who } } · no070 = ยังไม่รัน 070 · slipFail = { upload, sign, remove } ทำให้ขั้นนั้นล้ม
     TEACH.fail = {}; TEACH.missing = false; TEACH.noSource = false; TEACH.noCourseWrite = false; TEACH.priceWrites = []; TEACH.cal = { mode: 'ok', busy: [], failUpsert: null, failRemove: null, raceConflict: false, events: [] }; TEACH.gate = null; TEACH.loads = 0;
     TEACH.rows = [
       // กำลังเรียน: เหลือ 50 วัน · 3/6
@@ -296,6 +297,10 @@ const TEACH = { rows: [], profiles: [], sessions: [], ext: [], subs: [], status:
       if (a.p_amount == null || a.p_amount <= 0) return E('ยอดชำระต้องมากกว่า 0');
       if (!a.p_paid_on || a.p_paid_on > TODAY) return E('วันที่ชำระต้องไม่ว่างและไม่เกินวันนี้');
       if (['transfer', 'cash', 'card', 'promptpay', 'other'].indexOf(a.p_method) < 0) return E('วิธีชำระไม่ถูกต้อง');
+      if (a.p_slip_path != null) {            // 047/060: พาธต้องตรงโฟลเดอร์การลงเรียน + ชื่อไฟล์ตรงรหัสคำขอ · ไฟล์ต้องอยู่ในถังจริง
+        if (a.p_slip_path.indexOf(e.id + '/' + a.p_request_id + '.') !== 0) return E('ไฟล์สลิปต้องอยู่ในโฟลเดอร์ของการลงเรียนนี้ และตั้งชื่อตามรหัสคำขอ');
+        if (!TEACH.slipFiles[a.p_slip_path]) return E('ไม่พบไฟล์สลิปในที่เก็บ — อัปโหลดให้เสร็จก่อนกดบันทึก');
+      }
       TEACH.payments.push({ request_id: a.p_request_id, enrollment: a.p_enrollment, amount: a.p_amount, paid_on: a.p_paid_on, slip: a.p_slip_path });
       TEACH.pay.push({ id: 'np' + (++TEACH.seq), enrollment_id: e.id, paid_on: a.p_paid_on, amount: a.p_amount, kind: 'payment', method: a.p_method, note: a.p_note || null, request_id: a.p_request_id, slip_path: a.p_slip_path || null, created_at: new Date().toISOString() });
       if (e.closed_on) return E('การลงเรียนนี้ปิดแล้ว บันทึกชำระเพิ่มไม่ได้');
@@ -441,6 +446,32 @@ const TEACH = { rows: [], profiles: [], sessions: [], ext: [], subs: [], status:
       if (a.p_note != null) p.note = String(a.p_note).trim() || null;
       recalc(e);
       return OK({ ok: true, deleted: false });
+    },
+    // ── สลิป (070): สำเนากติกาของฐานเท่าที่หน้าจอพึ่ง · ตัวจริงตรวจที่ console-workspace/sql-tests/test070.mjs ──
+    teach_payment_slip_set(me, a) {
+      if (!roleOf(me)) return E('แนบสลิปได้เฉพาะทีมงานที่ใช้งานอยู่');
+      const p = TEACH.pay.find(x => x.id === a.p_payment);
+      if (!p) return E('ไม่พบรายการชำระนี้');
+      if (p.kind !== 'payment') return E('แนบสลิปได้เฉพาะรายการชำระ (ไม่ใช่คืนเงิน)');
+      const ok = typeof a.p_slip_path === 'string' && a.p_slip_path.indexOf(p.enrollment_id + '/' + p.request_id + '.') === 0 && ['webp', 'jpg', 'png', 'pdf'].indexOf(a.p_slip_path.split('.').pop()) >= 0;
+      if (!ok) return E('ไฟล์สลิปต้องอยู่ในโฟลเดอร์ของการลงเรียนนี้ และตั้งชื่อตามรหัสคำขอของรายการชำระ');
+      if (p.slip_path) return p.slip_path === a.p_slip_path ? OK({ ok: true, duplicate: true }) : E('รายการนี้มีสลิปอยู่แล้ว — เปลี่ยนสลิปไม่ได้ (ให้เจ้าของลบสลิปเดิมก่อน)');
+      if (!TEACH.slipFiles[a.p_slip_path]) return E('ไม่พบไฟล์สลิปในที่เก็บ — อัปโหลดให้เสร็จก่อนกดบันทึก');
+      p.slip_path = a.p_slip_path;
+      return OK({ ok: true, duplicate: false });
+    },
+    teach_payment_slip_clear(me, a) {
+      if (roleOf(me) !== 'owner') return E('ลบสลิปได้เฉพาะเจ้าของ');
+      const p = TEACH.pay.find(x => x.id === a.p_payment);
+      if (!p) return E('ไม่พบรายการชำระนี้');
+      if (!p.slip_path) return OK({ ok: true, cleared: false, slip_path: null });
+      const old = p.slip_path; p.slip_path = null;
+      return OK({ ok: true, cleared: true, slip_path: old });
+    },
+    teach_payment_slip_todo(me, a) {
+      if (!roleOf(me)) return E('ดูรายการแนบสลิปได้เฉพาะทีมงานที่ใช้งานอยู่');
+      const list = TEACH.pay.filter(x => x.enrollment_id === a.p_enrollment && x.kind === 'payment').sort((x, y) => String(x.paid_on).localeCompare(String(y.paid_on)) || String(x.created_at).localeCompare(String(y.created_at)));
+      return OK(list.map((x, i) => ({ id: x.id, n: i + 1, request_id: x.request_id, has_slip: !!x.slip_path })));
     },
     teach_enroll_fix(me, a) {
       const role = roleOf(me), e = enr(a.p_id), p = a.p_patch;
@@ -668,6 +699,7 @@ const TEACH = { rows: [], profiles: [], sessions: [], ext: [], subs: [], status:
         CALLS.push({ op: 'rpc', fn, args: clone(args || {}), who: caller });
         if (TEACH.gateRpc) await TEACH.gateRpc;
         if (TEACH.fail['rpc_' + fn]) return E(TEACH.fail['rpc_' + fn]);
+        if (TEACH.no070 && fn.indexOf('teach_payment_slip_') === 0) return { data: null, error: { code: 'PGRST202', message: 'Could not find the function public.' + fn + ' in the schema cache' } };
         if (TEACH.missing) return E('Could not find the function public.' + fn + ' in the schema cache');
         return RPC[fn](caller, args || {});
       }
@@ -677,6 +709,42 @@ const TEACH = { rows: [], profiles: [], sessions: [], ext: [], subs: [], status:
       return OK(myTid(who(c)));
     };
     // บัญชีที่ไม่มีแถว admins: ครูล้วน (maniac) / คนทั่วไป (ghost) — ของจริงล็อกอินผ่านแต่ไม่มีสิทธิ์อะไร
+    // ถังสลิป course-slips (070): สำเนา RLS ของถัง — อัป: เจ้าของ/ผู้ดูแลได้ทุกพาธที่การลงเรียนมีจริง · พนักงานเฉพาะไฟล์ของรายการชำระที่ยังไม่มีสลิป ·
+    //   เปิดดู (sign): เจ้าของ/ผู้ดูแล/ครูของนักเรียน · ลบ: เจ้าของ (คนอื่นลบได้ 0 รายการ ไม่ error — เหมือน RLS จริง)
+    c.storage = { from: bucket => ({
+      async upload(path, blob, opts) {
+        const me = who(c), role = roleOf(me);
+        const call = { op: 'storage.upload', bucket, path, size: blob && blob.size, type: opts && opts.contentType, upsert: !!(opts && opts.upsert), who: me, ok: false };      // ok = ถังรับไฟล์จริง
+        CALLS.push(call);
+        if (TEACH.slipFail.upload) return { data: null, error: { message: TEACH.slipFail.upload.message || 'boom', statusCode: String(TEACH.slipFail.upload.statusCode || '500') } };
+        const parts = String(path).split('/'), folder = parts[0], file = parts[1] || '', ext = file.split('.').pop(), req = file.slice(0, file.length - ext.length - 1);
+        const shapeOk = parts.length === 2 && ['webp', 'jpg', 'png', 'pdf'].indexOf(ext) >= 0 && !!req;
+        const payment = TEACH.pay.find(x => x.enrollment_id === folder && x.request_id === req);
+        const allowed = bucket === 'course-slips' && shapeOk && !!enr(folder) && (isMgr(role) || (role === 'staff' && payment && payment.kind === 'payment' && !payment.slip_path));
+        if (!allowed) return { data: null, error: { message: 'new row violates row-level security policy', statusCode: '403' } };
+        if (TEACH.slipFiles[path]) return { data: null, error: { message: 'The resource already exists', statusCode: '409' } };
+        TEACH.slipFiles[path] = { size: blob && blob.size, type: opts && opts.contentType, who: me };
+        call.ok = true;
+        return { data: { path }, error: null };
+      },
+      async createSignedUrl(path, secs) {
+        const me = who(c), role = roleOf(me), e = enr(String(path).split('/')[0]);
+        CALLS.push({ op: 'storage.sign', bucket, path, secs, who: me, opens: window.__openCount || 0 });      // opens = จำนวนครั้งที่ window.open ถูกเรียกก่อนขอลิงก์ (ต้องเปิดแท็บเปล่าก่อน)
+        if (TEACH.slipFail.sign) return { data: null, error: { message: 'boom', statusCode: '500' } };
+        if (!TEACH.slipFiles[path]) return { data: null, error: { message: 'Object not found', statusCode: '404' } };
+        const mine = !!e && !!myTid(me) && e.teacher_id === myTid(me);
+        if (!(isMgr(role) || mine)) return { data: null, error: { message: 'Object not found', statusCode: '404' } };       // RLS ไม่ให้เห็น = เหมือนไม่มีไฟล์
+        return { data: { signedUrl: 'https://signed.test/' + bucket + '/' + path + '?token=t&secs=' + secs }, error: null };
+      },
+      async remove(paths) {
+        const me = who(c), role = roleOf(me);
+        CALLS.push({ op: 'storage.remove', bucket, paths: paths.slice(), who: me });
+        if (TEACH.slipFail.remove) return { data: null, error: { message: 'boom', statusCode: '500' } };
+        const gone = role === 'owner' ? paths.filter(p => TEACH.slipFiles[p]) : [];
+        gone.forEach(p => { delete TEACH.slipFiles[p]; });
+        return { data: gone.map(name => ({ name })), error: null };
+      },
+    }) };
     c.auth.signInWithPassword = async function (a) {
       const em = String((a && a.email) || '').toLowerCase();
       if (em.startsWith('maniac') || em.startsWith('ghost') || em.startsWith('alldayz')) {
