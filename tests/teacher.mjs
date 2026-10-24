@@ -12,6 +12,7 @@
  *  4. iPhone (390px)
  *  5. เพิ่มนักเรียนเอง · ผูกนัดปฏิทิน (060)
  *  6. เพิ่มนักเรียนย้อนหลัง (062): สวิตช์ · วันที่เรียน · ส่งลงเรียน→ลงรอบ · ล้มกลางทางแล้วทำต่อ · ครูที่เป็นพนักงานโดนฐานปฏิเสธ
+ *  8. ออกจากระบบ → พาไปหน้าเข้าสู่ระบบของคอนโซล (desk.html) · ไม่เด้งเมื่อ signOut ล้ม/ยังไม่เคยล็อกอิน · เด้งเมื่อ session หายเอง
  */
 
 import { dirname, join } from 'node:path';
@@ -43,6 +44,10 @@ async function signIn(name) {
   await sleep(900);
 }
 async function signOut() { $('logoutBtn').click(); await sleep(500); }
+// ดักการเด้งไป desk.html หลังออกจากระบบ (ของจริง = location.replace ซึ่งพาหน้านี้ออกจากไฟล์ที่ทดสอบ) · เก็บโค้ดจริงไว้ตรวจว่าไม่อ่านพาธจาก URL
+const GO_SRC = goConsoleLogin.toString();
+let GOLOGIN = 0;
+goConsoleLogin = () => { GOLOGIN++; };
 const txt = () => $('app').textContent;
 const html = () => $('app').innerHTML;
 const cards = () => [...$('app').querySelectorAll('.card.click[data-eid]')];
@@ -90,8 +95,10 @@ async function runTests() {
   await signIn('ghost');
   ok('บัญชีที่ไม่ใช่ครู: ข้อความบอกชัด · มีลิงก์ไปคอนโซลร้าน · ไม่ดึงนักเรียน/รอบเรียนเลย', !!$('notTeacher') && /ยังไม่ได้ผูกกับครู/.test(txt()) && !!$('app').querySelector('a[href="desk.html"]')
     && rpcCalls('teach_my_students').length === 0 && !CALLS.some(c => c.table === 'class_sessions'), J(CALLS.map(c => c.fn || c.table)));
+  ok('ยังไม่ได้ออกจากระบบ: ยังไม่เด้งไปหน้าเข้าสู่ระบบของคอนโซล', GOLOGIN === 0, String(GOLOGIN));
   await signOut();
   ok('ออกจากระบบ: กลับหน้าเข้าสู่ระบบ · ไม่มีข้อความของบัญชีเดิม', !!$('loginForm') && !$('notTeacher'));
+  ok('ออกจากระบบ (บัญชีที่ไม่ใช่ครู): พาไปหน้าเข้าสู่ระบบของคอนโซล 1 ครั้ง', GOLOGIN === 1, String(GOLOGIN));
 
   // ── ครู Maniac (ไม่มีแถว admins) ──
   await signIn('maniac');
@@ -264,7 +271,9 @@ async function runTests() {
   // ── ออกจากระบบ: ข้อมูลไม่ค้าง ──
   await ostu('e-month');
   ok('ก่อนออก: แผงมีชื่อนักเรียนและบันทึกการสอน', /วีระ ชูใจ/.test(txt()) && /บันทึกของครู Maniac/.test(txt()));
+  const g0 = GOLOGIN;
   await signOut();
+  ok('ออกจากระบบ (ครู): พาไปหน้าเข้าสู่ระบบของคอนโซลครั้งเดียว', GOLOGIN === g0 + 1, g0 + ' → ' + GOLOGIN);
   ok('ออกจากระบบ: DOM ของหน้าไม่เหลือข้อมูลนักเรียน/บันทึก/ติดต่อ · แถบบนว่าง · ปุ่มออกซ่อน', !/วีระ|ดวงดาว|บันทึกของครู|wee/.test($('app').innerHTML) && $('who').textContent === '' && $('logoutBtn').hidden && !!$('loginForm'));
 
   // ── สลับบัญชีกลางโหลด: ผลของ Maniac ต้องไม่โผล่ให้ Alldayz ──
@@ -823,6 +832,58 @@ async function runTests() {
 }
 </script>`;
 
+// ── 8. ออกจากระบบแล้วกลับหน้าเข้าสู่ระบบของคอนโซล (desk.html) ──
+// ลำดับจริง desk → ครู → ออก → desk ที่ไม่วนกลับ ตรวจแบบเปิดหน้าต่อกันจริงที่ tests/teacher-logout.mjs · ที่นี่ตรวจฝั่งหน้าครู
+const T8 = `<script>
+window.addEventListener('load', () => setTimeout(runTests, 300));
+${COMMON}
+async function runTests() {
+  L('=== หน้าครู (8): ออกจากระบบ → หน้าเข้าสู่ระบบของคอนโซล ===');
+  seedManiac();
+  await sleep(300);
+  const src = GO_SRC.replace(/\\s+/g, ' ');
+  ok('ปลายทางเป็นพาธคงที่ desk.html: ไม่อ่าน query · hash · referrer · URL · โดเมนใด ๆ (กัน open redirect)',
+    src === "function goConsoleLogin() { location.replace('desk.html'); }", src);
+  history.replaceState(null, '', location.pathname + '?next=https://evil.example/x&redirect=//evil.example/y&to=desk.html#https://evil.example/z');
+
+  // ยังไม่ได้ล็อกอิน: ไม่เด้ง (ผู้ใช้เปิดหน้าครูตรง ๆ เพื่อเข้าสู่ระบบ)
+  db.cbs.forEach(cb => cb('SIGNED_OUT', null)); await sleep(150);
+  ok('ยังไม่เคยล็อกอินในหน้านี้: ได้ SIGNED_OUT ก็ไม่เด้ง · ค้างที่ฟอร์มเข้าสู่ระบบของหน้าครู', GOLOGIN === 0 && !!$('loginForm'), String(GOLOGIN));
+  $('lgEmail').value = 'unknown@x'; $('lgPass').value = 'bad'; $('loginForm').requestSubmit(); await sleep(600);
+  ok('รหัสผิด: ไม่เด้ง', GOLOGIN === 0 && isRed($('loginErr')), String(GOLOGIN));
+
+  await signIn('maniac');
+  ok('เข้าสำเร็จ: ไม่เด้ง · เห็นนักเรียน', GOLOGIN === 0 && cards().length === 3, GOLOGIN + ' ' + cards().length);
+  db.cbs.forEach(cb => cb('TOKEN_REFRESHED', db.session)); await sleep(150);
+  ok('ต่ออายุ token (TOKEN_REFRESHED): ไม่เด้ง ไม่ล้างหน้า', GOLOGIN === 0 && cards().length === 3);
+
+  // ออกไม่สำเร็จ (เน็ตสะดุด): session ยังอยู่ → ห้ามเด้ง (desk จะพากลับมาหน้าครู = วน) · แจ้งผู้ใช้ตามจริง
+  const realSignOut = db.auth.signOut;
+  db.auth.signOut = async () => ({ error: { message: 'Failed to fetch', code: 'x' } });
+  $('logoutBtn').click(); await sleep(400);
+  ok('signOut ล้ม: ไม่เด้ง · ยังอยู่หน้าครูพร้อมข้อมูล · แถบแดงบอกว่าออกไม่สำเร็จ',
+    GOLOGIN === 0 && cards().length === 3 && !!db.session && /ออกจากระบบไม่สำเร็จ/.test(($('fatalError') || {}).textContent || ''), GOLOGIN + ' ' + (($('fatalError') || {}).textContent || ''));
+  db.auth.signOut = realSignOut;
+  await signOut();
+  ok('ลองใหม่สำเร็จ: เด้งไปหน้าเข้าสู่ระบบของคอนโซล 1 ครั้ง · session หาย · หน้าครูไม่เหลือข้อมูลนักเรียน',
+    GOLOGIN === 1 && !db.session && !/วีระ|ดวงดาว/.test($('app').innerHTML) && $('logoutBtn').hidden, GOLOGIN + ' ' + !!db.session);
+
+  // session หายเอง (ออกจากระบบจากแท็บอื่น · refresh token หมดอายุ) ขณะอยู่หน้าครู
+  await signIn('maniac');
+  ok('เข้าอีกรอบ: ไม่เด้งเพิ่ม', GOLOGIN === 1 && cards().length === 3, String(GOLOGIN));
+  db.session = null; db.cbs.forEach(cb => cb('SIGNED_OUT', null)); await sleep(200);
+  ok('session หายเอง (SIGNED_OUT จากที่อื่น): พาไปหน้าเข้าสู่ระบบของคอนโซล 1 ครั้ง · ล้างข้อมูลออกจากหน้า',
+    GOLOGIN === 2 && !/วีระ|ดวงดาว/.test($('app').innerHTML) && $('who').textContent === '', String(GOLOGIN));
+
+  // สลับเป็นอีกบัญชีโดยไม่ผ่าน SIGNED_OUT (setSession) ไม่ใช่การออกจากระบบ
+  await signIn('maniac');
+  db.session = { user: { id: 'u-alldayz' }, access_token: 'at', refresh_token: 'rt' };
+  db.cbs.forEach(cb => cb('SIGNED_IN', db.session)); await sleep(600);
+  ok('สลับบัญชีกลางหน้า (SIGNED_IN คนใหม่): ไม่เด้ง · เปลี่ยนเป็นข้อมูลของ Alldayz', GOLOGIN === 2 && /ครู Alldayz/.test($('who').textContent), GOLOGIN + ' ' + $('who').textContent);
+  L('RESULT:' + (fail ? 'FAIL' : 'PASS') + ' pass=' + pass + ' fail=' + fail);
+}
+</script>`;
+
 const mock = MOCK3 + '\n' + TEACH_MOCK;
 let allOk = true;
 for (const [label, tests, opts] of [
@@ -833,6 +894,7 @@ for (const [label, tests, opts] of [
   ['5 เพิ่มนักเรียนเอง · ผูกนัดปฏิทิน (060)', T5, { width: 1100, height: 900, coarse: false }],
   ['6 เพิ่มนักเรียนย้อนหลัง (062)', T6, { width: 1100, height: 900, coarse: false }],
   ['7 นัดสอนที่เดียว: ลงฐาน + Google Calendar (063)', T7, { width: 1100, height: 900, coarse: false }],
+  ['8 ออกจากระบบ → หน้าเข้าสู่ระบบของคอนโซล', T8, { width: 1100, height: 900, coarse: false }],
 ]) {
   if (ONLY && !ONLY.test(label)) continue;
   console.log('\n--- ' + label + ' ---');

@@ -23,9 +23,15 @@ import { CHROME, writePatched } from './page-test.mjs';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 // coarse = จอสัมผัส: pointer: coarse + hover: none (ค่าเดียวกับ iPad ที่ไม่ได้ต่อแทร็กแพด)
-export async function runCdpPage({ root, file, mock, tests, hash, width, height, coarse = true, shotDir = null, flags = [] }) {
+// siblings = [{ file, mock, tests }] หน้าอื่นที่ต้องอยู่ข้างกัน ใช้ชื่อไฟล์จริง (เช่น desk.html) — ให้ทดสอบหน้าที่พากันไปมา (location.replace('teacher.html')) ด้วยการเปิดหน้าต่อกันจริง
+export async function runCdpPage({ root, file, mock, tests, hash, width, height, coarse = true, shotDir = null, flags = [], siblings = [] }) {
   const target = writePatched({ root, file, mock, tests });
   if (!target) return { ran: false, ok: false, lines: [] };
+  for (const s of siblings) {
+    const t = writePatched({ root, file: s.file, mock: s.mock, tests: s.tests });
+    if (!t) return { ran: false, ok: false, lines: [] };
+    copyFileSync(t, join(dirname(target), s.file));
+  }
   // โลโก้/ไอคอนของหน้า (ไฟล์ .png ที่รากรีโป) ไปไว้ข้างไฟล์ที่ทดสอบ — ภาพหน้าจอจะได้ไม่มีรูปแตก
   for (const f of readdirSync(root)) if (f.endsWith('.png')) copyFileSync(join(root, f), join(dirname(target), f));
 
