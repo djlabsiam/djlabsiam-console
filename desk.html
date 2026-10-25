@@ -2229,6 +2229,7 @@
               <h3>ทะเบียนสมาชิกร้าน</h3>
               <input type="search" id="memberSearch" class="input" placeholder="ชื่อ / เบอร์โทร / รหัสสมาชิก (3 ตัวขึ้นไป)" autocomplete="off" aria-label="ค้นหาสมาชิก">
               <p class="hint">ทะเบียนนี้มาจาก Google Sheet ของร้าน — ดูได้อย่างเดียว แก้ที่ชีตเท่านั้น</p>
+              <div id="memberSync" aria-live="polite"></div>
               <div id="memberResults" style="margin-top:8px;"></div>
               <button class="btn btn-block" type="button" onclick="openCodeModal()" style="margin-top:12px;">+ สร้างลิงก์สมัครสมาชิก</button>
             </div>
@@ -3552,6 +3553,7 @@ async function handleAuthState(session) {
     workReset();                    // และล้างงานของฉัน/คำขอ (ใบงาน ประวัติ รูปหลักฐาน ฟอร์มที่พิมพ์ค้าง)
     trReset();                      // และล้างโอนไฟล์ (รายการไฟล์ ประวัติ คิวอัปโหลดที่ค้าง)
     attReset();                     // และล้างไฟล์แนบจากคลังไฟล์ (รายการที่แนบ ช่องแนบในฟอร์ม หน้าต่างเลือกไฟล์)
+    msyncReset();                   // และล้างสถานะซิงก์ทะเบียนสมาชิก (มีชื่อสมาชิกที่หายจากชีตให้เห็น)
     notifReset();                   // และล้างหน้าต่างแจ้งเตือน (รายการเครื่อง/ข้อความของคนก่อน)
     dcStop();                       // ออกจากระบบ = หยุดดึงข้อความ Discord และล้างที่ค้างในหน่วยความจำ
     closeCam();                     // ออกจากระบบ = ปิดกล้อง (iPad) ด้วย
@@ -3734,6 +3736,7 @@ async function loadAll() {
   renderAll();
   bkOpenDeepLink();               // ลิงก์ #booking:<id> (เช่น จากแจ้งเตือนการจอง) เปิดใบนั้นเมื่อข้อมูลพร้อม
   loadMySales();                  // ขายแล้ว (เครื่องนี้หรือเครื่องอื่น) ยอดของฉันบนหน้าแรกขยับตาม
+  loadMemberSync();               // สถานะซิงก์ทะเบียนสมาชิกจาก Google Sheet (การ์ดในหมวดลูกค้า) — ไม่รอ ไม่ขวางหน้าอื่น
 }
 
 async function loadProducts() {
@@ -5888,6 +5891,7 @@ function showSection(id, mode) {
   // หมวดที่ข้อมูลผูกกับตัวกรองของตัวเอง โหลดตอนเปิด ไม่ต้องโหลดทุกอย่างตั้งแต่ล็อกอิน
   if (currentUserId) {
     if (id === 'daily') loadDaily();
+    if (id === 'customers') loadMemberSync();     // อายุ "ตรวจล่าสุด" นับใหม่ทุกครั้งที่เปิดหมวด
     if (id === 'activity' && !activityLoaded) reloadActivity();
     if (id === 'admin' && !adLoaded) adLoadAll();
     if (id === 'ops') loadOps();
@@ -7574,6 +7578,54 @@ async function searchMembers() {
   }).join('');
 }
 document.getElementById('memberSearch').addEventListener('input', searchMembers);
+
+// ---- สถานะซิงก์ทะเบียนสมาชิกจาก Google Sheet (ตาราง members_sync_state — migration 071) ----
+// Apps Script ตรวจทั้งชีตเทียบฐานทุก 10 นาทีแล้วบันทึกผลไว้ที่นี่ — บอกให้เห็นว่า "ข้อมูลตรงกับชีตหรือยัง"
+// ไม่ใช่ปล่อยให้พนักงานเจอว่าหาชื่อไม่เจอเอง · เกิน MSYNC_STALE_MIN = ซิงก์สะดุด (พลาด 3 รอบติด)
+const MSYNC_STALE_MIN = 30;
+let msync = { loaded: false, missing: false, error: '', st: null };
+function msyncReset() { msync = { loaded: false, missing: false, error: '', st: null }; const el = document.getElementById('memberSync'); if (el) el.innerHTML = ''; }
+async function loadMemberSync() {
+  const uid = currentUserId;
+  if (!uid) return;
+  const { data, error } = await db.from('members_sync_state').select('*').limit(1);
+  if (uid !== currentUserId) return;              // ออกจากระบบ/สลับบัญชีระหว่างโหลด = ทิ้งผลที่มาช้า
+  if (error) {
+    console.error('[Load members_sync_state]', error);
+    // ยังไม่รัน 071 = บอกให้รัน (ไม่ใช่ error แดง) · ข้อผิดพลาดอื่นแจ้งตามจริงในการ์ด
+    const missing = /members_sync_state|schema cache|PGRST205|42P01/i.test((error.code || '') + ' ' + (error.message || ''));
+    msync = { loaded: true, missing, error: missing ? '' : error.message, st: null };
+  } else {
+    msync = { loaded: true, missing: false, error: '', st: (data && data[0]) || null };
+  }
+  renderMemberSync();
+}
+function memberSyncHtml(m, now) {
+  if (!m.loaded) return '';
+  if (m.missing) return '<div class="alert alert-warn">ยังไม่ได้ติดตั้งการซิงก์ทั้งชีต — สมาชิกที่เพิ่ม/แก้เป็นกลุ่มในชีตอาจยังไม่เข้าระบบ (ต้องรัน migration 071 และติดตั้งตัวตั้งเวลาใน Apps Script)</div>';
+  if (m.error) return '<div class="alert alert-red">อ่านสถานะซิงก์ไม่สำเร็จ: ' + escapeHtml(m.error) + '</div>';
+  const s = m.st, ran = s && s.last_run_at ? Date.parse(s.last_run_at) : NaN;
+  if (!Number.isFinite(ran)) return '<div class="alert alert-warn">ยังไม่เคยตรวจทั้งชีต — ติดตั้งตัวตั้งเวลา (installReconcileTrigger) ใน Apps Script ของชีต DJ LAB MEMBERSHIP</div>';
+  const age = Math.max(0, Math.floor((now - ran) / 60000)), stale = age > MSYNC_STALE_MIN;
+  let h = stale
+    ? '<div class="alert alert-warn">ซิงก์จาก Google Sheet ล่าสุด ' + escapeHtml(wbAgo(age)) + ' — นานกว่าปกติ (ปกติทุก 10 นาที) สมาชิกที่เพิ่งแก้ในชีตอาจยังไม่เข้าระบบ · เปิดแท็บ SyncLog ในชีตดูสาเหตุ</div>'
+    : '<p class="hint"><span class="st st-ok">✓ ตรงกับ Google Sheet</span> ตรวจล่าสุด ' + escapeHtml(wbAgo(age)) + ' · ' + (Number(s.rows_seen) || 0) + ' รายชื่อ</p>';
+  if (s.error_count > 0) {
+    const eg = (Array.isArray(s.errors) ? s.errors : []).slice(0, 3).map(e => 'แถว ' + escapeHtml(String(e.row == null ? '?' : e.row)) + ': ' + escapeHtml(String(e.message || ''))).join(' · ');
+    h += '<div class="alert alert-red">ระบบรับข้อมูลจากชีตไม่ได้ ' + (Number(s.error_count) || 0) + ' แถว — ' + eg + '</div>';
+  }
+  if (s.duplicate_count > 0) h += '<div class="alert alert-warn">รหัสซ้ำในชีต ' + (Number(s.duplicate_count) || 0) + ' แถว (ใช้แถวแรก ข้ามแถวที่ซ้ำ) — ตรวจคอลัมน์ Code</div>';
+  if (s.orphan_count > 0) {
+    const og = (Array.isArray(s.orphan_sample) ? s.orphan_sample : []).slice(0, 5).map(o => escapeHtml((o.code ? '#' + o.code + ' ' : '') + (o.name || ''))).join(' · ');
+    h += '<p class="hint">มีในระบบแต่ไม่อยู่ในชีตแล้ว ' + (Number(s.orphan_count) || 0) + ' รายชื่อ (ไม่ลบอัตโนมัติ)' + (og ? ': ' + og : '') + '</p>';
+  }
+  if (s.customers_result && s.customers_result.error) h += '<div class="alert alert-red">ตามข้อมูลสมาชิกไปหน้าลูกค้าไม่สำเร็จ: ' + escapeHtml(String(s.customers_result.error)) + '</div>';
+  return h;
+}
+function renderMemberSync() {
+  const el = document.getElementById('memberSync');
+  if (el) el.innerHTML = memberSyncHtml(msync, Date.now());
+}
 
 function openMemberDetail(id) {
   const m = memberCache[id];
@@ -11006,6 +11058,7 @@ function onAccountSwitched() {
   workReset();                   // งานของฉัน/คำขอ: ใบงาน คำขอ รูปหลักฐานของคนเดิมต้องไม่ค้าง (คอมหน้าร้านใช้ร่วมกันหลายคน)
   trReset();                     // โอนไฟล์: รายการ ประวัติ และคิวอัปโหลดของคนเดิมต้องไม่ค้าง (อัปโหลดที่ยังไม่จบถูกทิ้ง)
   attReset();                    // ไฟล์แนบจากคลังไฟล์: รายการที่แนบ ช่องแนบในฟอร์ม และหน้าต่างเลือกไฟล์ของคนเดิมต้องไม่ค้าง
+  msyncReset();                  // สถานะซิงก์ทะเบียนสมาชิก: ล้างของคนเดิม (โหลดใหม่ให้คนใหม่ตอน loadAll)
   notifReset();                  // หน้าต่างแจ้งเตือน: รายการเครื่อง/ข้อความของคนเดิมต้องไม่ค้าง
   coSellers = [];
   launchDraft = null;
