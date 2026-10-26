@@ -2271,7 +2271,7 @@
           <div class="split">
             <div>
               <div class="toolbar">
-                <input type="search" id="customerSearch" class="input grow" placeholder="ชื่อ / เบอร์โทร / LINE ID / อีเมล / แท็ก" autocomplete="off" aria-label="ค้นหาลูกค้า">
+                <input type="search" id="customerSearch" class="input grow" placeholder="ชื่อ / รหัสสมาชิก / เบอร์โทร / LINE ID / อีเมล / แท็ก" autocomplete="off" aria-label="ค้นหาลูกค้า">
                 <button class="btn btn-primary" type="button" onclick="openCustomerForm(null)">+ เพิ่มลูกค้าใหม่</button>
               </div>
               <div class="tablewrap" id="tw-customers" tabindex="0" aria-label="ตารางลูกค้า">
@@ -3917,7 +3917,7 @@ async function loadMovements() {
 async function loadCustomers() {
   // ชุดคอลัมน์เดียวกับ customers.html — หน้าขายใช้แค่ชื่อ/เบอร์จากชุดนี้
   const { data, error } = await db.from('customers')
-    .select('id, full_name, phone, line_id, email, note, tags, created_at, created_by, admins:created_by(full_name)')
+    .select('id, full_name, phone, line_id, email, note, tags, created_at, created_by, admins:created_by(full_name), members:member_id(code)')
     .order('full_name');
   if (error) { console.error('[Load customers]', error); showFatalError('โหลดรายชื่อลูกค้าไม่สำเร็จ: ' + error.message); return; }
   customers = data || [];
@@ -7536,8 +7536,12 @@ function findPhoneTwin(phone, exceptId) {
     normalizePhone(c.phone).slice(-9) === digits.slice(-9)) || null;
 }
 
+// รหัสสมาชิกของลูกค้าที่ผูกกับทะเบียนสมาชิก (customers.member_id → members.code) · ไม่ผูก/อ่านทะเบียนไม่ได้ = ''
+function memberCodeOf(c) { return c.members && c.members.code ? String(c.members.code) : ''; }
+
 function matchesQuery(c, q, digits) {
   if ((c.full_name || '').toLowerCase().includes(q)) return true;
+  if (memberCodeOf(c).toLowerCase().includes(q)) return true;
   if ((c.line_id || '').toLowerCase().includes(q)) return true;
   if ((c.email || '').toLowerCase().includes(q)) return true;
   if ((c.note || '').toLowerCase().includes(q)) return true;
@@ -7560,7 +7564,7 @@ function renderCustomers() {
   document.getElementById('custCount').textContent = q
     ? 'พบ ' + rows.length + ' รายจากทั้งหมด ' + customers.length + ' ราย' : 'ทั้งหมด ' + customers.length + ' ราย';
   fillTable('customers', sortRows('customers', rows), c =>
-    '<td><strong>' + escapeHtml(c.full_name) + '</strong>' + (!c.phone && !c.line_id && !c.email ? ' <span class="st st-warn">⚠ ไม่มีช่องทางติดต่อ</span>' : '') + '</td>' +
+    '<td><strong>' + escapeHtml(c.full_name) + '</strong>' + (memberCodeOf(c) ? ' <span class="st st-off">รหัส ' + escapeHtml(memberCodeOf(c)) + '</span>' : '') + (!c.phone && !c.line_id && !c.email ? ' <span class="st st-warn">⚠ ไม่มีช่องทางติดต่อ</span>' : '') + '</td>' +
     '<td class="nowrap">' + escapeHtml(c.phone || '—') + '</td>' +
     '<td class="col-opt">' + escapeHtml(c.line_id || '—') + '</td>' +
     '<td class="col-opt">' + escapeHtml((c.tags || []).join(', ') || '—') + '</td>' +
