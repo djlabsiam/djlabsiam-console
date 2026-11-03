@@ -1402,6 +1402,8 @@
   /* กรอบนี้ต้องตรงกับ SCAN_ROI ในโค้ดเป๊ะ ๆ ไม่งั้นผู้ใช้เล็งผิดที่ (ชุดเดียวกับ stock.html) */
   .cam-roi { position: absolute; left: 8%; right: 8%; top: 32%; bottom: 32%; border: 2px solid var(--red); pointer-events: none;
     box-shadow: 0 0 0 9999px rgba(15,15,15,.35); }
+  /* โหมดสแกน QR สมาชิก: QR เป็นสี่เหลี่ยมจัตุรัส กรอบจึงสูงเกือบเต็มภาพ — ต้องตรงกับ SCAN_ROI_QR ในโค้ด */
+  .cam-view.qr .cam-roi { left: 20%; right: 20%; top: 8%; bottom: 8%; }
   .cam-hint { padding: 10px 14px; font-size: 15px; font-weight: 600; border-bottom: 1px solid var(--line); }
   .cam-err { padding: 10px 14px 0; }
   .cam-err .alert { margin: 0; white-space: pre-line; }
@@ -2114,6 +2116,7 @@
                 <input type="text" id="posCustomer" class="input" list="customerOptions" autocomplete="off" placeholder="พิมพ์ชื่อหรือเบอร์โทรแล้วเลือก">
                 <datalist id="customerOptions"></datalist>
                 <button class="btn btn-sm" type="button" style="margin-top:8px;" onclick="openCustomerForm(null, true)">+ ลูกค้าใหม่</button>
+                <button class="btn btn-sm" type="button" style="margin-top:8px;" onclick="mqStart()">สแกน QR สมาชิก</button>
               </div>
               <div class="row2">
                 <div class="field">
@@ -2272,6 +2275,7 @@
             <div>
               <div class="toolbar">
                 <input type="search" id="customerSearch" class="input grow" placeholder="ชื่อ / รหัสสมาชิก / เบอร์โทร / LINE ID / อีเมล / แท็ก" autocomplete="off" aria-label="ค้นหาลูกค้า">
+                <button class="btn" type="button" onclick="mqStart()">สแกน QR สมาชิก</button>
                 <button class="btn btn-primary" type="button" onclick="openCustomerForm(null)">+ เพิ่มลูกค้าใหม่</button>
               </div>
               <div class="tablewrap" id="tw-customers" tabindex="0" aria-label="ตารางลูกค้า">
@@ -2683,6 +2687,13 @@
   <div class="dlg-head"><h2 id="codeTitle">รหัสนี้ยังไม่มีในระบบ</h2></div>
   <div class="dlg-body" id="codeBody"></div>
   <div class="dlg-foot"><button class="btn" type="button" onclick="document.getElementById('codeDialog').close()">ปิด (Esc)</button></div>
+</dialog>
+
+<!-- สแกน QR สมาชิก — ใช้ระบุตัวสมาชิกเท่านั้น (ไม่ใช่ส่วนลด/คูปอง/จ่ายเงิน) · เนื้อในวาดโดย mqRender() -->
+<dialog id="mqDialog" aria-labelledby="mqTitle">
+  <div class="dlg-head"><h2 id="mqTitle">สแกน QR สมาชิก</h2></div>
+  <div class="dlg-body" id="mqBody"></div>
+  <div class="dlg-foot" id="mqFoot" style="flex-wrap:wrap;"></div>
 </dialog>
 
 <dialog id="successDialog" aria-labelledby="successTitle">
@@ -3442,6 +3453,7 @@
   <div class="cam-err" id="camError"></div>
   <div class="cam-foot">
     <button class="btn" id="camTorchBtn" type="button" onclick="camTorch()" disabled>ไฟฉาย</button>
+    <button class="btn" id="camMqManual" type="button" onclick="mqFromCam()" hidden>พิมพ์รหัสแทน</button>
     <button class="btn btn-primary" id="camDoneBtn" type="button" onclick="closeCam()">เสร็จแล้ว</button>
   </div>
 </div>
@@ -3666,6 +3678,7 @@ async function handleAuthState(session) {
     workReset();                    // และล้างงานของฉัน/คำขอ (ใบงาน ประวัติ รูปหลักฐาน ฟอร์มที่พิมพ์ค้าง)
     trReset();                      // และล้างโอนไฟล์ (รายการไฟล์ ประวัติ คิวอัปโหลดที่ค้าง)
     teReset();                     // คอร์สเรียน: รายการนักเรียน/รอบเรียนของคนก่อนต้องไม่ค้างหน้าจอ
+    mqReset();                      // และล้างผลสแกน QR สมาชิก (ชื่อ/รหัสสมาชิกบนการ์ด)
     notifReset();                   // และล้างหน้าต่างแจ้งเตือน (รายการเครื่อง/ข้อความของคนก่อน)
     dcStop();                       // ออกจากระบบ = หยุดดึงข้อความ Discord และล้างที่ค้างในหน่วยความจำ
     closeCam();                     // ออกจากระบบ = ปิดกล้อง (iPad) ด้วย
@@ -3917,7 +3930,7 @@ async function loadMovements() {
 async function loadCustomers() {
   // ชุดคอลัมน์เดียวกับ customers.html — หน้าขายใช้แค่ชื่อ/เบอร์จากชุดนี้
   const { data, error } = await db.from('customers')
-    .select('id, full_name, phone, line_id, email, note, tags, created_at, created_by, admins:created_by(full_name), members:member_id(code)')
+    .select('id, full_name, phone, line_id, email, note, tags, created_at, created_by, member_id, admins:created_by(full_name), members:member_id(code)')
     .order('full_name');
   if (error) { console.error('[Load customers]', error); showFatalError('โหลดรายชื่อลูกค้าไม่สำเร็จ: ' + error.message); return; }
   customers = data || [];
@@ -6238,8 +6251,12 @@ if (window.visualViewport) {
 const SCAN_ROI = { left: 0.08, right: 0.92, top: 0.32, bottom: 0.68 };
 const SCAN_FORMATS = ['ean_13', 'code_128', 'code_39', 'qr_code'];
 const ZXING_SRC = 'https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js';
-const CAM_MODE = { search: 'หา', receive: 'รับเข้า', count: 'นับ', cart: 'ขาย', serial: 'ซีเรียล', movement: 'เลือกสินค้า', field: 'ใส่ช่องบาร์โค้ด' };
-const cam = { stream: null, track: null, scanning: false, detector: null, reader: null, torch: false, last: '', lastAt: 0, zxAt: 0, token: 0 };
+const SCAN_ROI_QR = { left: 0.2, right: 0.8, top: 0.08, bottom: 0.92 };   // โหมดสแกน QR สมาชิก — ต้องตรงกับ .cam-view.qr .cam-roi
+const CAM_MODE = { search: 'หา', receive: 'รับเข้า', count: 'นับ', cart: 'ขาย', serial: 'ซีเรียล', movement: 'เลือกสินค้า', field: 'ใส่ช่องบาร์โค้ด', member: 'QR สมาชิก' };
+const cam = { stream: null, track: null, scanning: false, detector: null, reader: null, torch: false, last: '', lastAt: 0, zxAt: 0, token: 0, memberOnly: false };
+// สถานะสแกน QR สมาชิก (ฟังก์ชัน mq* อยู่ถัดจาก unlinkMember ในหมวดลูกค้า · routeScan ดัก "DJLM1." ก่อนตัดสินตามหมวด) — ประกาศตรงนี้เพื่อให้ mqReset() เรียกจาก handleAuthState ได้ทุกเวลา
+// ไม่มี token อยู่ในนี้เลย: token ถูกส่งเข้า RPC แล้วทิ้ง (ไม่เก็บ ไม่ log ไม่ขึ้นจอ) · view = ผลที่โชว์บนการ์ด
+const mq = { busy: false, doneAt: 0, tok: 0, view: null };
 let adCamField = false;                        // กล้องเปิดจากปุ่ม 📷 ของช่องบาร์โค้ดในฟอร์มสินค้า (หน้าจัดการข้อมูล) — ปิดกล้องแล้วล้าง
 const camCanvas = document.createElement('canvas');
 const camCtx = camCanvas.getContext('2d', { willReadFrequently: true });
@@ -6269,13 +6286,16 @@ function loadZXing() {
   return loadZXing.p;
 }
 
-async function openCam() {
-  const purpose = wedgeRoute();
+async function openCam(forMember) {
+  cam.memberOnly = forMember === true;         // สแกน QR สมาชิก: ใช้ได้ทุกหมวด (ไม่ผ่าน wedgeRoute) และอ่านเฉพาะ QR ของสมาชิก
+  const purpose = cam.memberOnly ? 'member' : wedgeRoute();
   if (!CAM_MODE[purpose]) { showToast('⚠️ สแกนด้วยกล้องใช้ได้ในหมวดสต็อกสินค้าและขายหน้าร้าน'); return; }
   const token = ++cam.token;
   cam.last = ''; cam.lastAt = 0;
   document.getElementById('camMode').textContent = CAM_MODE[purpose];
-  document.getElementById('camHint').textContent = 'เล็งบาร์โค้ดให้อยู่ในกรอบแดง';
+  document.getElementById('camWrap').classList.toggle('qr', cam.memberOnly);
+  document.getElementById('camMqManual').hidden = !cam.memberOnly;
+  document.getElementById('camHint').textContent = cam.memberOnly ? 'เล็ง QR ในหน้าสมาชิกบนมือถือของลูกค้าให้อยู่ในกรอบแดง' : 'เล็งบาร์โค้ดให้อยู่ในกรอบแดง';
   document.getElementById('camError').innerHTML = '';
   document.getElementById('camPanel').hidden = false;
   try {
@@ -6343,9 +6363,10 @@ function camROI() {
   const v = document.getElementById('camVideo');
   const vw = v.videoWidth, vh = v.videoHeight;
   if (!vw || !vh) return false;
-  const sx = Math.round(vw * SCAN_ROI.left), sy = Math.round(vh * SCAN_ROI.top);
-  const sw = Math.round(vw * (SCAN_ROI.right - SCAN_ROI.left));
-  const sh = Math.round(vh * (SCAN_ROI.bottom - SCAN_ROI.top));
+  const R = cam.memberOnly ? SCAN_ROI_QR : SCAN_ROI;
+  const sx = Math.round(vw * R.left), sy = Math.round(vh * R.top);
+  const sw = Math.round(vw * (R.right - R.left));
+  const sh = Math.round(vh * (R.bottom - R.top));
   if (camCanvas.width !== sw || camCanvas.height !== sh) { camCanvas.width = sw; camCanvas.height = sh; }
   camCtx.drawImage(v, sx, sy, sw, sh, 0, 0, sw, sh);
   return true;
@@ -6383,16 +6404,22 @@ async function camScanned(code) {
   cam.scanning = false;                      // หยุดทันที ไม่งั้นอ่านซ้ำรัว ๆ
   const token = cam.token;
   const value = String(code || '').trim();
+  // QR สมาชิกเป็นค่าใช้ครั้งเดียว: ไม่จำไว้ (cam.last) ไม่ขึ้นจอ — กันซ้ำด้วย mq.busy/หน่วงเวลาใน memberQrScan แทน
+  const isMq = mqIsToken(value);
+  if (cam.memberOnly && !isMq) {              // กล้องโหมดสมาชิกอ่านเจออย่างอื่น (บาร์โค้ดสินค้า ฯลฯ) — บอกแล้วอ่านต่อ ไม่ส่งไปฐาน
+    if (value) document.getElementById('camHint').textContent = '⚠️ ไม่ใช่ QR สมาชิกของร้าน — เล็งที่ QR ในหน้าสมาชิกบนมือถือของลูกค้า';
+    camRearm(); return;
+  }
   // กันอ่านใบเดิมซ้ำตอนเปิดค้าง — คนยังถือกล้องจ่อกล่องเดิมอยู่ (เครื่องยิงไม่มีปัญหานี้ ต้องเหนี่ยวไกใหม่ถึงได้ค่าซ้ำ)
   const now = performance.now();
-  if (!value || (value === cam.last && now - cam.lastAt < 2000)) { camRearm(); return; }
-  cam.last = value; cam.lastAt = now;
+  if (!value || (!isMq && value === cam.last && now - cam.lastAt < 2000)) { camRearm(); return; }
+  if (!isMq) { cam.last = value; cam.lastAt = now; }
   if (navigator.vibrate) navigator.vibrate(120);
-  document.getElementById('camHint').textContent = 'อ่านได้: ' + value;
+  document.getElementById('camHint').textContent = isMq ? 'อ่าน QR สมาชิกได้ กำลังตรวจ…' : 'อ่านได้: ' + value;
   const purpose = await routeScan(value, false);
   if (token !== cam.token) return;           // ระหว่างนั้นปิดกล้องไปแล้ว (เช่น เปลี่ยนหมวด)
   // หาเจอ = เปิดแผงสินค้าให้แล้ว · รหัสที่ไม่รู้จักเปิดหน้าต่างถาม — ปิดกล้องให้คนตัดสินใจ ไม่อ่านต่อลับหลัง
-  if (!purpose || purpose === 'search' || purpose === 'movement' || purpose === 'field' || document.querySelector('dialog[open]')) { closeCam(); return; }
+  if (!purpose || purpose === 'search' || purpose === 'movement' || purpose === 'field' || purpose === 'member' || document.querySelector('dialog[open]')) { closeCam(); return; }
   const more = purpose === 'cart' ? ' · ในตะกร้า ' + cart.length + ' รายการ'
     : purpose === 'receive' ? ' · ในถาดรับเข้า ' + rcvTotal() + ' ชิ้น' : '';
   camRearm('อ่านได้: ' + value + more + ' — สแกนชิ้นถัดไปได้เลย');
@@ -6424,6 +6451,9 @@ function closeCam() {
   // ปิดกล้องจริง ๆ ไม่งั้นไฟกล้องค้างและกินแบตทั้งวัน
   if (cam.stream) { cam.stream.getTracks().forEach(t => t.stop()); cam.stream = null; }
   cam.track = null; cam.detector = null; cam.reader = null; cam.torch = false;
+  cam.memberOnly = false;
+  document.getElementById('camWrap').classList.remove('qr');
+  document.getElementById('camMqManual').hidden = true;
   document.getElementById('camVideo').srcObject = null;
   document.getElementById('camTorchBtn').textContent = 'ไฟฉาย';
   document.getElementById('camTorchBtn').disabled = true;
@@ -7857,6 +7887,192 @@ async function unlinkMember(id) {
   m.line_user_id = null;
   openMemberDetail(id);
   showToast('✅ ยกเลิกการผูกบัญชี LINE แล้ว ลูกค้าผูกใหม่ได้ทันที');
+}
+
+// ---------------------------------------------------------------------------
+// สแกน QR สมาชิก (RPC member_qr_redeem · migration 076 · 3 พ.ย. 69 เจ้าของสั่ง) — "ระบุตัวสมาชิกให้เร็วขึ้น" เท่านั้น
+// สมาชิกเปิด QR จากหน้าสมาชิกบนเว็บ (ข้อความ "DJLM1.<base32>" อายุ 120 วิ ใช้ได้ครั้งเดียว) → พนักงานสแกนด้วยเครื่องยิง (ยิงได้ทุกหมวด)
+// หรือกล้อง → RPC คืนแค่ member_id + member_code → โหลดรายละเอียดด้วยสิทธิ์พนักงานเดิม (อ่านตาราง members เหมือนช่องค้นหาสมาชิก) แล้วโชว์การ์ด
+// ⚠️ การสแกน "ไม่เขียนอะไรเลย" นอกจากตัว RPC ที่ใช้ token ทิ้ง: ไม่ใส่ลูกค้าในบิล ไม่แตะราคา/ส่วนลด/แต้ม/สถานะ — ปุ่ม "ใส่ในบิลขาย" พนักงานกดเอง
+// ⚠️ token ใช้แล้วทิ้ง: ไม่เก็บในตัวแปรข้ามการเรียก ไม่ console.log ไม่ขึ้นจอ ไม่ใส่ในข้อความผิดพลาด (ข้อความแจ้งผลใช้ reason/รหัสข้อผิดพลาดเท่านั้น)
+// ⚠️ ผลที่โชว์ผูกกับ session ที่สแกน: ออกจากระบบ/สลับบัญชี → mqReset() ทิ้งผลและหน้าต่าง · ผลที่มาช้าถูกทิ้ง (mq.tok / currentUserId)
+// ---------------------------------------------------------------------------
+const MQ_DEBOUNCE_MS = 1500;                    // สแกนซ้ำภายในช่วงนี้หลังเสร็จรอบก่อน = ข้าม (ยิง/กล้องอ่านซ้ำในเสี้ยววินาที) · ระหว่างรอ RPC ข้ามเสมอ (mq.busy)
+const MQ_REASON = { expired: 'QR หมดอายุ ให้สมาชิกกดขอ QR ใหม่', used: 'QR นี้ถูกใช้แล้ว', invalid: 'ไม่ใช่ QR สมาชิกของร้าน' };
+// ฐาน (076) ปฏิเสธด้วย raise ข้อความไทย "สแกน QR ไม่ผ่านบ่อยเกินไป กรุณารอ 10 นาที…" เมื่อสแกนไม่ผ่านเกิน 30 ครั้ง/10 นาที/คน (errcode ทั่วไป) · ที่เหลือเผื่อ reason/ข้อความอังกฤษ
+const MQ_RATE_RE = /บ่อยเกินไป|rate|limit|too.?many|throttl|429/i;
+const MQ_WAIT = 'สแกนไม่ผ่านหลายครั้งเกินไป ระบบจำกัดชั่วคราว — รอสักครู่แล้วลองใหม่ (หรือพิมพ์รหัสสมาชิกด้านล่างแทน)';
+mq.doneAt = -Infinity;
+
+function mqIsToken(v) { return typeof v === 'string' && /^DJLM1\.\S{1,200}$/i.test(v); }
+// มีแต่หน้าต่างสแกนสมาชิกเปิดอยู่ = ยังยิง QR ถัดไปเข้าได้ (หน้าต่างอื่นค้าง = wedgeRoute 'blocked' เหมือนเดิม)
+function mqOnlyOpen() { const o = document.querySelectorAll('dialog[open]'); return o.length === 1 && o[0].id === 'mqDialog'; }
+
+function mqFailView(res) {
+  const err = res && res.error, d = res && res.data;
+  if (err) {
+    const code = String(err.code || ''), msg = String(err.message || '');
+    // ข้อความไทยของฐานโชว์ตามจริง (เป็นข้อความคงที่ ไม่มี token) · ไม่ใช่ภาษาไทย/ผิดปกติ = ใช้ข้อความของหน้าเอง
+    if (MQ_RATE_RE.test(code) || MQ_RATE_RE.test(msg)) return { tone: 'warn', text: /[฀-๿]/.test(msg) && msg.length <= 200 && !/DJLM1/i.test(msg) ? msg : MQ_WAIT };
+    if (code === 'PGRST202' || code === '42883' || /could not find the function|does not exist/i.test(msg))
+      return { tone: 'warn', text: 'ระบบสแกน QR สมาชิกยังไม่เปิดใช้ในฐานข้อมูล — แจ้งผู้ดูแลระบบ (ต้องรัน migration 076 ก่อน)' };
+    if (code === '42501') return { tone: 'red', text: 'บัญชีนี้ไม่มีสิทธิ์สแกน QR สมาชิก' };
+    console.error('[member_qr_redeem] รหัสข้อผิดพลาด', code);           // รหัสเท่านั้น — ไม่ log ข้อความ/อาร์กิวเมนต์ (อาจมี token)
+    return { tone: 'red', text: 'สแกนไม่สำเร็จ (รหัสข้อผิดพลาด ' + (/^[A-Za-z0-9_]{1,12}$/.test(code) ? code : 'ไม่ทราบ') + ') — ลองสแกนใหม่อีกครั้ง' };
+  }
+  const r = d && d.reason ? String(d.reason) : '';
+  if (MQ_REASON[r]) return { tone: 'red', text: MQ_REASON[r] };
+  if (MQ_RATE_RE.test(r)) return { tone: 'warn', text: MQ_WAIT };
+  return { tone: 'red', text: 'สแกนไม่สำเร็จ — ระบบตอบกลับผิดปกติ ลองสแกนใหม่อีกครั้ง' };
+}
+
+async function mqLoad(memberId, code) {
+  let member = null, failed = false;
+  try {
+    const r = await db.from('members').select(MEMBER_FIELDS).eq('id', memberId).limit(1);
+    if (r.error) failed = true; else member = (r.data || [])[0] || null;
+  } catch (err) { failed = true; }
+  if (failed) console.error('[QR member load] โหลดทะเบียนสมาชิกไม่สำเร็จ');
+  const c = String(code || '');
+  const customer = customers.find(x => (x.member_id && x.member_id === memberId) || (c && memberCodeOf(x) === c)) || null;
+  return { member, customer, failed };
+}
+
+async function memberQrScan(token) {
+  if (!currentUserId || mq.busy || performance.now() - mq.doneAt < MQ_DEBOUNCE_MS) return;
+  const uid = currentUserId, me = ++mq.tok;
+  mq.busy = true;
+  mqRender({ state: 'busy' });
+  try {
+    let res;
+    // ฐานตรวจรูปแบบเข้ม (^DJLM1\.[A-Z2-7]{26}$) ไม่แปลงตัวพิมพ์/ช่องว่างให้ — ตัดช่องว่าง + ตัวพิมพ์ใหญ่ก่อนส่ง (ชุดอักขระ token เป็นตัวพิมพ์ใหญ่อยู่แล้ว)
+    try { res = await db.rpc('member_qr_redeem', { p_token: String(token || '').trim().toUpperCase() }); }
+    catch (err) { res = { error: { code: 'NETWORK' } }; }
+    if (me !== mq.tok || uid !== currentUserId) return;
+    const d = res && res.data;
+    if (!res.error && d && d.ok === true && d.member_id) {
+      const loaded = await mqLoad(d.member_id, d.member_code);
+      if (me !== mq.tok || uid !== currentUserId) return;
+      mqRender(Object.assign({ state: 'ok', via: 'qr', code: d.member_code || '' }, loaded));
+    } else {
+      mqRender(Object.assign({ state: 'err' }, mqFailView(res)));
+    }
+  } finally {
+    if (me === mq.tok) { mq.busy = false; mq.doneAt = performance.now(); }
+  }
+}
+
+function mqManualHtml() {
+  return '<div style="margin-top:14px;"><label class="lbl" for="mqCode">หรือพิมพ์รหัสสมาชิกเอง (เมื่อสแกนไม่ได้)</label>' +
+    '<div class="scan-row"><input type="text" id="mqCode" class="input" maxlength="30" autocomplete="off" inputmode="text" placeholder="เช่น 125093" onkeydown="if(event.key===\'Enter\')mqManual()">' +
+    '<button class="btn btn-primary" type="button" onclick="mqManual()">ค้นหา</button></div>' +
+    '<div id="mqManualErr" role="alert" style="margin-top:8px;"></div></div>';
+}
+
+function mqRender(v) {
+  mq.view = v;
+  const body = document.getElementById('mqBody'), foot = document.getElementById('mqFoot');
+  const close = '<button class="btn" type="button" onclick="mqAct(\'close\')">ปิด (Esc)</button>';
+  const again = '<button class="btn" type="button" onclick="mqAct(\'again\')">สแกนคนถัดไป</button>';
+  if (v.state === 'busy') {
+    body.innerHTML = '<div class="hint" role="status">กำลังตรวจ QR สมาชิก…</div>';
+    foot.innerHTML = close;
+  } else if (v.state === 'err') {
+    body.innerHTML = '<div class="alert ' + (v.tone === 'warn' ? 'alert-warn' : 'alert-red') + '" role="alert"><strong>' + escapeHtml(v.text) + '</strong></div>' + mqManualHtml();
+    foot.innerHTML = again.replace('สแกนคนถัดไป', 'สแกนใหม่') + close;
+  } else if (v.state === 'ok') {
+    const m = v.member, c = v.customer;
+    const name = (c && c.full_name) || (m && m.full_name) || '';
+    const code = v.code || (m && m.code) || '';
+    const ctype = m && m.member_type ? ' <span class="st st-off">' + escapeHtml(m.member_type) + '</span>' : '';
+    body.innerHTML =
+      '<div class="alert alert-plain" role="status" style="border-color:var(--ok);color:var(--ok);background:var(--ok-soft);">✓ ' + (v.via === 'qr' ? 'ตรวจ QR สำเร็จ — ' : '') + 'พบสมาชิก</div>' +
+      (v.failed ? '<div class="alert alert-red" role="alert"><strong>โหลดข้อมูลสมาชิกจากทะเบียนไม่สำเร็จ — แสดงเฉพาะรหัสสมาชิก ลองกด “เปิดโปรไฟล์สมาชิก” หรือค้นด้วยรหัสอีกครั้ง</strong></div>' : '') +
+      (!v.failed && !m ? '<div class="alert alert-warn">ไม่พบสมาชิกรหัสนี้ในทะเบียน — ตรวจรหัสอีกครั้ง</div>' : '') +
+      '<dl class="kv"><dt>ชื่อ</dt><dd><strong>' + escapeHtml(name || '—') + '</strong>' + ctype + '</dd>' +
+      '<dt>รหัสสมาชิก</dt><dd>' + escapeHtml(code || '—') + (m ? ' ' + memberBadge(m) : '') + '</dd></dl>' +
+      '<div class="alert alert-plain">การสแกนนี้ใช้ระบุตัวสมาชิกเท่านั้น — ไม่ให้ส่วนลด ไม่เปลี่ยนราคา และไม่เปลี่ยนสถานะใด ๆ ของสมาชิก</div>';
+    const swap = selectedCustomer && c && selectedCustomer.id !== c.id;
+    foot.innerHTML =
+      '<button class="btn btn-primary" type="button" onclick="mqAct(\'profile\')">เปิดโปรไฟล์สมาชิก</button>' +
+      (c ? '<button class="btn" type="button" onclick="mqAct(\'bill\')">' + (swap ? 'เปลี่ยนลูกค้าในบิลเป็นคนนี้' : 'ใส่ในบิลขาย') + '</button>' : '') +
+      again + close;
+  } else {                                                       // ready — ยังไม่ได้สแกน (เครื่องที่ไม่มีกล้อง · หรือกดมาจาก "พิมพ์รหัสแทน")
+    body.innerHTML =
+      '<p style="margin:0 0 8px;">ให้สมาชิกเปิด QR จากหน้าสมาชิกบน djlabsiam.com แล้ว<strong>ยิงด้วยเครื่องยิงบาร์โค้ดได้เลย</strong> (หน้าต่างนี้เปิดค้างไว้ได้)' +
+      (document.documentElement.classList.contains('can-cam') ? ' หรือกดเปิดกล้อง' : '') + '</p>' +
+      '<div class="hint" style="margin:0;">QR ใช้ระบุตัวสมาชิกเท่านั้น · อายุ 2 นาที ใช้ได้ครั้งเดียว</div>' +
+      (document.documentElement.classList.contains('can-cam') ? '<button class="btn btn-block" type="button" style="margin-top:12px;" onclick="mqAct(\'again\')">เปิดกล้องสแกน QR</button>' : '') +
+      mqManualHtml();
+    foot.innerHTML = close;
+  }
+  const d = document.getElementById('mqDialog');
+  if (!d.open) d.showModal();
+  else if (v.state === 'ok') foot.querySelector('button').focus();      // เปลี่ยนเนื้อในหน้าต่างที่เปิดอยู่ (ปุ่มเดิมหาย) — พาโฟกัสไปปุ่มหลัก
+}
+
+function mqCloseDlg() { const d = document.getElementById('mqDialog'); if (d.open) d.close(); }
+
+// ปุ่ม "สแกน QR สมาชิก": มีกล้อง/จอสัมผัส → เปิดกล้องโหมดสมาชิกเลย · ไม่มี → หน้าต่างพร้อมยิง (เครื่องยิงยิงได้ทุกหมวดอยู่แล้ว)
+function mqStart() {
+  if (!currentUserId || mq.busy) return;
+  mqCloseDlg();
+  if (document.documentElement.classList.contains('can-cam')) openCam(true);
+  else mqRender({ state: 'ready' });
+}
+function mqFromCam() { closeCam(); mqRender({ state: 'ready' }); }
+
+// ทางสำรอง: พิมพ์รหัสสมาชิกเอง → หาตรงตัวใน members.code (อ่านตารางเดียวกับช่องค้นหา "ทะเบียนสมาชิกร้าน") — ไม่ผ่าน RPC ไม่ใช้ token
+async function mqManual() {
+  const inp = document.getElementById('mqCode'), errBox = document.getElementById('mqManualErr');
+  if (!inp || !currentUserId || mq.busy) return;
+  const code = inp.value.trim();
+  if (!/^[A-Za-z0-9-]{3,30}$/.test(code)) { errBox.innerHTML = '<div class="alert alert-warn" style="margin:0;">พิมพ์รหัสสมาชิกอย่างน้อย 3 ตัว (ตัวเลข/ตัวอักษร)</div>'; return; }
+  const uid = currentUserId, me = ++mq.tok;
+  mq.busy = true;
+  errBox.innerHTML = '<div class="hint" style="margin:0;">กำลังค้นหา…</div>';
+  try {
+    let r;
+    try { r = await db.from('members').select(MEMBER_FIELDS).eq('code', code).limit(1); }
+    catch (err) { r = { error: { code: 'NETWORK' } }; }
+    if (me !== mq.tok || uid !== currentUserId) return;
+    if (r.error) { console.error('[QR manual lookup]', r.error.code); errBox.innerHTML = '<div class="alert alert-red" style="margin:0;"><strong>ค้นหาไม่สำเร็จ — ลองใหม่อีกครั้ง</strong></div>'; return; }
+    const m = (r.data || [])[0];
+    if (!m) { errBox.innerHTML = '<div class="alert alert-warn" style="margin:0;"><strong>ไม่พบรหัสสมาชิกนี้ในทะเบียน</strong></div>'; return; }
+    const cs = String(m.code || '');
+    const customer = customers.find(x => (x.member_id && x.member_id === m.id) || (cs && memberCodeOf(x) === cs)) || null;
+    mqRender({ state: 'ok', via: 'manual', code: m.code || code, member: m, customer, failed: false });
+  } finally {
+    if (me === mq.tok) mq.busy = false;
+  }
+}
+
+function mqAct(a) {
+  const v = mq.view;
+  if (a === 'close') { mqCloseDlg(); return; }
+  if (a === 'again') { mqStart(); return; }
+  if (!v || v.state !== 'ok') return;
+  if (a === 'profile') {
+    mqCloseDlg();
+    showSection('customers');
+    if (v.customer) openCustomer(v.customer.id);
+    else if (v.member) { memberCache[v.member.id] = v.member; openMemberDetail(v.member.id); }
+    else { const s = document.getElementById('memberSearch'); s.value = v.code || ''; searchMembers(); }
+  } else if (a === 'bill' && v.customer) {
+    selectedCustomer = v.customer;                // เหมือนเลือกลูกค้าเองในช่อง "ลูกค้า" ของหน้าขาย — ไม่แตะราคา/ส่วนลด
+    renderSelectedCustomer();
+    mqCloseDlg();
+    showSection('pos');
+    showToast('✅ ใส่ลูกค้าในบิลแล้ว: ' + v.customer.full_name);
+  }
+}
+
+function mqReset() {
+  mq.tok++; mq.busy = false; mq.view = null; mq.doneAt = -Infinity;
+  const d = document.getElementById('mqDialog');
+  if (d && d.open) d.close();
+  document.getElementById('mqBody').innerHTML = '';
+  document.getElementById('mqFoot').innerHTML = '';
 }
 
 // ---------------------------------------------------------------------------
@@ -11288,6 +11504,7 @@ function onAccountSwitched() {
   workReset();                   // งานของฉัน/คำขอ: ใบงาน คำขอ รูปหลักฐานของคนเดิมต้องไม่ค้าง (คอมหน้าร้านใช้ร่วมกันหลายคน)
   trReset();                     // โอนไฟล์: รายการ ประวัติ และคิวอัปโหลดของคนเดิมต้องไม่ค้าง (อัปโหลดที่ยังไม่จบถูกทิ้ง)
   teReset();                     // คอร์สเรียน: รายการนักเรียน/รอบเรียนของคนก่อนต้องไม่ค้างหน้าจอ
+  mqReset();                     // สแกน QR สมาชิก: ชื่อ/รหัสสมาชิกบนการ์ดของรอบก่อนต้องไม่ค้าง
   notifReset();                  // หน้าต่างแจ้งเตือน: รายการเครื่อง/ข้อความของคนเดิมต้องไม่ค้าง
   coSellers = [];
   launchDraft = null;
@@ -18446,6 +18663,12 @@ async function onWedgeScan(value) {
 async function routeScan(value, viaGun) {
   const purpose = wedgeRoute();
   if (!purpose) return null;                  // ยังไม่ได้ล็อกอิน เงียบไว้
+  // QR สมาชิก ("DJLM1.…") ใช้ได้ทุกหมวด และไม่เคยไปเป็นบาร์โค้ดสินค้า/ซีเรียล — ดักก่อนตัดสินตามหมวด (ยกเว้นมีหน้าต่างอื่นค้าง = บอกให้ปิดก่อน เหมือนเดิม)
+  if (mqIsToken(value)) {
+    if (purpose === 'blocked' && !mqOnlyOpen()) { showToast('⚠️ ปิดหน้าต่างที่เปิดค้างอยู่ก่อน แล้วค่อยยิง'); return null; }
+    await memberQrScan(value);
+    return 'member';
+  }
   if (purpose === 'blocked') { showToast('⚠️ ปิดหน้าต่างที่เปิดค้างอยู่ก่อน แล้วค่อยยิง'); return null; }
   if (purpose === 'wrongpage') { showToast('⚠️ เครื่องยิงบาร์โค้ดใช้ได้ในหมวดสต็อกสินค้าและขายหน้าร้าน — เปลี่ยนหมวดก่อนแล้วค่อยยิง'); return null; }
   scanPurpose = purpose;
