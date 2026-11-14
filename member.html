@@ -139,7 +139,8 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
 const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-let lineUserId = null;
+// ไม่เก็บ/ไม่ส่ง LINE userId จากฝั่งเบราว์เซอร์อีกแล้ว (เชื่อไม่ได้ — ใครก็ปลอมได้) · ส่ง id_token สด ๆ ตอนกดเช็ค ให้ Edge Function line-claim ให้ LINE ยืนยันเอง
+let inLine = false;
 let ready = false;
 
 function showFormError(msg) {
@@ -177,8 +178,15 @@ async function check() {
     showFormError('กรุณากรอกเบอร์โทรให้ครบ');
     return;
   }
-  if (!lineUserId) {
+  if (!inLine) {
     showFormError('ไม่พบบัญชี LINE ของท่าน — กรุณาเปิดหน้านี้จากเมนูในแชท LINE ของร้าน');
+    return;
+  }
+  // id_token สดตอนกดเช็ค (ไม่เก็บไว้ที่ไหน) — ต้องเปิดสิทธิ์ openid ที่ LIFF app · ไม่มี = ไม่ยอมถอยไปใช้ทางเดิม (ทางเดิมเชื่อ userId จากเบราว์เซอร์ จึงถูกปิดแล้ว)
+  let idToken = null;
+  try { idToken = liff.getIDToken(); } catch (err) { /* ด้านล่าง */ }
+  if (!idToken) {
+    showFormError('ยืนยันบัญชี LINE ไม่สำเร็จ — กรุณาปิดแล้วเปิดหน้านี้จากเมนูในแชท LINE ใหม่อีกครั้ง หากยังไม่ได้ ทักแชทแจ้งทีมงาน');
     return;
   }
 
@@ -189,10 +197,7 @@ async function check() {
 
   let data, error;
   try {
-    ({ data, error } = await db.rpc('claim_membership', {
-      p_phone: phone,
-      p_line_user_id: lineUserId,
-    }));
+    ({ data, error } = await db.functions.invoke('line-claim', { body: { id_token: idToken, phone: phone } }));
   } catch (err) {
     btn.disabled = false;
     btn.textContent = 'เช็คสิทธิ์สมาชิก';
@@ -204,8 +209,14 @@ async function check() {
   btn.textContent = 'เช็คสิทธิ์สมาชิก';
 
   if (error) {
-    console.error('[claim_membership]', error);
-    showFormError('ตรวจสอบไม่สำเร็จ: ' + error.message);
+    // ข้อความไทยที่ฟังก์ชันตั้งใจให้เห็น (เช่น ลองบ่อยเกินไป · LINE ไม่ยืนยัน) อยู่ใน body ของคำตอบที่ไม่ใช่ 2xx · ไม่แสดงข้อความดิบของระบบ
+    let msg = 'ตรวจสอบไม่สำเร็จ กรุณาลองใหม่อีกครั้ง หากยังไม่ได้ ทักแชทแจ้งทีมงาน';
+    try {
+      const j = error.context && typeof error.context.json === 'function' ? await error.context.json() : null;
+      if (j && j.error && /[ก-๙]/.test(String(j.error.message || ''))) msg = j.error.message;
+    } catch (err) { /* ไม่ใช่ JSON — ใช้ข้อความมาตรฐาน */ }
+    console.error('[line-claim]', error.name || 'error');
+    showFormError(msg);
     return;
   }
 
@@ -287,10 +298,7 @@ function render(r) {
 async function init() {
   try {
     await liff.init({ liffId: LIFF_ID });
-    if (liff.isLoggedIn()) {
-      const profile = await liff.getProfile();
-      lineUserId = profile.userId;
-    }
+    if (liff.isLoggedIn()) inLine = true;
   } catch (err) {
     console.error('[LIFF init]', err);
   }
@@ -306,7 +314,7 @@ async function init() {
 
   // Opened outside LINE there is no account to link, and nothing this page can
   // do about it — say so instead of letting someone fill the form for nothing.
-  if (!lineUserId) {
+  if (!inLine) {
     document.getElementById('formError').innerHTML =
       '<div class="alert alert-gold" style="margin:12px 0 0;">หน้านี้ต้องเปิดจากเมนูในแชท LINE ของร้าน จึงจะผูกบัญชีให้ได้</div>';
     document.getElementById('checkBtn').disabled = true;
