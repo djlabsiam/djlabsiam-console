@@ -2602,7 +2602,7 @@
           <div class="hint" id="waMkInfo" style="margin-bottom:8px;"></div>
           <div class="tablewrap" id="tw-wamk" tabindex="0" aria-label="รายชื่อผู้รับข่าวสาร (อ่านอย่างเดียว อีเมลปิดบัง)">
             <table class="data">
-              <thead><tr><th>ผู้ให้บริการ</th><th>อีเมล (ปิดบัง)</th><th>ติ๊กรับข่าวสารเมื่อ</th><th>ใช้ล่าสุด</th><th>สมาชิกร้าน</th></tr></thead>
+              <thead><tr><th>ผู้ให้บริการ</th><th>อีเมล (ปิดบัง)</th><th>บันทึกความยินยอมล่าสุดเมื่อ</th><th>ใช้ล่าสุด</th><th>สมาชิกร้าน</th></tr></thead>
               <tbody id="waMkRows"></tbody>
             </table>
           </div>
@@ -3817,7 +3817,7 @@ async function handleAuthState(session) {
   } else if (sec && !sectionAllowed(sec)) showSection(HOME, 'replace');
   // เข้าหมวดซ้ำเฉพาะตอนเข้า/สลับบัญชีจริง — supabase-js ส่ง SIGNED_IN ซ้ำด้วย session เดิมทุกครั้งที่กลับมาที่แท็บ (และตอนต่ออายุ token)
   // ถ้าเข้าหมวดซ้ำตอนนั้น closeDetail() จะปิดแผง/ฟอร์มที่เปิดค้าง (เช่นแถบเพิ่มสินค้า) ทุกครั้งที่สลับหน้าต่าง · ข้อมูลเก็บตกโดย resyncAll อยู่แล้ว
-  else if (prevUser !== currentUserId && ['daily', 'activity', 'admin', 'mail', 'calendar'].includes(current)) showSection(current, 'none');
+  else if (prevUser !== currentUserId && ['daily', 'activity', 'admin', 'mail', 'calendar', 'webacct'].includes(current)) showSection(current, 'none');
 
   loadAll();
   loadStaffHome();
@@ -8351,6 +8351,7 @@ opsPollSchedule();
 // ลบบัญชีที่ไม่ใช้ + เก็บกวาด Auth ที่ค้าง = เจ้าของคนเดียว · แบบเดียวกับล้างข้อมูลจองเว็บ (booking_anonymize_expired): นับก่อน → หน้าต่างยืนยันคำเตือนแดงตัวหนา → ส่งจำนวนที่เห็น (ไม่ตรง = ไม่ลบ)
 const WA_PAGE = 50, WA_MONTHS = 24;
 const WA_NO_FN = /web_admin_|PGRST202|Could not find the function|does not exist/i;
+let waReq = 0;                                   // เลขคำขอของ waLoad — คำขอเก่าที่กลับมาทีหลังคำขอใหม่ถูกทิ้ง (ล่าสุดชนะ)
 let waTok = 0;                                   // ขึ้นเลขทุกครั้งที่รีเซ็ต — ผลที่มาช้าจากบัญชีเดิมถูกทิ้ง
 let wa = { mkOff: 0, nkQ: '', jobs: { inactive: null, orphans: null } };
 const waEl = id => document.getElementById(id);
@@ -8363,21 +8364,21 @@ const WA_JOBS = {
   inactive: {
     fn: 'web_admin_inactive', args: { p_months: WA_MONTHS }, out: 'waInactive', go: 'waInactiveGo', title: 'ลบบัญชีที่ไม่ใช้',
     none: d => 'ไม่มีบัญชีที่ไม่ใช้เกิน ' + WA_MONTHS + ' เดือน (ก่อน ' + waDay(d.before) + ') · ข้ามบัญชีที่เป็นสมาชิกร้านแล้ว ' + waNum(d.members_skipped) + ' บัญชี',
-    found: d => '<span class="wk-red">บัญชีที่ไม่ใช้เกิน ' + WA_MONTHS + ' เดือน ' + d.count + ' บัญชี</span> (ก่อน ' + waDay(d.before) + ') · มีอีเมล ' + waNum(d.with_email) +
-      ' (ติดต่อทางอื่นได้) · ไม่มีช่องทางติดต่อเลย ' + waNum(d.no_channel) + ' · ข้ามบัญชีที่เป็นสมาชิกร้านแล้ว ' + waNum(d.members_skipped),
-    label: d => 'ลบ ' + d.count + ' บัญชี…',
-    warn: d => '<div class="alert alert-red" style="font-weight:700;">ลบบัญชีผู้ใช้ทั่วไป ' + d.count + ' บัญชีถาวร (ไม่ได้ใช้งานก่อน ' + waDay(d.before) + ')</div>' +
+    found: d => '<span class="wk-red">บัญชีที่ไม่ใช้เกิน ' + WA_MONTHS + ' เดือน ' + waNum(d.count) + ' บัญชี</span> (ก่อน ' + waDay(d.before) + ') · มีอีเมลในระบบ ' + waNum(d.with_email) +
+      ' (หน้านี้ดูอีเมลเต็มไม่ได้ · ร้านไม่มีระบบแจ้งก่อนลบ) · ไม่มีช่องทางติดต่อเลย ' + waNum(d.no_channel) + ' · ข้ามบัญชีที่เป็นสมาชิกร้านแล้ว ' + waNum(d.members_skipped),
+    label: d => 'ลบ ' + waNum(d.count) + ' บัญชี…',
+    warn: d => '<div class="alert alert-red" style="font-weight:700;">ลบบัญชีผู้ใช้ทั่วไป ' + waNum(d.count) + ' บัญชีถาวร (ไม่ได้ใช้งานก่อน ' + waDay(d.before) + ')</div>' +
       '<br>ลบ: ตัวตน LINE/Google · ความยินยอม · ชื่อเล่นและคะแนนเกมของบัญชีนั้นทั้งหมด · บัญชีล็อกอิน' +
       '<br>ไม่ลบ: บัญชีที่เป็นสมาชิกร้านแล้ว · ข้อมูลสมาชิกในระบบร้าน' +
       '<br><span class="wk-red">ผู้ใช้จะไม่ได้รับแจ้งล่วงหน้า และกู้คืนไม่ได้</span>',
-    ok: 'ลบ', done: r => 'ลบบัญชีแล้ว ' + waNum(r.deleted) + ' บัญชี',
+    ok: 'ลบ', done: r => 'ลบบัญชีแล้ว ' + waNum(r.deleted) + ' บัญชี' + (waNum(r.kept) ? ' · ข้าม ' + waNum(r.kept) + ' บัญชีที่เพิ่งกลับมาใช้งาน/เพิ่งเป็นสมาชิกระหว่างลบ' : ''),
   },
   orphans: {
     fn: 'web_admin_orphans', args: {}, out: 'waOrphan', go: 'waOrphanGo', title: 'เก็บกวาดบัญชี Auth ที่ค้าง',
     none: () => 'ไม่มีบัญชี Auth ที่ค้าง',
-    found: d => '<span class="wk-red">บัญชี Auth ที่ค้าง ' + d.count + ' บัญชี</span> (ไม่มีบัญชีเว็บรองรับ · อายุเกิน 1 ชั่วโมง)',
-    label: d => 'ลบบัญชี Auth ที่ค้าง ' + d.count + ' บัญชี…',
-    warn: d => '<div class="alert alert-red" style="font-weight:700;">ลบบัญชีล็อกอินที่ค้าง ' + d.count + ' บัญชีถาวร</div>' +
+    found: d => '<span class="wk-red">บัญชี Auth ที่ค้าง ' + waNum(d.count) + ' บัญชี</span> (ไม่มีบัญชีเว็บรองรับ · อายุเกิน 1 ชั่วโมง)',
+    label: d => 'ลบบัญชี Auth ที่ค้าง ' + waNum(d.count) + ' บัญชี…',
+    warn: d => '<div class="alert alert-red" style="font-weight:700;">ลบบัญชีล็อกอินที่ค้าง ' + waNum(d.count) + ' บัญชีถาวร</div>' +
       '<br>เป็นบัญชีที่ระบบสร้างไว้ตอนสมัครแต่ไม่มีบัญชีเว็บรองรับ (สมัครล้มกลางทาง หรือลบบัญชีแล้วลบ Auth ไม่สำเร็จ) · ไม่แตะพนักงานและสมาชิก',
     ok: 'ลบ', done: r => 'ลบบัญชี Auth ที่ค้างแล้ว ' + waNum(r.deleted) + ' บัญชี',
   },
@@ -8396,8 +8397,8 @@ function waRenderMarketing(m) {
     '<span class="wk-red">อีเมลถูกปิดบังโดยตั้งใจ — ส่งข่าวสารจริงต้องทำนอกคอนโซล (ไม่มีปุ่มส่งหรือส่งออกอีเมลเต็ม)</span>';
   waEl('waMkRows').innerHTML = rows.length
     ? rows.map(r => '<tr><td>' + escapeHtml((Array.isArray(r.providers) ? r.providers : []).map(waProv).join(' + ')) + '</td><td>' +
-        (r.email ? escapeHtml(r.email) : '<span class="hint" style="margin:0;">ไม่มีอีเมล</span>') + '</td><td>' + escapeHtml(formatDateTime(r.consent_at)) + '</td><td>' +
-        escapeHtml(formatDateTime(r.last_active)) + '</td><td>' + (r.is_member ? '✓ สมาชิก' : '—') + '</td></tr>').join('')
+        (r.email ? escapeHtml(r.email) : '<span class="hint" style="margin:0;">ไม่มีอีเมล</span>') + '</td><td>' + escapeHtml(waDay(r.consent_at)) + '</td><td>' +
+        escapeHtml(waDay(r.last_active)) + '</td><td>' + (r.is_member ? '✓ สมาชิก' : '—') + '</td></tr>').join('')
     : '<tr><td colspan="5"><div class="empty">ยังไม่มีผู้ติ๊กรับข่าวสาร</div></td></tr>';
   const from = rows.length ? wa.mkOff + 1 : 0;
   waEl('waMkPager').textContent = rows.length ? 'แถว ' + from + '–' + (wa.mkOff + rows.length) + ' จาก ' + total : '—';
@@ -8416,7 +8417,7 @@ function waRenderNicknames(n) {
 
 async function waLoad() {
   if (!isManager()) return;
-  const tok = waTok, uid = currentUserId, btn = waEl('waRefresh'), alertEl = waEl('waAlert');
+  const tok = waTok, req = ++waReq, uid = currentUserId, btn = waEl('waRefresh'), alertEl = waEl('waAlert');
   waEl('waOwner').hidden = !isOwner();
   btn.disabled = true; btn.textContent = 'กำลังโหลด…';
   try {
@@ -8425,7 +8426,7 @@ async function waLoad() {
       db.rpc('web_admin_marketing', { p_limit: WA_PAGE, p_offset: wa.mkOff }),
       db.rpc('web_admin_nicknames', { p_q: wa.nkQ || null, p_limit: 50 }),
     ]);
-    if (tok !== waTok || uid !== currentUserId || !isManager()) return;        // สลับบัญชีระหว่างโหลด — ทิ้งผล
+    if (tok !== waTok || req !== waReq || uid !== currentUserId || !isManager()) return;        // สลับบัญชี/มีคำขอใหม่กว่าระหว่างโหลด — ทิ้งผล
     const err = s.error || m.error || n.error;
     if (err) {
       console.error('[WebAcct load]', err);
@@ -8442,9 +8443,9 @@ async function waLoad() {
     waEl('waStamp').textContent = 'อัปเดตล่าสุด ' + new Date().toLocaleTimeString('th-TH', { hour12: false, timeZone: 'Asia/Bangkok' });
   } catch (e) {                                  // คำขอล้มทั้งก้อน (เน็ตหลุด) — ต้องบอก ไม่ปล่อยให้ปุ่มรีเฟรช "กดแล้วเงียบ"
     console.error('[WebAcct load]', e);
-    if (tok === waTok && uid === currentUserId) showFatalError('โหลดข้อมูลบัญชีเว็บไม่สำเร็จ: ' + ((e && e.message) || 'เชื่อมต่อไม่ได้'));
+    if (tok === waTok && req === waReq && uid === currentUserId) showFatalError('โหลดข้อมูลบัญชีเว็บไม่สำเร็จ: ' + ((e && e.message) || 'เชื่อมต่อไม่ได้'));
   } finally {
-    btn.disabled = false; btn.textContent = '↻ รีเฟรช';
+    if (req === waReq) { btn.disabled = false; btn.textContent = '↻ รีเฟรช'; }      // คำขอเก่าที่ถูกแทนที่ไม่แตะปุ่ม (คำขอใหม่เป็นเจ้าของสถานะ "กำลังโหลด")
   }
 }
 
@@ -8523,8 +8524,9 @@ function waReset() {
 }
 (function waInit() {
   waEl('waRefresh').addEventListener('click', () => { if (!waEl('waRefresh').disabled) waLoad(); });
-  waEl('waMkPrev').addEventListener('click', () => { wa.mkOff = Math.max(0, wa.mkOff - WA_PAGE); waLoad(); });
-  waEl('waMkNext').addEventListener('click', () => { wa.mkOff += WA_PAGE; waLoad(); });
+  // ระหว่างโหลด (ปุ่มรีเฟรชถูกล็อก) ไม่รับคลิกเปลี่ยนหน้า — กดรัวไม่ข้ามหน้าโดยไม่ตั้งใจ
+  waEl('waMkPrev').addEventListener('click', () => { if (waEl('waRefresh').disabled) return; wa.mkOff = Math.max(0, wa.mkOff - WA_PAGE); waLoad(); });
+  waEl('waMkNext').addEventListener('click', () => { if (waEl('waRefresh').disabled) return; wa.mkOff += WA_PAGE; waLoad(); });
   const search = () => { wa.nkQ = waEl('waNkSearch').value.trim().slice(0, 40); waLoad(); };
   waEl('waNkGo').addEventListener('click', search);
   waEl('waNkSearch').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); search(); } });

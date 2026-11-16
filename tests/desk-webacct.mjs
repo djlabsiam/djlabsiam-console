@@ -73,7 +73,7 @@ async function rpcImpl(name, args) {
   if (name === 'web_admin_inactive') {
     if (args.p_dry) return { data: Object.assign({ ok: true, dry: true }, clone(INACTIVE)), error: null };
     if (args.p_expected !== INACTIVE.count) return { data: { ok: false, error: 'count_changed', count: INACTIVE.count }, error: null };
-    const n = INACTIVE.count; INACTIVE.count = 0; return { data: { ok: true, dry: false, deleted: n }, error: null };
+    const n = INACTIVE.count; INACTIVE.count = 0; return { data: { ok: true, dry: false, deleted: n, kept: MODE.kept || 0 }, error: null };
   }
   if (name === 'web_admin_orphans') {
     if (args.p_dry) return { data: { ok: true, dry: true, count: ORPHANS.count }, error: null };
@@ -146,6 +146,8 @@ async function runTests() {
 
   // ── ผู้รับข่าวสาร ──
   ok('ตารางแสดง 50 แถว · ตัวนับ "แถว 1–50 จาก 120"', mkRows().length === 50 && $('waMkPager').textContent === 'แถว 1–50 จาก 120', $('waMkPager').textContent + ' / ' + mkRows().length);
+  ok('หัวคอลัมน์ตรงข้อมูล: "บันทึกความยินยอมล่าสุดเมื่อ" (ไม่ใช่ "ติ๊กรับข่าวสารเมื่อ")', /บันทึกความยินยอมล่าสุดเมื่อ/.test(document.querySelector('#sec-webacct thead').textContent) && !/ติ๊กรับข่าวสารเมื่อ/.test($('sec-webacct').textContent));
+  ok('วันที่ในตารางผู้รับข่าวสารแสดงเป็นวัน (ฐานปัดเป็นวันแล้ว — ไม่มีเวลา)', Array.prototype.every.call($('waMkRows').querySelectorAll('tr'), tr => !/:/.test(tr.children[2].textContent + tr.children[3].textContent) && tr.children[2].textContent.trim().length > 0), $('waMkRows').querySelector('tr').textContent);
   ok('ข้อความกำกับ: อีเมลปิดบัง ส่งจริงทำนอกคอนโซล — แดงตัวหนา', visibleRed($('waMkInfo')) && /ปิดบัง/.test($('waMkInfo').textContent));
   const body = $('waMkRows').innerHTML + $('waMkRows').textContent;
   ok('ไม่มีฟิลด์ล่อ (id / อีเมลเต็ม / sub) ขึ้นจอ', !/SECRET|leak\\.test|secret\\d/.test(body), body.slice(0, 200));
@@ -161,6 +163,16 @@ async function runTests() {
   ok('ย้อนกลับถึงหน้าแรก ไม่ติดลบ', rpcs('web_admin_marketing').pop().args.p_offset === 0 && $('waMkPrev').disabled);
   // ปุ่มถูกปิดที่หน้าแรกอยู่แล้ว แต่ตัวจัดการต้องกันเองด้วย (คลิกซ้อนจากหน้าที่ยังไม่วาดใหม่) — บังคับปลดปุ่มแล้วกด
   $('waMkPrev').disabled = false; $('waMkPrev').click(); await sleep(350);
+  { // กดรัวระหว่างโหลด: ไปหน้าถัดไปแค่ครั้งเดียว ไม่ข้ามหน้า
+    const nM = rpcs('web_admin_marketing').length; let relP; MODE.hold = new Promise(r => { relP = r; });
+    $('waMkNext').click(); await sleep(60); $('waMkNext').click(); await sleep(60); $('waMkNext').click(); await sleep(60);
+    relP(); MODE.hold = null; await sleep(450);
+    ok('กดถัดไปรัว 3 ครั้งระหว่างโหลด: ขอแค่ครั้งเดียว · อยู่หน้า 2 (ไม่ข้ามหน้า)', rpcs('web_admin_marketing').length === nM + 1 && $('waMkPager').textContent === 'แถว 51–100 จาก 120', rpcs('web_admin_marketing').length - nM + ' / ' + $('waMkPager').textContent);
+    const nP = rpcs('web_admin_marketing').length; MODE.hold = new Promise(r => { relP = r; });
+    $('waMkPrev').click(); await sleep(60); $('waMkPrev').click(); await sleep(60);
+    relP(); MODE.hold = null; await sleep(450);
+    ok('กดย้อนรัว 2 ครั้งระหว่างโหลด: ขอแค่ครั้งเดียว · กลับหน้าแรก', rpcs('web_admin_marketing').length === nP + 1 && $('waMkPager').textContent === 'แถว 1–50 จาก 120', rpcs('web_admin_marketing').length - nP + ' / ' + $('waMkPager').textContent);
+  }
   ok('กดย้อนซ้ำที่หน้าแรก (บังคับปลดปุ่ม): ขอ offset 0 ไม่ใช่ติดลบ', rpcs('web_admin_marketing').pop().args.p_offset === 0 && mkRows().length === 50, String(rpcs('web_admin_marketing').pop().args.p_offset));
 
   // ── ชื่อเล่น ──
@@ -175,6 +187,27 @@ async function runTests() {
   $('waNkSearch').value = 'x'.repeat(100); $('waNkGo').click(); await sleep(350);
   ok('คำค้นยาวเกินถูกตัดที่ 40 ตัว', rpcs('web_admin_nicknames').pop().args.p_q.length === 40);
   $('waNkSearch').value = ''; $('waNkGo').click(); await sleep(350);
+  { // คำขอแรก (alpha) ค้างอยู่ คำขอที่สอง (delta) เสร็จก่อน แล้วค่อยปล่อยคำขอแรก — ผลสุดท้ายต้องเป็นของคำขอที่สอง
+    let relA; MODE.hold = new Promise(r => { relA = r; }); MODE.holdName = 'web_admin_nicknames';
+    $('waNkSearch').value = 'alpha'; $('waNkGo').click(); await sleep(60);
+    MODE.hold = null; MODE.holdName = null;
+    $('waNkSearch').value = 'delta'; $('waNkGo').click(); await sleep(350);
+    relA(); await sleep(350);
+    ok('ค้นสองครั้งติดกัน คำขอเก่ากลับมาทีหลัง: ผลสุดท้ายเป็นของคำค้นล่าสุด (Delta) ไม่ถูกทับด้วย Alpha', JSON.stringify(nkNames()) === '["Delta"]' && /delta/.test($('waNkInfo').textContent), JSON.stringify(nkNames()));
+    $('waNkSearch').value = ''; $('waNkGo').click(); await sleep(350);
+  }
+  { // คำขอเก่าจบก่อนคำขอใหม่: ปุ่มรีเฟรชต้องยังเป็น "กำลังโหลด…" จนกว่าคำขอใหม่จะจบ (คำขอเก่าไม่แตะปุ่ม)
+    let relA, relB; MODE.hold = new Promise(r => { relA = r; }); MODE.holdName = 'web_admin_nicknames';
+    $('waNkSearch').value = 'alpha'; $('waNkGo').click(); await sleep(60);
+    MODE.hold = new Promise(r => { relB = r; });
+    $('waNkSearch').value = 'delta'; $('waNkGo').click(); await sleep(60);
+    MODE.hold = null; MODE.holdName = null;
+    relA(); await sleep(250);
+    ok('คำขอเก่าจบก่อนคำขอใหม่: ปุ่มรีเฟรชยัง "กำลังโหลด…" (คำขอใหม่ยังไม่จบ) · ผลเก่าไม่ขึ้นหน้า', $('waRefresh').disabled && $('waRefresh').textContent === 'กำลังโหลด…' && nkNames().length === 3, $('waRefresh').textContent + ' / ' + JSON.stringify(nkNames()));
+    relB(); await sleep(350);
+    ok('คำขอใหม่จบ: ปุ่มกลับมา · ผลเป็นของคำค้นล่าสุด (Delta)', !$('waRefresh').disabled && JSON.stringify(nkNames()) === '["Delta"]', JSON.stringify(nkNames()));
+    $('waNkSearch').value = ''; $('waNkGo').click(); await sleep(350);
+  }
   ok('ล้างคำค้น: ส่ง p_q = null · กลับมา 3 ชื่อ', rpcs('web_admin_nicknames').pop().args.p_q === null && nkRows().length === 3);
 
   // ── ซ่อนชื่อเล่น ──
@@ -205,7 +238,7 @@ async function runTests() {
   ok('ยังไม่กดตรวจ = ยังไม่ยิงฟังก์ชันลบ/นับ', rpcs('web_admin_inactive').length === 0 && rpcs('web_admin_orphans').length === 0 && $('waInactiveGo').hidden);
   $('waInactiveCheck').click(); await sleep(350);
   ok('ตรวจ: ส่ง p_dry true + 24 เดือน', JSON.stringify(rpcs('web_admin_inactive')[0].args) === JSON.stringify({ p_dry: true, p_months: 24 }), JSON.stringify(rpcs('web_admin_inactive')[0]));
-  ok('ผลตรวจ: 3 บัญชี · มีอีเมล 1 · ไม่มีช่องทาง 2 · ข้ามสมาชิก 1 — จำนวนเป็นแดงตัวหนา', /3 บัญชี/.test($('waInactive').textContent) && /มีอีเมล 1/.test($('waInactive').textContent) && /ไม่มีช่องทางติดต่อเลย 2/.test($('waInactive').textContent) && /ข้ามบัญชีที่เป็นสมาชิกร้านแล้ว 1/.test($('waInactive').textContent) && visibleRed($('waInactive')), $('waInactive').textContent);
+  ok('ผลตรวจ: 3 บัญชี · มีอีเมล 1 · ไม่มีช่องทาง 2 · ข้ามสมาชิก 1 — จำนวนเป็นแดงตัวหนา', /3 บัญชี/.test($('waInactive').textContent) && /มีอีเมลในระบบ 1/.test($('waInactive').textContent) && /หน้านี้ดูอีเมลเต็มไม่ได้ · ร้านไม่มีระบบแจ้งก่อนลบ/.test($('waInactive').textContent) && !/ติดต่อทางอื่นได้/.test($('waInactive').textContent) && /ไม่มีช่องทางติดต่อเลย 2/.test($('waInactive').textContent) && /ข้ามบัญชีที่เป็นสมาชิกร้านแล้ว 1/.test($('waInactive').textContent) && visibleRed($('waInactive')), $('waInactive').textContent);
   ok('ปุ่มลบขึ้น "ลบ 3 บัญชี…" (btn-danger)', shown($('waInactiveGo')) && $('waInactiveGo').textContent === 'ลบ 3 บัญชี…' && $('waInactiveGo').classList.contains('btn-danger'));
   ok('ตรวจเฉย ๆ ไม่ลบอะไร (ไม่มี dry=false)', rpcs('web_admin_inactive').every(c => c.args.p_dry === true));
   $('waInactiveGo').click(); await sleep(150);
@@ -213,12 +246,13 @@ async function runTests() {
   await cancelDlg();
   ok('ยกเลิก: ไม่ลบ', rpcs('web_admin_inactive').every(c => c.args.p_dry === true) && INACTIVE.count === 3);
   // จำนวนเปลี่ยนระหว่างรอ
-  INACTIVE.count = 5;
+  INACTIVE.count = 5; MODE.kept = 1;
   $('waInactiveGo').click(); await sleep(150); await clickOk();
   const del1 = rpcs('web_admin_inactive').filter(c => c.args.p_dry === false)[0];
   ok('ยืนยัน: ส่ง p_expected = จำนวนที่เห็นตอนตรวจ (3) + 24 เดือน', JSON.stringify(del1.args) === JSON.stringify({ p_dry: false, p_expected: 3, p_months: 24 }), JSON.stringify(del1));
   ok('จำนวนเปลี่ยน (count_changed): ไม่ลบ · บอกให้รู้ · ตรวจจำนวนใหม่ให้ (5 บัญชี) · ปุ่มลบอัปเดตเป็น 5', INACTIVE.count === 5 && /จำนวนเปลี่ยนไปประหว่างรอ/.test($('waInactive').textContent.replace('ระหว่าง', 'ประหว่าง')) && /5 บัญชี/.test($('waInactive').textContent) && $('waInactiveGo').textContent === 'ลบ 5 บัญชี…' && !$('confirmDialog').open, $('waInactive').textContent);
   $('waInactiveGo').click(); await sleep(150); await clickOk();
+  ok('ฐานรายงานว่าข้ามผู้ที่เพิ่งกลับมาใช้งาน 1 บัญชี: ข้อความบอกจำนวนที่ข้าม', /ข้าม 1 บัญชีที่เพิ่งกลับมาใช้งาน/.test($('waInactive').textContent), $('waInactive').textContent); MODE.kept = 0;
   ok('ยืนยันรอบสอง (ส่ง 5): ลบสำเร็จ · ข้อความ ✅ ลบบัญชีแล้ว 5 บัญชี · ปุ่มลบหาย', INACTIVE.count === 0 && /✅ ลบบัญชีแล้ว 5 บัญชี/.test($('waInactive').textContent) && $('waInactiveGo').hidden && /ลบบัญชีแล้ว 5/.test(toast()), $('waInactive').textContent);
   $('waInactiveCheck').click(); await sleep(350);
   ok('ตรวจอีกครั้ง = 0: บอกว่าไม่มี · ไม่มีปุ่มลบ', /ไม่มีบัญชีที่ไม่ใช้เกิน 24 เดือน/.test($('waInactive').textContent) && $('waInactiveGo').hidden, $('waInactive').textContent);
@@ -256,6 +290,15 @@ async function runTests() {
   $('waRefresh').click(); await sleep(400); db.rpc = origRpc;
   ok('คำขอล้มทั้งก้อน (throw): แจ้งแถบแดง ไม่เงียบ · ปุ่มกลับมา', /เน็ตหลุดจำลอง/.test(fatal()) && !$('waRefresh').disabled, fatal());
   if ($('fatalError')) $('fatalError').remove();
+  { // คำขอเก่าที่ถูกคำขอใหม่แทนที่แล้วค่อยล้ม (throw): ต้องไม่ขึ้นแถบแดงหลอก (ผู้ใช้เห็นผลของคำขอใหม่ที่สำเร็จอยู่แล้ว)
+    let rejA; const pA = new Promise((_, rej) => { rejA = rej; }); const origRpc2 = db.rpc; db.rpc = () => pA;
+    $('waRefresh').click(); await sleep(60);
+    db.rpc = origRpc2;
+    $('waNkSearch').value = ''; $('waNkGo').click(); await sleep(350);
+    rejA(new Error('เก่า-ล้ม')); await sleep(250);
+    ok('คำขอเก่าที่ถูกแทนที่ล้มทีหลัง (throw): ไม่ขึ้นแถบแดงหลอก · ตารางยังเป็นผลของคำขอใหม่', !/เก่า-ล้ม/.test(fatal()) && !$('waRefresh').disabled && mkRows().length === 50, fatal());
+    if ($('fatalError')) $('fatalError').remove();
+  }
 
   // ── ตัวหนังสือ ≥ 14px ──
   const small = [];
@@ -292,6 +335,19 @@ async function runTests() {
   ok('ผลโหลดที่มาช้าหลัง waReset (ผู้ใช้เดิม): ถูกทิ้งด้วยเลขรอบ · ตารางว่าง · ปุ่มรีเฟรชกลับมา', mkRows().length === 0 && nkRows().length === 0 && $('waStatUsers').textContent === '0' && !$('waRefresh').disabled);
   await openSec();
   ok('เปิดหมวดอีกครั้งหลัง waReset: กลับมาโหลดปกติ (หน้าแรก ไม่มีคำค้น)', mkRows().length === 50 && rpcs('web_admin_marketing').pop().args.p_offset === 0 && rpcs('web_admin_nicknames').pop().args.p_q === null);
+
+  // ออกจากระบบขณะอยู่หมวดนี้ แล้วเข้าใหม่: ต้องมีข้อมูลกลับมา (ไม่ใช่ตัวเลข 0/ตารางว่างที่หลอกเจ้าของ)
+  await db.auth.signOut(); await sleep(300);
+  ok('ออกจากระบบ: หน้าว่างเปล่า (ล้างแล้ว)', mkRows().length === 0 && $('waStatUsers').textContent === '0');
+  await login();
+  ok('เข้าสู่ระบบใหม่ขณะ hash ยังเป็นหมวดนี้: โหลดข้อมูลกลับมาเอง (ตาราง 50 แถว · ภาพรวม 57 · ส่วนเจ้าของโผล่)', mkRows().length === 50 && $('waStatUsers').textContent === '57' && shown($('waOwner')), $('waStatUsers').textContent + ' / ' + mkRows().length);
+  // สลับบัญชีด้วย PIN เจ้าของ → ผู้ดูแล ขณะอยู่หมวดนี้: ข้อมูลโหลดกลับ แต่ส่วนเจ้าของคนเดียวต้องหาย
+  FAKE.admins = [{ id: 'u2', full_name: 'ผู้ดูแลทดสอบ', role: 'admin', is_active: true }]; MODE.role = 'admin'; SESSION = { user: { id: 'u2' } };
+  onAccountSwitched(); authCb('SIGNED_IN', SESSION); await sleep(600);
+  ok('สลับ PIN เจ้าของ→ผู้ดูแล ขณะอยู่หมวดนี้: โหลดข้อมูลกลับ (50 แถว · 57) · ส่วนเจ้าของซ่อน', !$('sec-webacct').hidden && mkRows().length === 50 && $('waStatUsers').textContent === '57' && !shown($('waOwner')), $('waStatUsers').textContent + ' / ' + mkRows().length + ' / ' + shown($('waOwner')));
+  FAKE.admins = [{ id: 'u1', full_name: 'คนทดสอบ', role: 'owner', is_active: true }]; MODE.role = 'owner'; SESSION = { user: { id: 'u1' } };
+  onAccountSwitched(); authCb('SIGNED_IN', SESSION); await sleep(600);
+  ok('สลับกลับเป็นเจ้าของ: ส่วนเจ้าของกลับมา · ข้อมูลครบ', mkRows().length === 50 && shown($('waOwner')));
 
   // ผลที่มาช้าหลังออกจากระบบต้องถูกทิ้ง
   let release; MODE.hold = new Promise(r => { release = r; });
