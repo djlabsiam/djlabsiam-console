@@ -2361,7 +2361,7 @@
             <label class="hint" for="filterTable" style="margin:0;">หมวด</label><select id="filterTable" class="input"></select>
             <label class="hint" for="filterAction" style="margin:0;">การกระทำ</label>
             <select id="filterAction" class="input">
-              <option value="">ทั้งหมด</option><option value="INSERT">เพิ่มใหม่</option><option value="UPDATE">แก้ไข</option><option value="DELETE">ลบ</option>
+              <option value="">ทั้งหมด</option><option value="INSERT">เพิ่มใหม่</option><option value="UPDATE">แก้ไข</option><option value="DELETE">ลบ</option><option value="VIEW">เปิดดู</option>
             </select>
             <label class="hint" for="filterActor" style="margin:0;">โดย</label><select id="filterActor" class="input"><option value="">ทั้งหมด</option></select>
             <label class="hint" for="filterRange" style="margin:0;">ช่วงเวลา</label>
@@ -10012,9 +10012,10 @@ const TABLE_LABELS = {
   products: 'สินค้า', product_units: 'สินค้าแบบมีซีเรียล', stock_movements: 'การเคลื่อนไหวสต็อก',
   sales: 'บิลขาย', sale_items: 'รายการในบิล', customers: 'ข้อมูลลูกค้า',
   expenses: 'รายจ่าย', income_entries: 'รายรับกรอกมือ', members: 'ทะเบียนสมาชิก',
+  web_consents: 'บัญชีเว็บ (ความยินยอม)',
 };
-const ACTION_LABELS = { INSERT: 'เพิ่มใหม่', UPDATE: 'แก้ไข', DELETE: 'ลบ' };
-const ACTION_ST = { INSERT: 'st-ok">＋ ', UPDATE: 'st-warn">✎ ', DELETE: 'st-bad">✕ ' };
+const ACTION_LABELS = { INSERT: 'เพิ่มใหม่', UPDATE: 'แก้ไข', DELETE: 'ลบ', VIEW: 'เปิดดู' };       // VIEW = บันทึกว่ามีคนเปิดดูข้อมูลส่วนบุคคล (083 web_admin_marketing) ไม่ใช่การแก้ข้อมูล
+const ACTION_ST = { INSERT: 'st-ok">＋ ', UPDATE: 'st-warn">✎ ', DELETE: 'st-bad">✕ ', VIEW: 'st-off">◎ ' };
 const FIELD_LABELS = {
   full_name: 'ชื่อ', phone: 'เบอร์โทร', line_id: 'LINE ID', email: 'อีเมล',
   note: 'หมายเหตุ', tags: 'แท็ก', name: 'ชื่อสินค้า', sku: 'SKU', brand: 'แบรนด์',
@@ -10107,8 +10108,14 @@ async function fetchActivityPage() {
 
 function actWho(row) { return row.admins ? row.admins.full_name : (row.admin_id ? 'ทีมงาน' : 'ลูกค้า / ระบบ'); }
 function tableLabel(t) { return TABLE_LABELS[t] || t; }
+function viewRange(d) {                                                  // แถวที่ถูกเปิดดู (ฐานบันทึก offset/rows เป็นตัวเลข) — ค่าที่ไม่ใช่ตัวเลข = ไม่แสดงช่วง
+  const off = Number(d.offset), n = Number(d.rows);
+  if (!Number.isInteger(off) || !Number.isInteger(n) || off < 0 || n < 0) return '';
+  return n > 0 ? 'แถว ' + (off + 1) + '–' + (off + n) : 'หน้าเกินข้อมูล (ไม่มีแถว)';
+}
 function entityLabel(row) {
   const d = row.new_data || row.old_data || {};
+  if (row.action === 'VIEW' && row.table_name === 'web_consents') return 'เปิดดูรายชื่อผู้รับข่าวสาร' + (viewRange(d) ? ' · ' + viewRange(d) : '');
   const pick = [d.sale_no, d.full_name, d.customer_name, d.name, d.sku, d.serial_no, d.room_name, d.description]
     .find(v => v !== undefined && v !== null && String(v).trim() !== '');
   if (pick) return String(pick);
@@ -10165,11 +10172,14 @@ function openActivity(id) {
     '<div style="margin-bottom:12px;"><span class="st ' + (ACTION_ST[row.action] || 'st-off">• ') + escapeHtml(ACTION_LABELS[row.action] || row.action) + '</span></div>' +
     '<dl class="kv"><dt>เมื่อ</dt><dd>' + formatDateTime(row.created_at) + '</dd><dt>โดย</dt><dd>' + escapeHtml(actWho(row)) + '</dd></dl>' +
     (row.action === 'DELETE' ? '<div class="alert alert-red">รายการนี้ถูกลบออกจากระบบแล้ว ด้านล่างคือข้อมูลก่อนถูกลบ</div>' : '') +
-    '<div class="sec-title">' + (isUpdate ? 'ค่าเดิม → ค่าใหม่' : 'ข้อมูล') + '</div>' +
+    (row.action === 'VIEW'
+      ? '<div class="sec-title">สิ่งที่เปิดดู</div><div class="list-row"><div class="sub" style="min-width:110px;">รายชื่อ</div><div style="text-align:right;"><strong>' + escapeHtml(entityLabel(row).replace('เปิดดู', '')) + '</strong></div></div>' +
+        '<div class="hint">บันทึกนี้บอกแค่ว่าใครเปิดดูรายชื่อเมื่อไร — ไม่มีอีเมลหรือรหัสผู้ใช้ของใครอยู่ในบันทึก (อีเมลในหน้านั้นปิดบังอยู่แล้ว)</div>'
+      : '<div class="sec-title">' + (isUpdate ? 'ค่าเดิม → ค่าใหม่' : 'ข้อมูล') + '</div>' +
     (changes.length === 0 ? '<div class="hint">ไม่มีฟิลด์ที่เปลี่ยนแปลง (อาจเป็นการบันทึกซ้ำค่าเดิม)</div>'
       : changes.map(c => '<div class="list-row"><div class="sub" style="min-width:110px;">' + escapeHtml(FIELD_LABELS[c.field] || c.field) + '</div><div style="text-align:right;">' +
           (isUpdate ? '<span style="text-decoration:line-through;color:var(--text2);">' + escapeHtml(formatLogValue(c.field, c.from)) + '</span> → ' : '') +
-          '<strong>' + escapeHtml(formatLogValue(c.field, c.to)) + '</strong></div></div>').join('')));
+          '<strong>' + escapeHtml(formatLogValue(c.field, c.to)) + '</strong></div></div>').join(''))));
 }
 
 // ===========================================================================

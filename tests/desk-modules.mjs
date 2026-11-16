@@ -67,6 +67,12 @@ const FAKE = {
       old_data: { name: 'DDJ-FLX4', sell_price: 12500 }, new_data: { name: 'DDJ-FLX4', sell_price: 12900 }, admins: { full_name: 'เจ้าของร้าน' } },
     { id: 'a2', action: 'DELETE', table_name: 'customers', record_id: 'c9', created_at: '2026-09-28T10:00:00Z', admin_id: null,
       old_data: { full_name: 'ลูกค้าเก่า' }, new_data: null, admins: null },
+    { id: 'a3', action: 'VIEW', table_name: 'web_consents', record_id: null, created_at: '2026-09-27T10:00:00Z', admin_id: 'u1',
+      old_data: null, new_data: { via: 'web_admin_marketing', offset: 50, limit: 50, rows: 50 }, admins: { full_name: 'ผู้ดูแล' } },
+    { id: 'a4', action: 'VIEW', table_name: 'web_consents', record_id: null, created_at: '2026-09-26T10:00:00Z', admin_id: 'u1',
+      old_data: null, new_data: { via: 'web_admin_marketing', offset: 999, limit: 2, rows: 0 }, admins: { full_name: 'ผู้ดูแล' } },
+    { id: 'a5', action: 'VIEW', table_name: 'web_consents', record_id: null, created_at: '2026-09-25T10:00:00Z', admin_id: 'u1',
+      old_data: null, new_data: { via: 'web_admin_marketing', offset: '<b id="xssv">x</b>', rows: 'abc' }, admins: { full_name: 'ผู้ดูแล' } },
   ],
 };
 const COLS = {
@@ -615,7 +621,7 @@ async function runTests() {
   key('Digit9', '9', { altKey: true });
   await sleep(200);
   ok('เจ้าของร้านเปิดบันทึกการใช้งานได้ (Alt+9)', current === 'activity', current);
-  ok('แสดงบันทึก 2 รายการ', document.querySelectorAll('#activityRows tr[data-i]').length === 2);
+  ok('แสดงบันทึก 5 รายการ (แก้ไข · ลบ · เปิดดู 3)', document.querySelectorAll('#activityRows tr[data-i]').length === 5);
   CALLS.length = 0;
   document.getElementById('tw-activity').focus();
   key('ArrowDown', 'ArrowDown'); key('Enter', 'Enter');
@@ -625,6 +631,23 @@ async function runTests() {
     .filter(t => /แก้|ลบ|บันทึก|เพิ่ม(?!อีก)/.test(t));
   ok('หมวดบันทึกการใช้งานไม่มีปุ่มแก้/ลบ/บันทึก/เพิ่ม', actBtns.length === 0, actBtns.join('|'));
   ok('ไม่มีการเขียนฐานข้อมูลระหว่างดูบันทึก', writes().length === 0);
+  // แถว VIEW (บันทึกว่ามีคนเปิดรายชื่อผู้รับข่าวสาร): ป้ายไทย ไม่ใช่คำดิบ · ตัวกรองมีตัวเลือก · รายละเอียดไม่โชว์คีย์ดิบ
+  const actRows = () => [...document.querySelectorAll('#activityRows tr[data-i]')];
+  const rowA3 = actRows().find(r => /แถว 51–100/.test(r.textContent));
+  ok('แถว VIEW: ป้ายการกระทำเป็น "เปิดดู" ไม่ใช่คำดิบ VIEW', !!rowA3 && /เปิดดู/.test(rowA3.querySelector('.st').textContent) && !/VIEW/.test(rowA3.textContent), rowA3 && rowA3.textContent);
+  ok('แถว VIEW: ป้ายเป็นสไตล์กลาง (st-off) มีสัญลักษณ์ ◎ — ไม่ใช่สีเขียว/เหลือง/แดงของการเพิ่ม/แก้/ลบข้อมูล', !!rowA3 && rowA3.querySelector('.st').classList.contains('st-off') && !rowA3.querySelector('.st-ok, .st-warn, .st-bad') && /◎/.test(rowA3.querySelector('.st').textContent), rowA3 && rowA3.querySelector('.st').outerHTML);
+  ok('แถว VIEW: ชื่อรายการ "เปิดดูรายชื่อผู้รับข่าวสาร · แถว 51–100" (จาก offset 50 + 50 แถว) · หมวดเป็นป้ายไทย', !!rowA3 && /เปิดดูรายชื่อผู้รับข่าวสาร · แถว 51–100/.test(rowA3.textContent) && /บัญชีเว็บ \\(ความยินยอม\\)/.test(rowA3.textContent) && !/web_consents/.test(rowA3.textContent), rowA3 && rowA3.textContent);
+  ok('แถว VIEW หน้าเกินข้อมูล (0 แถว): บอกว่าไม่มีแถว ไม่ขึ้นช่วงเลขแปลก', actRows().some(r => /หน้าเกินข้อมูล \\(ไม่มีแถว\\)/.test(r.textContent)));
+  const rowA5 = actRows().find(r => /เปิดดูรายชื่อผู้รับข่าวสาร/.test(r.textContent) && !/แถว|หน้าเกิน/.test(r.textContent));
+  ok('แถว VIEW ที่ค่าไม่ใช่ตัวเลข/มี HTML: ไม่แสดงช่วง · ไม่เกิดแท็กจากค่านั้น', !!rowA5 && !document.getElementById('xssv'), rowA5 && rowA5.textContent);
+  ok('ตัวกรอง "การกระทำ" มีตัวเลือก "เปิดดู" (VIEW)', [...document.querySelectorAll('#filterAction option')].some(o => o.value === 'VIEW' && /เปิดดู/.test(o.textContent)));
+  ok('ตัวกรอง "หมวด" มีบัญชีเว็บ (ความยินยอม)', [...document.querySelectorAll('#filterTable option')].some(o => o.value === 'web_consents' && /ความยินยอม/.test(o.textContent)));
+  openActivity('a3');
+  ok('รายละเอียดแถว VIEW: บอกว่าเปิดดูแถวไหน + ใคร + ป้าย "เปิดดู" · ไม่มีคีย์ดิบ (via/offset/limit/rows/web_admin_marketing)', /เปิดดู/.test(txt('detailBody')) && /แถว 51–100/.test(txt('detailBody')) && /ผู้ดูแล/.test(txt('detailBody')) && !/web_admin_marketing|offset|limit|\\brows\\b/.test(txt('detailBody')), txt('detailBody'));
+  ok('รายละเอียดแถว VIEW: ไม่มีหัว "ค่าเดิม → ค่าใหม่" และบอกว่าไม่มีอีเมล/รหัสผู้ใช้ในบันทึก', !/ค่าเดิม → ค่าใหม่/.test(txt('detailBody')) && /ไม่มีอีเมลหรือรหัสผู้ใช้/.test(txt('detailBody')));
+  openActivity('a1');
+  ok('แถวแก้ไข (UPDATE) ยังแสดง ค่าเดิม → ค่าใหม่ เหมือนเดิม (ไม่ถูกกระทบ)', /ค่าเดิม → ค่าใหม่/.test(txt('detailBody')) && /12,900\\.00 บาท/.test(txt('detailBody')));
+  ok('ไม่มีการเขียนฐานข้อมูลตอนเปิดแถว VIEW', writes().length === 0);
 
   // ── 5. จัดการข้อมูล ───────────────────────────────────────────────────
   key('Digit0', '0', { altKey: true });
