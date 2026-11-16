@@ -1054,6 +1054,7 @@
   }
 
   /* งานของฉัน (#tasks · Work Checklist · 037 + 038) — สถานะเป็นคำเสมอ + ขอบในซ้าย 4px (แดง = เกินกำหนด · เหลือง = ส่งกลับแก้ · เขียว = ผ่าน) ไม่ใช้สีอย่างเดียว */
+  #waAlert { margin-right: var(--calc-clear); }          /* บัญชีเว็บ: แถบเตือนแถวแรก (โหลดล้ม/ยังไม่รัน 083) — เว้นที่ให้ปุ่มเครื่องคิดเลขมุมขวาบน */
   #workAlert { margin-right: var(--calc-clear); }       /* แถบแจ้งเตือนแถวแรกของหมวด — เว้นที่ให้ปุ่มเครื่องคิดเลข */
   .wk-h2 { font-size: 19px; }
   .wk-group { margin-bottom: 20px; }
@@ -2581,6 +2582,65 @@
           </div>
         </section>
 
+        <!-- ============ บัญชีเว็บผู้ใช้ทั่วไป (migration 080–083) — เจ้าของ/ผู้ดูแล · ไม่แสดงอีเมลเต็ม/ชื่อจริง/รหัสผู้ใช้ ============ -->
+        <section class="section" id="sec-webacct" hidden aria-label="บัญชีเว็บผู้ใช้ทั่วไป ผู้รับข่าวสาร ชื่อเล่นบนกระดาน บัญชีที่ไม่ใช้">
+          <div id="waAlert"></div>
+          <div class="alert alert-plain calc-clear">ผู้ใช้ทั่วไป = คนที่เข้าเว็บด้วย LINE หรือ Google (บางคนเป็นสมาชิกร้านด้วย) · หน้านี้ไม่แสดงอีเมลเต็ม ชื่อจริง หรือรหัสผู้ใช้ของใคร</div>
+          <div class="stats stats-4" aria-label="สรุปภาพรวม">
+            <div class="stat"><div class="stat-value" id="waStatUsers">0</div><div class="stat-label">บัญชีผู้ใช้ทั่วไป</div></div>
+            <div class="stat"><div class="stat-value" id="waStatMarketing">0</div><div class="stat-label">รับข่าวสาร</div></div>
+            <div class="stat"><div class="stat-value" id="waStatNick">0</div><div class="stat-label">มีชื่อเล่นบนกระดาน</div></div>
+            <div class="stat"><div class="stat-value" id="waStatWithdrawn">0</div><div class="stat-label">ถอนความยินยอมนโยบาย</div></div>
+          </div>
+          <div class="toolbar calc-clear">
+            <button class="btn" id="waRefresh" type="button">↻ รีเฟรช</button>
+            <span class="hint" id="waStamp" role="status" aria-live="polite" style="margin:0;"></span>
+            <span class="hint" id="waBreak" style="margin:0;"></span>
+          </div>
+
+          <h3 class="wb-h">ผู้รับข่าวสาร</h3>
+          <div class="hint" id="waMkInfo" style="margin-bottom:8px;"></div>
+          <div class="tablewrap" id="tw-wamk" tabindex="0" aria-label="รายชื่อผู้รับข่าวสาร (อ่านอย่างเดียว อีเมลปิดบัง)">
+            <table class="data">
+              <thead><tr><th>ผู้ให้บริการ</th><th>อีเมล (ปิดบัง)</th><th>ติ๊กรับข่าวสารเมื่อ</th><th>ใช้ล่าสุด</th><th>สมาชิกร้าน</th></tr></thead>
+              <tbody id="waMkRows"></tbody>
+            </table>
+          </div>
+          <div class="toolbar" style="margin-top:10px;">
+            <button class="btn btn-sm" id="waMkPrev" type="button">‹ ก่อนหน้า</button>
+            <span class="hint" id="waMkPager" style="margin:0;">—</span>
+            <button class="btn btn-sm" id="waMkNext" type="button">ถัดไป ›</button>
+          </div>
+
+          <h3 class="wb-h">ชื่อเล่นบนกระดาน (ผู้ใช้ทั่วไป + สมาชิก)</h3>
+          <div class="toolbar calc-clear">
+            <input type="search" id="waNkSearch" class="input grow" placeholder="ค้นชื่อเล่น แล้วกด Enter" autocomplete="off" aria-label="ค้นชื่อเล่น">
+            <button class="btn" id="waNkGo" type="button">ค้นหา</button>
+          </div>
+          <div class="hint" id="waNkInfo" style="margin-bottom:8px;"></div>
+          <div class="tablewrap" id="tw-wank" tabindex="0" aria-label="ชื่อเล่นบนกระดาน">
+            <table class="data">
+              <thead><tr><th>ชื่อเล่น</th><th>ชนิด</th><th>ด่านที่มีคะแนน</th><th>แก้ล่าสุด</th><th></th></tr></thead>
+              <tbody id="waNkRows"></tbody>
+            </table>
+          </div>
+
+          <div id="waOwner" hidden>
+            <h3 class="wb-h">ลบบัญชีที่ไม่ใช้ (เจ้าของร้านเท่านั้น)</h3>
+            <div class="alert alert-red" style="font-weight:700;">ระบบยังไม่ส่งแจ้งเตือนก่อนลบให้ผู้ใช้ (ไม่มีตัวส่งอีเมล/LINE จากฐานข้อมูล) · การลบเป็นปุ่มที่เจ้าของกดเองเท่านั้น ไม่มีลบอัตโนมัติ · ลบแล้วกู้คืนไม่ได้</div>
+            <div class="hint" style="margin-bottom:8px;">นับบัญชีที่ไม่ได้เข้าสู่ระบบ ส่งคะแนน หรือเปลี่ยนความยินยอม เกิน 24 เดือน · ข้ามบัญชีที่เป็นสมาชิกร้านแล้วเสมอ</div>
+            <button class="btn" type="button" id="waInactiveCheck">ตรวจจำนวนบัญชีที่ไม่ใช้เกิน 24 เดือน</button>
+            <div id="waInactive" role="status" aria-live="polite" style="margin-top:8px;font-size:14px;"></div>
+            <button class="btn btn-danger" type="button" id="waInactiveGo" hidden style="margin-top:8px;"></button>
+
+            <h3 class="wb-h">เก็บกวาดบัญชี Auth ที่ค้าง (เจ้าของร้านเท่านั้น)</h3>
+            <div class="hint" style="margin-bottom:8px;">บัญชีล็อกอินที่ระบบสร้างไว้แต่ไม่มีบัญชีเว็บรองรับ (สมัครล้มกลางทาง / ลบบัญชีแล้วลบ Auth ไม่สำเร็จ) อายุเกิน 1 ชั่วโมง · ไม่แตะพนักงานและสมาชิก</div>
+            <button class="btn" type="button" id="waOrphanCheck">ตรวจจำนวนบัญชี Auth ที่ค้าง</button>
+            <div id="waOrphan" role="status" aria-live="polite" style="margin-top:8px;font-size:14px;"></div>
+            <button class="btn btn-danger" type="button" id="waOrphanGo" hidden style="margin-top:8px;"></button>
+          </div>
+        </section>
+
         <!-- ============ ราคาและโปรโมชัน (migration 035) ============ -->
         <section class="section" id="sec-catalog" hidden aria-label="ราคาและโปรโมชัน รายการสินค้าตามประเภท">
           <div id="catAlert"></div>
@@ -3551,6 +3611,8 @@ const SECTIONS = [
   { id: 'admin',    hash: 'admin',         group: 'บัญชีและระบบ', icon: 'admin', label: 'จัดการข้อมูล', manager: true, key: '0' },
   // owner: true = เฉพาะเจ้าของร้าน (เข้มกว่า manager ที่ผู้ดูแลก็เข้าได้) — Ops Board เก็บงาน/ข้อมูลภายในที่เจ้าของไม่ให้ใครเห็น
   { id: 'ops',      hash: 'ops',           group: 'บัญชีและระบบ', icon: 'ops', label: 'Ops Board', owner: true, key: 'O' },
+  // W = บัญชีเว็บผู้ใช้ทั่วไป (migration 080–083 · 15 พ.ย. 69) — เจ้าของ/ผู้ดูแล · ลบบัญชีที่ไม่ใช้/เก็บกวาด = เจ้าของคนเดียว (ด่านจริงอยู่ที่ฐาน web_admin_gate)
+  { id: 'webacct',  hash: 'webacct',       group: 'บัญชีและระบบ', icon: 'webacct', label: 'บัญชีเว็บ', manager: true, key: 'W' },
 ].filter(s => s.id !== 'discord' || DISCORD_ENABLED);
 // ไอคอนเมนูซ้าย — เส้น 1.75 ปลายเหลี่ยม มุมแหลม ชุดเดียวกับ .ico-svg ทั้งคอนโซล (เลิกใช้อักขระ Unicode แทนไอคอน · 1 ต.ค. 69)
 // ตกแต่งล้วน: ชื่อหมวดอยู่ข้าง ๆ เป็นตัวหนังสือเสมอ จึง aria-hidden
@@ -3571,6 +3633,7 @@ const NAV_ICONS = {
   activity:  '<rect x="4" y="3" width="12" height="14.5"/><path d="M7.5 3V1.8h5V3M7 8h6M7 11h6M7 14h3.5"/>',
   admin:     '<ellipse cx="10" cy="5" rx="6.5" ry="2.5"/><path d="M3.5 5v10c0 1.4 2.9 2.5 6.5 2.5s6.5-1.1 6.5-2.5V5M3.5 10c0 1.4 2.9 2.5 6.5 2.5s6.5-1.1 6.5-2.5"/>',
   ops:       '<rect x="3" y="3" width="14" height="14"/><path d="M6.5 7.5l1.5 1.5 2.5-3M6.5 13h7"/>',
+  webacct:   '<circle cx="9" cy="7" r="3.25"/><path d="M2.5 17c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6M15 3.5v4M13 5.5h4"/>',
   catalog:   '<path d="M3 3.5h6.5l7.5 7.5-6 6L3 9.5z"/><path d="M6.8 7h.01"/>',
   tasks:     '<rect x="4" y="3.5" width="12" height="14"/><path d="M7.5 3.5V2h5v1.5M7 9l1.5 1.5L11 8M7 14h6"/>',
   transfer:  '<path d="M10 12.5V3M6.5 6.5L10 3l3.5 3.5"/><path d="M3 12.5v4.5h14v-4.5"/>',
@@ -3673,6 +3736,7 @@ function loginVisible() {
 async function handleAuthState(session) {
   if (!session) {
     opsReset();                     // ออกจากระบบ = ล้าง Ops Board ออกจากหน้า (ข้อมูลภายในร้าน)
+    waReset();                      // และล้างหมวดบัญชีเว็บ (รายชื่อผู้รับข่าวสาร/ชื่อเล่นของผู้ใช้ไม่ค้างหน้าจอ)
     catReset();                     // และล้างหมวดราคา/โปรโมชัน (แถบย้อนกลับ ฟอร์มที่พิมพ์ค้าง)
     wbReset();                      // และล้างแผง "จองออนไลน์" (ค่าตั้งการจองเว็บ/สถานะซิงก์ที่โหลดไว้)
     workReset();                    // และล้างงานของฉัน/คำขอ (ใบงาน ประวัติ รูปหลักฐาน ฟอร์มที่พิมพ์ค้าง)
@@ -6147,6 +6211,7 @@ function showSection(id, mode) {
     if (id === 'activity' && !activityLoaded) reloadActivity();
     if (id === 'admin' && !adLoaded) adLoadAll();
     if (id === 'ops') loadOps();
+    if (id === 'webacct') waLoad();
     if (id === 'catalog') { renderCatalog(); loadCatalog(); }
     if (id === 'tasks') { renderWork(); loadWork(); }
     if (id === 'transfer') { renderTransfer(); loadTransfer(); }
@@ -8278,6 +8343,200 @@ function opsPollSchedule() {
   }, OPS_POLL_MS);
 }
 opsPollSchedule();
+
+// ===========================================================================
+// บัญชีเว็บผู้ใช้ทั่วไป (หมวด webacct · migration 080–083 · 15 พ.ย. 69) — เจ้าของ/ผู้ดูแล
+// ===========================================================================
+// ข้อมูลทุกอย่างมาจากฟังก์ชัน web_admin_* ของ 083 (ฐานตรวจสิทธิ์ซ้ำด้วย web_admin_gate · ซ่อนเมนู/ปุ่มเป็นแค่ความสะดวก) · ไม่มีอีเมลเต็ม/ชื่อจริง/รหัสผู้ใช้มาถึงหน้านี้เลย
+// ลบบัญชีที่ไม่ใช้ + เก็บกวาด Auth ที่ค้าง = เจ้าของคนเดียว · แบบเดียวกับล้างข้อมูลจองเว็บ (booking_anonymize_expired): นับก่อน → หน้าต่างยืนยันคำเตือนแดงตัวหนา → ส่งจำนวนที่เห็น (ไม่ตรง = ไม่ลบ)
+const WA_PAGE = 50, WA_MONTHS = 24;
+const WA_NO_FN = /web_admin_|PGRST202|Could not find the function|does not exist/i;
+let waTok = 0;                                   // ขึ้นเลขทุกครั้งที่รีเซ็ต — ผลที่มาช้าจากบัญชีเดิมถูกทิ้ง
+let wa = { mkOff: 0, nkQ: '', jobs: { inactive: null, orphans: null } };
+const waEl = id => document.getElementById(id);
+const waProv = p => p === 'line' ? 'LINE' : p === 'google' ? 'Google' : String(p || '');
+const waNum = n => Number.isFinite(+n) ? +n : 0;
+const waDay = iso => fmtDate(new Date(iso).toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' }));
+
+// งานลบ/เก็บกวาด: คำอธิบายของแต่ละงาน (ข้อความคงที่ของแอป + ตัวเลขจากฐาน — ไม่มีข้อความดิบจากฐานขึ้นจอยกเว้นผ่าน escapeHtml)
+const WA_JOBS = {
+  inactive: {
+    fn: 'web_admin_inactive', args: { p_months: WA_MONTHS }, out: 'waInactive', go: 'waInactiveGo', title: 'ลบบัญชีที่ไม่ใช้',
+    none: d => 'ไม่มีบัญชีที่ไม่ใช้เกิน ' + WA_MONTHS + ' เดือน (ก่อน ' + waDay(d.before) + ') · ข้ามบัญชีที่เป็นสมาชิกร้านแล้ว ' + waNum(d.members_skipped) + ' บัญชี',
+    found: d => '<span class="wk-red">บัญชีที่ไม่ใช้เกิน ' + WA_MONTHS + ' เดือน ' + d.count + ' บัญชี</span> (ก่อน ' + waDay(d.before) + ') · มีอีเมล ' + waNum(d.with_email) +
+      ' (ติดต่อทางอื่นได้) · ไม่มีช่องทางติดต่อเลย ' + waNum(d.no_channel) + ' · ข้ามบัญชีที่เป็นสมาชิกร้านแล้ว ' + waNum(d.members_skipped),
+    label: d => 'ลบ ' + d.count + ' บัญชี…',
+    warn: d => '<div class="alert alert-red" style="font-weight:700;">ลบบัญชีผู้ใช้ทั่วไป ' + d.count + ' บัญชีถาวร (ไม่ได้ใช้งานก่อน ' + waDay(d.before) + ')</div>' +
+      '<br>ลบ: ตัวตน LINE/Google · ความยินยอม · ชื่อเล่นและคะแนนเกมของบัญชีนั้นทั้งหมด · บัญชีล็อกอิน' +
+      '<br>ไม่ลบ: บัญชีที่เป็นสมาชิกร้านแล้ว · ข้อมูลสมาชิกในระบบร้าน' +
+      '<br><span class="wk-red">ผู้ใช้จะไม่ได้รับแจ้งล่วงหน้า และกู้คืนไม่ได้</span>',
+    ok: 'ลบ', done: r => 'ลบบัญชีแล้ว ' + waNum(r.deleted) + ' บัญชี',
+  },
+  orphans: {
+    fn: 'web_admin_orphans', args: {}, out: 'waOrphan', go: 'waOrphanGo', title: 'เก็บกวาดบัญชี Auth ที่ค้าง',
+    none: () => 'ไม่มีบัญชี Auth ที่ค้าง',
+    found: d => '<span class="wk-red">บัญชี Auth ที่ค้าง ' + d.count + ' บัญชี</span> (ไม่มีบัญชีเว็บรองรับ · อายุเกิน 1 ชั่วโมง)',
+    label: d => 'ลบบัญชี Auth ที่ค้าง ' + d.count + ' บัญชี…',
+    warn: d => '<div class="alert alert-red" style="font-weight:700;">ลบบัญชีล็อกอินที่ค้าง ' + d.count + ' บัญชีถาวร</div>' +
+      '<br>เป็นบัญชีที่ระบบสร้างไว้ตอนสมัครแต่ไม่มีบัญชีเว็บรองรับ (สมัครล้มกลางทาง หรือลบบัญชีแล้วลบ Auth ไม่สำเร็จ) · ไม่แตะพนักงานและสมาชิก',
+    ok: 'ลบ', done: r => 'ลบบัญชี Auth ที่ค้างแล้ว ' + waNum(r.deleted) + ' บัญชี',
+  },
+};
+
+function waRenderSummary(s) {
+  waEl('waStatUsers').textContent = String(waNum(s.users));
+  waEl('waStatMarketing').textContent = String(waNum(s.marketing));
+  waEl('waStatNick').textContent = String(waNum(s.nicknames));
+  waEl('waStatWithdrawn').textContent = String(waNum(s.withdrawn));
+  waEl('waBreak').textContent = 'LINE ' + waNum(s.line) + ' · Google ' + waNum(s.google) + ' · เป็นสมาชิกร้านแล้ว ' + waNum(s.members);
+}
+function waRenderMarketing(m) {
+  const rows = Array.isArray(m.rows) ? m.rows : [], total = waNum(m.total);
+  waEl('waMkInfo').innerHTML = 'ติ๊กรับข่าวสารไว้ในความยินยอมล่าสุด ' + total + ' คน · มีอีเมล ' + waNum(m.with_email) + ' คน (ที่เหลือส่งทางอีเมลไม่ได้) · ' +
+    '<span class="wk-red">อีเมลถูกปิดบังโดยตั้งใจ — ส่งข่าวสารจริงต้องทำนอกคอนโซล (ไม่มีปุ่มส่งหรือส่งออกอีเมลเต็ม)</span>';
+  waEl('waMkRows').innerHTML = rows.length
+    ? rows.map(r => '<tr><td>' + escapeHtml((Array.isArray(r.providers) ? r.providers : []).map(waProv).join(' + ')) + '</td><td>' +
+        (r.email ? escapeHtml(r.email) : '<span class="hint" style="margin:0;">ไม่มีอีเมล</span>') + '</td><td>' + escapeHtml(formatDateTime(r.consent_at)) + '</td><td>' +
+        escapeHtml(formatDateTime(r.last_active)) + '</td><td>' + (r.is_member ? '✓ สมาชิก' : '—') + '</td></tr>').join('')
+    : '<tr><td colspan="5"><div class="empty">ยังไม่มีผู้ติ๊กรับข่าวสาร</div></td></tr>';
+  const from = rows.length ? wa.mkOff + 1 : 0;
+  waEl('waMkPager').textContent = rows.length ? 'แถว ' + from + '–' + (wa.mkOff + rows.length) + ' จาก ' + total : '—';
+  waEl('waMkPrev').disabled = wa.mkOff <= 0;
+  waEl('waMkNext').disabled = wa.mkOff + WA_PAGE >= total;
+}
+function waRenderNicknames(n) {
+  const rows = Array.isArray(n.rows) ? n.rows : [];
+  waEl('waNkInfo').textContent = rows.length ? 'แสดง ' + rows.length + ' ชื่อ' + (wa.nkQ ? ' ที่ตรงกับ “' + wa.nkQ + '”' : ' ล่าสุด') + ' · ซ่อน = ลบชื่อออกจากกระดานทุกแบบทันที (คะแนนยังอยู่ · บันทึกการซ่อนไว้ในบันทึกการใช้งาน)' : '';
+  waEl('waNkRows').innerHTML = rows.length
+    ? rows.map(r => '<tr><td>' + escapeHtml(r.nickname) + '</td><td>' + (r.kind === 'member' ? 'สมาชิก' : 'ผู้ใช้ทั่วไป') + '</td><td>' + waNum(r.levels) + '</td><td>' +
+        escapeHtml(formatDateTime(r.updated_at)) + '</td><td><button class="btn btn-sm btn-danger" type="button" data-wa-hide="' + escapeHtml(r.key) +
+        '" data-wa-name="' + escapeHtml(r.nickname) + '">ซ่อน</button></td></tr>').join('')
+    : '<tr><td colspan="5"><div class="empty">' + (wa.nkQ ? 'ไม่พบชื่อเล่นที่ตรงกัน' : 'ยังไม่มีชื่อเล่นบนกระดาน') + '</div></td></tr>';
+}
+
+async function waLoad() {
+  if (!isManager()) return;
+  const tok = waTok, uid = currentUserId, btn = waEl('waRefresh'), alertEl = waEl('waAlert');
+  waEl('waOwner').hidden = !isOwner();
+  btn.disabled = true; btn.textContent = 'กำลังโหลด…';
+  try {
+    const [s, m, n] = await Promise.all([
+      db.rpc('web_admin_summary'),
+      db.rpc('web_admin_marketing', { p_limit: WA_PAGE, p_offset: wa.mkOff }),
+      db.rpc('web_admin_nicknames', { p_q: wa.nkQ || null, p_limit: 50 }),
+    ]);
+    if (tok !== waTok || uid !== currentUserId || !isManager()) return;        // สลับบัญชีระหว่างโหลด — ทิ้งผล
+    const err = s.error || m.error || n.error;
+    if (err) {
+      console.error('[WebAcct load]', err);
+      if (WA_NO_FN.test(err.message || '')) {
+        alertEl.innerHTML = '<div class="alert alert-warn">ยังไม่ได้ติดตั้งเครื่องมือหมวดนี้ในฐานข้อมูล — ต้องรัน migration 080–083 ก่อน</div>';
+      } else {
+        alertEl.innerHTML = '<div class="alert alert-red" style="font-weight:700;">โหลดข้อมูลบัญชีเว็บไม่สำเร็จ: ' + escapeHtml(err.message || '') + '</div>';
+        showFatalError('โหลดข้อมูลบัญชีเว็บไม่สำเร็จ: ' + (err.message || ''));
+      }
+      return;
+    }
+    alertEl.innerHTML = '';
+    waRenderSummary(s.data || {}); waRenderMarketing(m.data || {}); waRenderNicknames(n.data || {});
+    waEl('waStamp').textContent = 'อัปเดตล่าสุด ' + new Date().toLocaleTimeString('th-TH', { hour12: false, timeZone: 'Asia/Bangkok' });
+  } catch (e) {                                  // คำขอล้มทั้งก้อน (เน็ตหลุด) — ต้องบอก ไม่ปล่อยให้ปุ่มรีเฟรช "กดแล้วเงียบ"
+    console.error('[WebAcct load]', e);
+    if (tok === waTok && uid === currentUserId) showFatalError('โหลดข้อมูลบัญชีเว็บไม่สำเร็จ: ' + ((e && e.message) || 'เชื่อมต่อไม่ได้'));
+  } finally {
+    btn.disabled = false; btn.textContent = '↻ รีเฟรช';
+  }
+}
+
+// ซ่อนชื่อเล่น (เจ้าของ/ผู้ดูแล) — เปิดหน้าต่างยืนยัน · ชื่อ/คีย์ที่ขึ้นจอมาจากผู้เล่น: escapeHtml เสมอ
+function waHideAsk(key, nick) {
+  if (!isManager() || !key) return;
+  askConfirm('ซ่อนชื่อเล่น',
+    '<div class="alert alert-red" style="font-weight:700;">ซ่อนชื่อเล่น “' + escapeHtml(nick) + '” ออกจากกระดานทั้งหมด</div>' +
+    '<br>คะแนนยังอยู่ · เจ้าของชื่อตั้งชื่อใหม่ได้ (ตั้งชื่อเดิมซ้ำก็ได้ — ยังไม่มีรายการชื่อต้องห้ามถาวร) · การซ่อนบันทึกไว้ในบันทึกการใช้งาน',
+    'ซ่อนชื่อเล่น', async () => {
+      const tok = waTok, uid = currentUserId;
+      const { data, error } = await db.rpc('web_admin_nickname_hide', { p_key: key });
+      closeConfirm();
+      if (tok !== waTok || uid !== currentUserId) return;
+      if (error || !data) { console.error('[WebAcct hide]', error || data); showFatalError('ซ่อนชื่อเล่นไม่สำเร็จ: ' + (error ? error.message : 'ไม่มีคำตอบจากฐาน')); return; }
+      if (!data.ok) { showToast('ไม่พบชื่อเล่นนี้แล้ว (อาจถูกซ่อนไปแล้ว) — โหลดรายการใหม่'); await waLoad(); return; }
+      showToast('✅ ซ่อนชื่อเล่น “' + nick + '” แล้ว');
+      await waLoad();
+    });
+}
+
+// ลบบัญชีที่ไม่ใช้ / เก็บกวาด Auth ที่ค้าง (เจ้าของเท่านั้น): นับก่อน → ยืนยัน → ส่งจำนวนที่เห็น
+async function waCheck(name, notice) {
+  const job = WA_JOBS[name];
+  if (!isOwner()) return;
+  const tok = waTok, uid = currentUserId, out = waEl(job.out), go = waEl(job.go);
+  const pre = notice ? '<span class="wk-red">' + notice + '</span><br>' : '';        // notice = ข้อความคงที่ของแอป (ไม่ใช่ข้อมูลจากฐาน)
+  wa.jobs[name] = null; go.hidden = true; out.textContent = 'กำลังตรวจ…';
+  const { data, error } = await db.rpc(job.fn, Object.assign({ p_dry: true }, job.args));
+  if (tok !== waTok || uid !== currentUserId) return;
+  if (error || !data || !data.ok) {
+    console.error('[WebAcct ' + name + ']', error || data);
+    out.innerHTML = pre + '<span class="wk-red">ตรวจจำนวนไม่สำเร็จ: ' + escapeHtml(error ? error.message : String(data && data.error)) + '</span>';
+    return;
+  }
+  if (!data.count) { out.innerHTML = pre + escapeHtml(job.none(data)); return; }
+  wa.jobs[name] = data;
+  out.innerHTML = pre + job.found(data);
+  go.textContent = job.label(data); go.hidden = false;
+}
+function waConfirm(name) {
+  const job = WA_JOBS[name], a = wa.jobs[name];
+  if (!a || !isOwner()) return;
+  askConfirm(job.title, job.warn(a), job.label(a).replace('…', ''), async () => {
+    const tok = waTok, uid = currentUserId;
+    const { data, error } = await db.rpc(job.fn, Object.assign({ p_dry: false, p_expected: a.count }, job.args));
+    closeConfirm();
+    if (tok !== waTok || uid !== currentUserId) return;
+    if (data && data.error === 'count_changed') { await waCheck(name, 'จำนวนเปลี่ยนไประหว่างรอ — ยังไม่ได้ลบอะไร ตรวจจำนวนใหม่ให้แล้ว'); return; }
+    if (error || !data || !data.ok) {
+      console.error('[WebAcct ' + name + ']', error || data);
+      wa.jobs[name] = null; waEl(job.go).hidden = true; waEl(job.out).textContent = '';
+      showFatalError(job.title + 'ไม่สำเร็จ: ' + (error ? error.message : String(data && data.error)) + '\nกด “ตรวจจำนวน” เพื่อดูสถานะล่าสุดก่อนสั่งใหม่');
+      return;
+    }
+    wa.jobs[name] = null; waEl(job.go).hidden = true;
+    waEl(job.out).textContent = '✅ ' + job.done(data);
+    showToast('✅ ' + job.done(data));
+    await waLoad();
+  });
+}
+
+// ออกจากระบบ/สลับบัญชี: ล้างผลที่โหลดไว้ (รายการผู้รับข่าวสาร/ชื่อเล่นไม่ค้างหน้าจอ) + หน้าต่างยืนยันที่เก็บชื่อเล่นไว้
+function waReset() {
+  waTok++;
+  wa = { mkOff: 0, nkQ: '', jobs: { inactive: null, orphans: null } };
+  ['waStatUsers', 'waStatMarketing', 'waStatNick', 'waStatWithdrawn'].forEach(id => { waEl(id).textContent = '0'; });
+  ['waBreak', 'waStamp', 'waMkInfo', 'waNkInfo', 'waInactive', 'waOrphan'].forEach(id => { waEl(id).textContent = ''; });
+  waEl('waAlert').innerHTML = '';
+  waEl('waMkRows').innerHTML = ''; waEl('waNkRows').innerHTML = '';
+  waEl('waMkPager').textContent = '—'; waEl('waNkSearch').value = '';
+  waEl('waOwner').hidden = true; waEl('waInactiveGo').hidden = true; waEl('waOrphanGo').hidden = true;
+  closeConfirm();
+  document.getElementById('confirmTitle').textContent = 'ยืนยัน';
+  document.getElementById('confirmBody').innerHTML = '';
+}
+(function waInit() {
+  waEl('waRefresh').addEventListener('click', () => { if (!waEl('waRefresh').disabled) waLoad(); });
+  waEl('waMkPrev').addEventListener('click', () => { wa.mkOff = Math.max(0, wa.mkOff - WA_PAGE); waLoad(); });
+  waEl('waMkNext').addEventListener('click', () => { wa.mkOff += WA_PAGE; waLoad(); });
+  const search = () => { wa.nkQ = waEl('waNkSearch').value.trim().slice(0, 40); waLoad(); };
+  waEl('waNkGo').addEventListener('click', search);
+  waEl('waNkSearch').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); search(); } });
+  waEl('waNkRows').addEventListener('click', e => {
+    const b = e.target.closest('button[data-wa-hide]');
+    if (b) waHideAsk(b.dataset.waHide, b.dataset.waName || '');
+  });
+  waEl('waInactiveCheck').addEventListener('click', () => waCheck('inactive'));
+  waEl('waInactiveGo').addEventListener('click', () => waConfirm('inactive'));
+  waEl('waOrphanCheck').addEventListener('click', () => waCheck('orphans'));
+  waEl('waOrphanGo').addEventListener('click', () => waConfirm('orphans'));
+})();
 
 function opsReset() {            // ออกจากระบบ/สลับบัญชี — ข้อมูลภายในร้านต้องไม่ค้างในหน้า (DOM ก็ล้าง ไม่ใช่แค่ซ่อน)
   ops = { tasks: [], meta: null, orders: [], ordersOn: true, loaded: false, filter: 'open', area: 'all', q: '', editingId: null };
@@ -11498,7 +11757,8 @@ function renderLoginAccounts() {
 // เปลี่ยนคนแล้ว: ตะกร้าที่ค้างอยู่ "ยังอยู่" (ส่งต่อให้คนที่มาแทนขายต่อได้ ไม่ต้องยิงใหม่) แต่บิลจะเป็นชื่อคนใหม่
 // และล้างพนักงานขายร่วมที่เลือกไว้ (คนเดิมเลือกไว้ให้บิลของตัวเอง ไม่ใช่ของคนใหม่) — บอกให้รู้ทุกครั้ง
 function onAccountSwitched() {
-  opsReset();                    // Ops Board เป็นข้อมูลของเจ้าของ — สลับเป็นคนอื่นต้องไม่ค้างอยู่ในหน้า
+  waReset();                     // บัญชีเว็บ: รายชื่อ/ผลตรวจของคนเดิมต้องไม่ค้างให้คนใหม่เห็น (สลับเป็นพนักงาน = ไม่มีสิทธิ์ดู)
+  opsReset();                   // Ops Board เป็นข้อมูลของเจ้าของ — สลับเป็นคนอื่นต้องไม่ค้างอยู่ในหน้า
   catReset();                    // หมวดราคา/โปรโมชัน: แถบย้อนกลับ/ฟอร์มค้างของคนเดิมใช้สิทธิ์ของคนใหม่ไม่ได้
   wbReset();                     // แผง "จองออนไลน์": ฟอร์มตั้งค่าของคนเดิม (เจ้าของ/ผู้ดูแล) ต้องไม่ค้างให้พนักงานเห็น
   workReset();                   // งานของฉัน/คำขอ: ใบงาน คำขอ รูปหลักฐานของคนเดิมต้องไม่ค้าง (คอมหน้าร้านใช้ร่วมกันหลายคน)
